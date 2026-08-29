@@ -10,6 +10,7 @@ Deno/browser toolchain.
 import re
 import unittest
 from pathlib import Path
+from tests.teacher_sources import console_source
 
 REPO = Path(__file__).resolve().parent.parent
 MIGRATION = (
@@ -35,9 +36,7 @@ API = (FRONTEND / "lib" / "api.ts").read_text()
 # below; the card-level pins assert the artifact document only ever reaches the frame as
 # TEXT and never becomes a navigable or embeddable URL in the card itself.
 RESOURCE_CARD = (FRONTEND / "student" / "ResourceCard.tsx").read_text()
-TEACHER = (
-    FRONTEND / "features" / "teacher" / "TeacherConsole.tsx"
-).read_text()
+TEACHER = console_source()
 PACKAGE = (REPO / "frontend" / "package.json").read_text()
 
 

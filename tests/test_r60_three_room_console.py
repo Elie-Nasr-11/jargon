@@ -13,11 +13,12 @@ test_r47_four_tab_console (rewritten for the three rooms).
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend" / "src"
-STUDIO = (FRONTEND / "routes" / "teacher.curriculum.tsx").read_text(encoding="utf-8")
+STUDIO = authoring_source()
 API = (FRONTEND / "lib" / "api.ts").read_text(encoding="utf-8")
 
 

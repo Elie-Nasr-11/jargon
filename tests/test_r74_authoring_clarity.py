@@ -25,11 +25,12 @@ The law, pinned here:
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source, console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ROUTE = (ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text(encoding="utf-8")
-CONSOLE = (ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx").read_text(encoding="utf-8")
+ROUTE = authoring_source()
+CONSOLE = console_source()
 BAR = (ROOT / "frontend" / "src" / "features" / "teacher" / "LessonInventoryBar.tsx").read_text(encoding="utf-8")
 INV = (ROOT / "frontend" / "src" / "features" / "teacher" / "lessonInventory.ts").read_text(encoding="utf-8")
 

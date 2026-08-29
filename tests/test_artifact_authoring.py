@@ -9,6 +9,7 @@ regressions show up in CI without a Deno/browser toolchain.
 import re
 import unittest
 from pathlib import Path
+from tests.teacher_sources import authoring_source
 
 REPO = Path(__file__).resolve().parent.parent
 ADMIN = (REPO / "supabase" / "functions" / "curriculum-admin" / "index.ts").read_text()
@@ -16,7 +17,7 @@ FRONTEND = REPO / "frontend" / "src"
 API = (FRONTEND / "lib" / "api.ts").read_text()
 TYPES = (FRONTEND / "lib" / "types.ts").read_text()
 DECK = (FRONTEND / "components" / "DeckRenderer.tsx").read_text()
-CURRICULUM = (FRONTEND / "routes" / "teacher.curriculum.tsx").read_text()
+CURRICULUM = authoring_source()
 
 
 class ArtifactGenerateBackend(unittest.TestCase):

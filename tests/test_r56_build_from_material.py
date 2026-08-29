@@ -16,6 +16,7 @@ the lesson lands as a DRAFT (publishing stays an explicit human act).
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,9 +26,7 @@ ADMIN = (ROOT / "supabase" / "functions" / "curriculum-admin" / "index.ts").read
 PROCESSING = (
     ROOT / "supabase" / "functions" / "resource-processing" / "index.ts"
 ).read_text(encoding="utf-8")
-STUDIO = (ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text(
-    encoding="utf-8"
-)
+STUDIO = authoring_source()
 MATERIAL = (ROOT / "frontend" / "src" / "lib" / "materialText.ts").read_text(encoding="utf-8")
 API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
 TYPES = (ROOT / "frontend" / "src" / "lib" / "types.ts").read_text(encoding="utf-8")

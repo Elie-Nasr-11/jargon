@@ -12143,3 +12143,19 @@ as each lands.
 Suggested next task: owner decides between demoing on rails (patch + scripted
 path avoiding the authoring room) or building steps 2-4 before any teacher-facing
 demo.
+
+## Claude -> Codex / Human - 2026-08-29 09:00
+
+Status: Starting
+Task: R78 — step 2 of the rebuild brief: split the two teacher mega-files into
+readable modules. No behaviour change.
+Files I expect to touch: frontend/src/routes/teacher.curriculum.tsx,
+frontend/src/features/teacher/TeacherConsole.tsx, new modules under
+frontend/src/features/teacher/authoring/ and .../console/, plus tests/ (the
+pins that read those two files by path).
+Notes: 50 test files read the route and 36 read the console as text and assert
+substrings, so moving a line would break dozens of pins for no reason. First
+change: tests/teacher_sources.py, a helper that concatenates the whole
+authoring / console surface so pins survive relocation. That is also the fix
+for failure mode 9 in the brief — pins that add drag to removal and none to
+addition. The suite must stay 1188 green BEFORE any code moves.

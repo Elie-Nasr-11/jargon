@@ -14,6 +14,7 @@ intervention_alerts read and the InterventionAlert type (message column) remain 
 stay pinned."""
 from pathlib import Path
 import unittest
+from tests.teacher_sources import console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,7 +28,6 @@ CHAT_MESSAGES = (
 )
 # routes/teacher.tsx is now a thin route wrapper; the live-intervention teacher
 # UI lives in the TeacherConsole feature component.
-TEACHER_ROUTE = ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx"
 HOOK = ROOT / "frontend" / "src" / "student" / "useConversation.ts"
 WINDOW = ROOT / "frontend" / "src" / "student" / "ChatWindow.tsx"
 
@@ -39,7 +39,7 @@ class LiveTeacherInterventionStaticTests(unittest.TestCase):
         cls.api = API.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
         cls.chat_messages = CHAT_MESSAGES.read_text(encoding="utf-8")
-        cls.teacher = TEACHER_ROUTE.read_text(encoding="utf-8")
+        cls.teacher = console_source()
         cls.hook = HOOK.read_text(encoding="utf-8")
         cls.window = WINDOW.read_text(encoding="utf-8")
 

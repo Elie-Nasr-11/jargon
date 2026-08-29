@@ -21,6 +21,7 @@ The law, pinned here:
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,7 +29,7 @@ OPS = (ROOT / "supabase" / "functions" / "admin-ops" / "index.ts").read_text(enc
 TYPES = (ROOT / "frontend" / "src" / "lib" / "types.ts").read_text(encoding="utf-8")
 API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
 CARD = (ROOT / "frontend" / "src" / "features" / "teacher" / "ClassDigestCard.tsx").read_text(encoding="utf-8")
-CONSOLE = (ROOT / "frontend" / "src" / "features" / "teacher" / "TeacherConsole.tsx").read_text(encoding="utf-8")
+CONSOLE = console_source()
 
 
 class HonestReportingTests(unittest.TestCase):

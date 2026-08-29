@@ -1,6 +1,7 @@
 """Brain-first Phase D: knowledge intake (extract/review) + teacher practice banks."""
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source
 
 ROOT = Path(__file__).resolve().parents[1]
 CHAT = (ROOT / "supabase" / "functions" / "chat" / "index.ts").read_text(encoding="utf-8")
@@ -15,9 +16,7 @@ API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
 CARD = (
     ROOT / "frontend" / "src" / "features" / "teacher" / "KnowledgeCard.tsx"
 ).read_text(encoding="utf-8")
-STUDIO = (
-    ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx"
-).read_text(encoding="utf-8")
+STUDIO = authoring_source()
 
 
 class PracticeItemsSchema(unittest.TestCase):

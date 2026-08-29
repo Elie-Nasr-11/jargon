@@ -22,6 +22,7 @@ stood between that plan and a good result, and both are fixed here.
 from pathlib import Path
 import re
 import unittest
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,9 +58,7 @@ PDF_CODE = code_only(PDF)
 ADMIN = (ROOT / "supabase" / "functions" / "curriculum-admin" / "index.ts").read_text(
     encoding="utf-8"
 )
-STUDIO = (ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text(
-    encoding="utf-8"
-)
+STUDIO = authoring_source()
 MATERIAL = (ROOT / "frontend" / "src" / "lib" / "materialText.ts").read_text(encoding="utf-8")
 
 

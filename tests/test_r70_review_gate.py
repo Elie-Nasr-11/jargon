@@ -20,12 +20,13 @@ The gate, pinned here:
 """
 from pathlib import Path
 import unittest
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN = (ROOT / "supabase" / "functions" / "curriculum-admin" / "index.ts").read_text(encoding="utf-8")
 API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
-ROUTE = (ROOT / "frontend" / "src" / "routes" / "teacher.curriculum.tsx").read_text(encoding="utf-8")
+ROUTE = authoring_source()
 
 
 class OneWritePathTests(unittest.TestCase):
