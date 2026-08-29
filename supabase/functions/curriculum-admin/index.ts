@@ -3482,6 +3482,91 @@ async function generateDraft(config: Config, actorId: string, body: DbRow): Prom
 
   // P7: generate an interactive artifact (html_sim / deck) from a teacher brief. Still a
   // pure draft — NO DB write; the studio previews it and a separate approve step persists.
+  // R76: one generation path for every SHORT FIELD a teacher writes — a lesson title,
+  // an objective, a unit title, an assignment's instructions. The owner's rule was "at
+  // every building point there should be an ai assistant to help draft content"; before
+  // this, drafting existed only for whole lessons and whole step lists, so the small
+  // writing — which is most of the writing — had no help at all.
+  //
+  // It returns ONE string and nothing else. The teacher's field is filled with a draft
+  // they then edit; the server never writes it, so an assist can always be ignored.
+  if (mode === "text_field") {
+    const field = cleanText(body.field);
+    const allowed: Record<string, { label: string; guidance: string; max: number }> = {
+      lesson_title: {
+        label: "a lesson title",
+        guidance: "3-8 words, concrete, no colon-subtitle, names what the student will learn.",
+        max: 90,
+      },
+      lesson_objective: {
+        label: "a lesson objective",
+        guidance:
+          "One sentence starting with a verb, describing what the student can DO afterwards.",
+        max: 220,
+      },
+      unit_title: {
+        label: "a unit (chapter) title",
+        guidance: "3-8 words naming the through-line of its lessons.",
+        max: 90,
+      },
+      tutor_prompt: {
+        label: "a tutor prompt",
+        guidance:
+          "2-4 sentences telling the AI mentor how to carry THIS lesson — what to lead with, " +
+          "what to check, what to avoid. Address the mentor, not the student.",
+        max: 700,
+      },
+      assignment_instructions: {
+        label: "assignment instructions",
+        guidance:
+          "2-5 sentences a student reads: what to produce, what good looks like, any constraint.",
+        max: 700,
+      },
+      summary: {
+        label: "a short summary",
+        guidance: "2-3 sentences, plain language, no preamble.",
+        max: 500,
+      },
+    };
+    const spec = allowed[field];
+    if (!spec) throw new Error("field is not one this assistant drafts.");
+
+    // Authorization rides whatever the field is attached to; a lesson-scoped draft
+    // checks the lesson's own course scope exactly like every other authoring action.
+    const lessonId = cleanText(body.lesson_id);
+    // Lesson context is read ONCE and reused for both the access check and the prompt:
+    // a title drafted against the lesson's own steps beats one drafted against a bare
+    // instruction.
+    let lessonContext = "";
+    if (lessonId) {
+      const ctx = await lessonStepsContext(config, lessonId);
+      await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
+      lessonContext = ctx.text || "";
+    } else {
+      const organizationId = cleanText(body.organization_id);
+      if (!organizationId) throw new Error("lesson_id or organization_id is required.");
+      await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+    }
+
+    const system =
+      `You draft ${spec.label} for a school lesson. ${spec.guidance} ` +
+      'Return ONLY JSON of the form {"text":string}. Write the field itself — no quotes ' +
+      "around it, no preamble, no explanation, no markdown. If reference material is " +
+      "given, ground the wording in it rather than inventing content.";
+    const parts: string[] = [];
+    if (lessonContext) parts.push(`Lesson context:\n${clampText(lessonContext, 4000)}`);
+    if (referenceText) parts.push(`Reference material:\n${clampText(referenceText, 8000)}`);
+    if (prompt) parts.push(`What the teacher asked for:\n${prompt}`);
+    if (currentJson) parts.push(`Current value (improve it):\n${currentJson}`);
+    if (feedback) parts.push(`Teacher feedback:\n${feedback}`);
+    if (!parts.length) throw new Error("Add a note, reference material, or open a lesson first.");
+
+    const result = await callModelJson(system, parts.join("\n\n"), { maxTokens: 600 });
+    const text = clampText(cleanText(result.text), spec.max);
+    if (!text) throw new Error("The assistant returned nothing usable — try again.");
+    return json({ status: "ok", draft: { field, text } });
+  }
+
   if (mode === "artifact") {
     const lessonId = cleanText(body.lesson_id);
     if (!lessonId) throw new Error("lesson_id is required.");

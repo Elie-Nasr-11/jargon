@@ -1823,6 +1823,43 @@ export async function readImageMaterial(
   return typeof data.text === "string" ? data.text : "";
 }
 
+// R76: draft ONE short field. Every building point a teacher writes into — a lesson
+// title, an objective, a tutor prompt, assignment instructions — can hand them a draft
+// instead of a blank box. It returns text and writes nothing: the teacher's save is
+// still the only thing that commits, so an assist can always be ignored.
+export type DraftableField =
+  | "lesson_title"
+  | "lesson_objective"
+  | "unit_title"
+  | "tutor_prompt"
+  | "assignment_instructions"
+  | "summary";
+
+export async function draftTextField(input: {
+  accessToken: string;
+  field: DraftableField;
+  classId?: string | null;
+  lessonId?: string | null;
+  organizationId?: string | null;
+  prompt?: string;
+  referenceText?: string;
+  current?: string;
+}): Promise<string> {
+  const data = await callCurriculumAdmin(input.accessToken, {
+    action: "generate",
+    mode: "text_field",
+    field: input.field,
+    class_id: input.classId || undefined,
+    lesson_id: input.lessonId || undefined,
+    organization_id: input.organizationId || undefined,
+    prompt: input.prompt || undefined,
+    reference_text: input.referenceText || undefined,
+    current: input.current ? { text: input.current } : undefined,
+  });
+  const draft = (data as unknown as { draft?: { text?: unknown } })?.draft;
+  return String(draft?.text || "");
+}
+
 export function generateCurriculumDraft(input: {
   accessToken: string;
   classId?: string | null;
