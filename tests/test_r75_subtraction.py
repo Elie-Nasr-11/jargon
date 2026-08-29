@@ -59,7 +59,9 @@ class DemotionTests(unittest.TestCase):
         self.assertNotIn("Books &amp; shared content", STUDIO)
         self.assertIn("selectedClass && booksOpen ? (", STUDIO)
         self.assertIn("<LinkedCoursesPanel", STUDIO)
-        self.assertIn('{booksOpen ? "Hide linked content" : "Linked content"}', STUDIO)
+        # R77 renamed it after what it manages: this panel picks the class's COURSES and
+        # never had anything to do with resources, which "content" implied.
+        self.assertIn('{booksOpen ? "Hide courses" : "Courses in this class"}', STUDIO)
 
     def test_knowledge_is_collapsed_not_deleted(self):
         self.assertIn("const [knowledgeOpen, setKnowledgeOpen] = useState(false);", STUDIO)

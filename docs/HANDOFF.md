@@ -12123,3 +12123,23 @@ worth unifying so authoring quality tracks the Opus 5 benchmark.
 Suggested next task: wire the two remaining assists in the console dialogs, and
 decide whether authoring generation should move to the same provider as the
 mentor.
+
+## Claude -> Codex / Human - 2026-08-28 04:20
+
+Status: Finished
+Summary: R77 (see DECISIONS) — step 1 of the rebuild brief. Renamed the course
+link panel to "Courses in this class", renamed and reframed the course planner
+to "Add units & lessons" (ask leads, material optional), fixed the stale
+empty-state hint and two stale comments. New tests/test_r77_naming_defects.py;
+R60 and R75 pins re-stated.
+Files changed: frontend/src/routes/teacher.curriculum.tsx, tests.
+Tests run: python 1188 green / 4 skipped; tsc clean; vite build succeeds.
+Remaining concerns: this is a PATCH, not the rebuild. The console still carries
+16.3k lines across two mega-files, 21 always-on sections and the AI buttons the
+owner objected to. The rebuild brief (published as an artifact, 2026-08-28)
+holds the full plan: lexicon freeze, file split, then Lesson / Course / Today /
+People / Settings / admin rebuilt screen by screen with the old routes deleted
+as each lands.
+Suggested next task: owner decides between demoing on rails (patch + scripted
+path avoiding the authoring room) or building steps 2-4 before any teacher-facing
+demo.

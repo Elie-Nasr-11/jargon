@@ -2317,3 +2317,34 @@ was downgraded to a field label rather than raising the ceiling. That is the
 discipline working on the release immediately after it was introduced.
 
 Pinned in tests/test_r76_assist_everywhere.py.
+
+## R77 — step 1 of the rebuild brief: three defects, named and fixed (2026-08-28)
+
+The owner walked the console after R76 and found it worse than before the four
+releases that were meant to clarify it. Three of his findings were defects I
+introduced. Fixed here, individually pinned, because each is a distinct failure
+mode the rebuild brief names.
+
+- RENAMING INSTEAD OF RESOLVING. R75 renamed "Books & shared content" to
+  "Linked content". The panel picks which COURSES a class teaches; it has never
+  had anything to do with resources, and "content" already means the room, the
+  resources and the materials. Now "Courses in this class" — the name says what
+  it manages.
+- PARTIAL DELETION. R75 removed the lesson-level Build-from-material/Start-blank
+  fork and reported the build path unified, while the course-level entry still
+  stood. On inspection it is NOT a duplicate: AiOutlinePanel drafts the course's
+  units and lesson titles, BuildFromMaterialPanel drafts one lesson's steps.
+  Deleting it would have removed the "get my book in" job, so it got the fix
+  lessons already had — renamed "Add units & lessons", with the ask leading and
+  reference material an optional input inside it. (The brief's own verdict of
+  "cut, duplicate" was wrong and is corrected here.)
+- STALE STRINGS SURVIVING THEIR FEATURE. The outline's empty state still told
+  teachers to open a drawer deleted in the same release, and two comments still
+  described the removed fork. Copy is part of a feature.
+
+Also corrected: two older pins (R60, R75) asserted the old names. Re-stated
+against the new ones rather than dropped.
+
+The AI-button critique from the same review is NOT addressed here — it needs the
+engineered answer in Part 5 of the brief (the assistant as empty state and
+default, not a button), which is rebuild work, not a patch.
