@@ -2509,6 +2509,13 @@ offline fixture backend (62 requests, none slower than 110ms). That is NOT a
 regression — the old studio measured 14.4s on the same fixtures — but it says
 the authoring payload is over-fetched. Worth its own release.
 
+[CORRECTED BY R82. The over-fetch reading was wrong, and the evidence for it was
+never there: "62 requests, none slower than 110ms" is a description of requests
+that are all FAST. The paragraph blamed the one part of the system it had just
+measured and found innocent. The 15s was a render-blocking Google Fonts <link>
+in index.html; the browser was idle, waiting on a host it could not reach. See
+the R82 entry.]
+
 ## R81 — step 5 of the rebuild brief: Today, and the class landing (2026-08-29)
 
 Jobs 4 and 5: see who's learning, act on what needs me. The brief's step 5 is
@@ -2547,3 +2554,60 @@ was live in the Activity room and would have been worse on the landing. Scoped
 through the class's course links, with R43's discipline kept: an unreadable link
 set falls back to unscoped rather than hiding a live student from the teacher
 who could help them.
+
+## R82 — the app starts fast (2026-08-30)
+
+THE DIAGNOSIS I SHIPPED TWICE WAS WRONG. R80 and R81 both recorded that the
+class needs ~13-15s to first paint because "the authoring payload is
+over-fetched". It is not, and I should have caught it from my own numbers: the
+same sentence noted that all 62 requests were fast. Fetching was never the
+suspect.
+
+WHAT IT ACTUALLY WAS. A CPU profile of the load says the renderer's main thread
+is IDLE for 13.6 seconds — total JavaScript work across the whole load is about
+200ms. Every script finishes downloading 45ms in. Then nothing happens until
+domInteractive at 12,526ms. The browser was not computing and was not fetching;
+it was BLOCKED, and index.html said on what:
+
+    <link href="https://fonts.googleapis.com/css2?family=Manrope..." rel="stylesheet" />
+
+A render-blocking stylesheet from a third-party origin. The container has no
+route to fonts.googleapis.com, so the browser held the first paint until the
+request timed out. Blocking that one request in the harness and changing nothing
+else: first contentful paint 12,536ms -> 116ms.
+
+THIS WAS NOT ONLY A HARNESS ARTIFACT, WHICH IS THE POINT. On a network that can
+reach Google the link resolves quickly and the page looks fine — which is why it
+survived 80 releases. But the failure mode it encodes is real and it is aimed
+squarely at our users: a school or ministry network that blocks or throttles
+Google shows a BLANK WHITE PAGE for the length of a DNS timeout, and no amount
+of backend speed changes that. First paint must not depend on a host we do not
+run. Manrope and Geist Mono are now dependencies, served from our own origin,
+with font-display:swap so text paints in the fallback face immediately.
+
+THE MEASUREMENT THAT CAUGHT MY OWN REGRESSION. Self-hosting made the
+render-blocking stylesheet BIGGER: Vite inlines any asset under 4kB, which swept
+eleven small font subsets into index.css as base64 — +67kB raw, +43kB gzip that
+every visitor downloads before first paint, for Cyrillic and Greek glyphs almost
+none of them will ever render. Fonts are now excluded from inlining, and the
+blocking stylesheet came out 26.4kB gzip — 3.3kB LIGHTER than before this
+release, because the KaTeX faces were being inlined the same way.
+
+THE SECOND HALF IS REAL EVEN THOUGH IT WAS NOT THE BUG. The entry chunk held
+three.js, the student app, the teacher console, the lesson editor and the admin
+window — 2,563kB, 716kB gzip, downloaded by every visitor before anything
+rendered, most of it for a screen they were not opening. Splitting it did not
+move the harness number (the browser was idle, not busy) and I have not claimed
+otherwise. It moves the number that matters on a school connection: the entry
+payload is 352kB / 114.7kB gzip, a 6.3x cut, with the ambient canvas, both
+consoles, the lesson editor and the admin window loaded on demand.
+
+WALKED, and it found one thing the 1,246 pins did not: the Lesson screen's
+account row was blank, because R79 shipped `email=""` hardcoded into its shell
+call. The session was already loaded two hooks away; it is threaded through now.
+
+THE PIN LESSON, AGAIN. Moving the admin screen out of its route broke 37 pins
+that had no opinion about where it lives — the same failure mode R78 fixed for
+the teacher console. tests/admin_sources.py now reads the admin SURFACE, not the
+file. A publish-order pin also broke on a reformat because it pinned the column
+its two statements sat in; it asserts the order now.

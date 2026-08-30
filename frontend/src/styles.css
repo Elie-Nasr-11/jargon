@@ -9,9 +9,9 @@
      counters, and timestamps. The old serif voice is retired — .font-serif below
      remaps legacy heading markup onto bold tight-tracked Manrope. */
   --font-sans:
-    "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
-  --font-serif: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    "Manrope Variable", "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -284,7 +284,7 @@
   --dot-grid: rgba(255, 255, 255, 0.045);
 }
 
-/* Manrope + Geist Mono load from the Google Fonts stylesheet linked in index.html. */
+/* Manrope + Geist Mono are self-hosted — imported in main.tsx, served from our origin. */
 
 html,
 body {

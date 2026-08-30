@@ -70,7 +70,13 @@ class OneSaveTests(unittest.TestCase):
         self.assertIn("setTouched(false)", save_body)
 
     def test_publish_flushes_before_publishing(self):
-        self.assertIn('saveAll();\n              authoring.setPublication("publish_lesson");', SCREEN)
+        # The claim is the ORDER — flush the open cards, then publish — not the column
+        # the two statements happen to sit in. Pinning the indentation made a reformat
+        # look like a behaviour change.
+        self.assertRegex(
+            SCREEN,
+            r'saveAll\(\);\s*authoring\.setPublication\("publish_lesson"\);',
+        )
 
     def test_steps_flush_before_meta(self):
         # The meta path may refetch; a step write racing it would visually revert.

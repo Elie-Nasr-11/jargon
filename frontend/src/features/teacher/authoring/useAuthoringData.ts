@@ -106,6 +106,9 @@ export function useAuthoringData(classId: string) {
     busy,
     setBusy,
     teacherId,
+    // The signed-in address, for the shell's account row. The session is already
+    // in hand here — a screen that renders the shell should not fetch it again.
+    email: sessionQuery.data?.user.email ?? "",
     data,
     classSummary,
     patch,

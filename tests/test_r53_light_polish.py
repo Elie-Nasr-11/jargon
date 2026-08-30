@@ -68,7 +68,10 @@ class BrainLightTests(unittest.TestCase):
 class LoginTests(unittest.TestCase):
     def test_rainbow_wash_is_retired(self):
         self.assertNotIn("GradientCard", LOGIN)
-        self.assertIn('<AmbientCanvas intensity={0.16} hue="--ambient-neutral" />', LOGIN)
+        # The claim is the WASH, not the component: a whisper at working-surface
+        # intensity, tinted neutral. R82 put the canvas behind <AmbientBackdrop> so
+        # three.js loads after first paint — same wash, deferred.
+        self.assertIn('<AmbientBackdrop intensity={0.16} hue="--ambient-neutral" />', LOGIN)
 
     def test_card_and_fields_speak_the_platform_language(self):
         self.assertIn("rounded-card border border-border bg-depth-card shadow-raised", LOGIN)

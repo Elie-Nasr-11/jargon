@@ -1,13 +1,14 @@
 from pathlib import Path
 import unittest
 
+from tests.admin_sources import admin_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN_FUNCTION = ROOT / "supabase" / "functions" / "run" / "index.ts"
 CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 RESOURCE_PROCESSING = ROOT / "supabase" / "functions" / "resource-processing" / "index.ts"
 ADMIN_OPS = ROOT / "supabase" / "functions" / "admin-ops" / "index.ts"
-ADMIN_ROUTE = ROOT / "frontend" / "src" / "routes" / "admin.tsx"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
 
 
@@ -18,7 +19,7 @@ class Phase11ReliabilityModelRoutingTests(unittest.TestCase):
         cls.chat = CHAT_FUNCTION.read_text(encoding="utf-8")
         cls.resource_processing = RESOURCE_PROCESSING.read_text(encoding="utf-8")
         cls.admin_ops = ADMIN_OPS.read_text(encoding="utf-8")
-        cls.admin_route = ADMIN_ROUTE.read_text(encoding="utf-8")
+        cls.admin_route = admin_source()
         cls.types = TYPES.read_text(encoding="utf-8")
 
     def test_run_function_retries_sleeping_engine_and_records_wake_events(self):

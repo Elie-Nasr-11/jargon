@@ -12262,3 +12262,41 @@ exercised in fixtures (the mock returns 403 for admin-ops).
 Suggested next task: either the payload fix, or step 6 — People + Settings,
 which retires the Students room as it stands and gives "courses in this class"
 its real home.
+
+## Claude -> Codex / Human - 2026-08-30 07:40
+
+Status: Finished
+Summary: R82 (see DECISIONS) — the app starts fast, and the reason it did not
+was NOT the one I recorded in R80 and R81. Those entries blamed an over-fetched
+authoring payload; a CPU profile shows the main thread idle for 13.6s with only
+~200ms of JavaScript work in the whole load. The real cause was a render-blocking
+Google Fonts <link> in index.html: the browser waited on a host it could not
+reach. Fonts are self-hosted now, and the entry chunk — which held three.js, the
+student app, both consoles and the admin window — is split so each screen loads
+on demand. First contentful paint 12,536ms -> 92ms; entry payload 716kB gzip ->
+114.7kB gzip. The wrong diagnosis is corrected in place in DECISIONS rather than
+quietly dropped.
+Files changed: frontend/index.html (third-party font link removed), main.tsx
+(@fontsource imports), styles.css (font stack names the self-hosted family),
+vite.config.ts (never base64-inline fonts into the blocking stylesheet), new
+components/AmbientBackdrop.tsx (three.js after first paint), new
+features/admin/AdminPage.tsx (moved out of the route), lazy route components for
+both consoles / the lesson editor / the student app / the admin window,
+LessonScreen + useLessonAuthoring + useAuthoringData (blank account row fixed),
+new tests/admin_sources.py, new tests/test_r82_first_paint.py, and the admin,
+login and publish-order pins re-pointed at their surfaces.
+Tests run: python 1255 green / 4 skipped; tsc clean; vite build succeeds; eslint
+on the teacher surface improved from 94 to 43 pre-existing prettier errors; each
+new pin mutation-tested (reintroduce the font link, drop the font import, remove
+the inline rule, reverse the publish order — each fails as it should); walked in
+a real browser against the offline fixture backend, login through home, class,
+Content, a lesson and Students.
+Remaining concerns: the ~13s figure quoted to the owner in R80 and R81 was a
+property of the offline container (no route to Google), so the LIVE app was never
+that slow — the live win is the payload cut and the removal of a third-party
+dependency from the critical path, not 13 seconds. Two further chunks are worth
+a look but were out of scope: createLucideIcon is 260kB and useAuthoringData
+pulls a 454kB chunk. The Today digest still cannot be exercised in fixtures (the
+mock returns 403 for admin-ops, four times per load).
+Suggested next task: step 6 — People + Settings, which retires the Students room
+as it stands and gives "courses in this class" its real home.

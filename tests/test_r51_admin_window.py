@@ -22,10 +22,12 @@ Pinned contracts:
 from pathlib import Path
 import unittest
 
+from tests.admin_sources import admin_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
 API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
-ROUTE = (ROOT / "frontend" / "src" / "routes" / "admin.tsx").read_text(encoding="utf-8")
+ROUTE = admin_source()
 DATA = (ROOT / "frontend" / "src" / "features" / "admin" / "adminData.ts").read_text(
     encoding="utf-8"
 )

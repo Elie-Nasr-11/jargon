@@ -374,3 +374,18 @@ its `reviewDue` field.
   keys ("jargon.repeat") — matching needs either a model call per write or the memory
   writer emitting skill keys alongside phrases. Cheap path if wanted: have the summary
   prompt return skill_keys per struggle and store them in profile.affirmed's key.
+
+- **`tab` vs `section` for the class rooms** (noticed while walking R82). The code calls
+  them sections — `ClassSection`, `CLASS_SECTIONS`, `normalizeClassSection` — but the URL
+  says `?tab=today`. That is one concept with two names, which the lexicon's "one word,
+  one meaning" law exists to prevent. Renaming the query key is a breaking change for the
+  notification-email deep links that already carry `?tab=`, so it wants a deliberate
+  decision: keep `tab` and rename the code, or rename the key and accept one release of
+  reading both. Step 6 touches this nav anyway.
+
+- **The Today digest calls an admin-only endpoint.** A teacher loading the class landing
+  fires `functions/v1/admin-ops` four times and, in fixtures, gets four 403s — the card
+  renders "Admin access for this action is required." where the week's digest should be.
+  Fine on production where the teacher's token carries the scope, but the landing screen
+  should not be asking an ADMIN endpoint for a teacher's own weekly summary, and the
+  four-fold retry is wasted either way. Worth folding into step 6 or 7.
