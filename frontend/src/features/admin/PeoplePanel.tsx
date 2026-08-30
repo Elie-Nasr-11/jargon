@@ -28,6 +28,7 @@ export function PeoplePanel({
   currentUserId,
   isPlatformAdmin,
   onScope,
+  rosterImport,
 }: {
   token: string;
   scope: AdminScope;
@@ -35,6 +36,9 @@ export function PeoplePanel({
   currentUserId: string;
   isPlatformAdmin: boolean;
   onScope: (result: AdminScopeResult) => void;
+  // R84: the roster importer — the only door that CREATES accounts — stands in the
+  // directory, passed in so this panel keeps owning the list and not the seeding.
+  rosterImport?: React.ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
@@ -169,11 +173,12 @@ export function PeoplePanel({
               </span>
             </h2>
             <p className="mt-1 text-body text-muted-foreground">
-              Everyone in this organization — reset passwords, adjust access, and manage class
-              membership.
+              Everyone in this organization — the directory, and the only place accounts are
+              created. Reset passwords, adjust access, and manage class membership.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {rosterImport}
             <div className="relative">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -184,7 +189,10 @@ export function PeoplePanel({
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search name or email"
                 aria-label="Search people"
-                className="jargon-input !w-[220px] pl-9"
+                // !pl-9: jargon-input sets its own padding and wins on order, so the
+                // plain utility lost and the magnifier sat on the placeholder's first
+                // letter. Measured at 12.8px of padding against a 28px-wide icon.
+                className="jargon-input !w-[220px] !pl-9"
               />
             </div>
             <select

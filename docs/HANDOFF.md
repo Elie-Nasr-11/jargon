@@ -12359,3 +12359,57 @@ an empty section cannot exist.
 Suggested next task: step 7 — the admin window as Setup / People / Classes / Health,
 with list_pilot_readiness as the spine of an ordered, stateful checklist, retiring
 the Seeding tab.
+
+## Claude -> Codex / Human - 2026-08-30 09:45
+
+Status: Starting
+Task: R84 — step 7 of the rebuild brief. The admin window becomes Setup / People /
+Classes / Health, with list_pilot_readiness's per-class checklist as Setup's spine.
+"Seeding" dies: its three unrelated jobs go to the screen that owns each — class
+creation to Classes (the only door), roster import to People (the only place
+accounts are created), demo logins to a fenced developer corner.
+Files I expect to touch: new features/admin/SetupPanel.tsx and HealthPanel.tsx,
+PeoplePanel.tsx (roster import moves in), AdminPage.tsx (1,534 lines — the Live,
+Cost and Seeding panel bodies leave it), OverviewPanel.tsx (Setup replaces it),
+routes/admin.tsx + platform.tsx if the tab set changes their search validation,
+tests.
+Notes: the checklist the brief asks for ALREADY EXISTS server-side —
+ReadinessChecklistItem is emitted per class by admin-ops (Active teacher · Active
+students · Published lessons · Work/resources prepared · Recent completion · No
+open alerts/errors) along with a per-class `issues` list, and neither is rendered
+anywhere in the frontend. That is what the brief means by "barely used". So this
+is a frontend-only release again: no edge function change, admin-ops stays v23.
+
+## Claude -> Codex / Human - 2026-08-30 11:05
+
+Status: Finished
+Summary: R84 (see DECISIONS) — step 7 of the rebuild brief. The admin window is
+Setup / People / Classes / Health. Setup is the ordered readiness checklist the
+brief asks for, built on a six-item per-class array admin-ops has been sending
+since R51 and that nothing rendered. "Seeding" is dead: class creation was a
+duplicate and is gone, roster import moved to People (which is what makes "the
+only place accounts are created" true), and demo logins are fenced in a
+platform-admin-only, folded-shut developer corner. Live + Cost merged into Health,
+and the tab set no longer changes shape depending on who is signed in. Frontend
+only — admin-ops stays v23, nothing deployed.
+Files changed: new features/admin/SetupPanel.tsx, HealthPanel.tsx,
+RosterImport.tsx, DeveloperCorner.tsx; OverviewPanel.tsx deleted (its two surviving
+facts rehomed into Setup and Health); AdminPage.tsx 1,534 → 497 lines with the
+Live/Cost/Seeding bodies and all their orphaned state removed; PeoplePanel.tsx
+(import door + a measured search-field padding fix); tests (new R84 file; the
+admin-ops tab pin, three R51 route pins and the two R51 Overview pins re-pointed).
+Tests run: python 1285 green / 4 skipped; tsc clean and tsc --noUnusedLocals clean
+for features/admin; vite build succeeds; eslint 0 errors in features/admin (255
+before the format pass); R84's pins mutation-tested (seeding returning as a tab, an
+importer that names a class instead of picking one, a checklist that stops saying
+what fixes each item — each fails as it should); walked in a real browser as a
+platform admin through all four tabs and all four legacy ?tab= links
+(overview/seeding → Setup, live/cost → Health).
+Remaining concerns: the scratchpad mock backend now returns the readiness checklist
+so Setup is walkable — that is a harness file, not repo code, so a future session
+walking this screen on a fresh scratchpad will see the empty-checklist state (which
+is now handled, but shows nothing useful). The empty cost-breakdown tables still
+draw column headers above "No model usage recorded yet.", which is pre-existing and
+slightly odd. Org admins were not walked; only the platform-admin path was.
+Suggested next task: step 8 — the AI mechanisms A–D across the new screens, whose
+principle is "the assistant is the empty state and the default, never a button".
