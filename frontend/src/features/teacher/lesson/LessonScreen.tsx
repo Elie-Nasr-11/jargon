@@ -223,7 +223,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
       classes={authoring.data?.classes ?? []}
       activeView="class"
       activeClassId={classId}
-      activeSection="content"
+      activeSection="course"
     >
       <PageShell
         widthClass="max-w-[1040px]"

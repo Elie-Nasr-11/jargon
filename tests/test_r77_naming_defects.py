@@ -19,7 +19,7 @@ individually because each one is a distinct failure mode the brief names:
 """
 from pathlib import Path
 import unittest
-from tests.teacher_sources import authoring_source
+from tests.teacher_sources import authoring_source, settings_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,10 +28,13 @@ STUDIO = authoring_source()
 
 class NamesSayWhatTheThingIsTests(unittest.TestCase):
     def test_the_course_link_panel_is_named_after_courses(self):
-        self.assertIn("Courses in this class", STUDIO)
+        # R83: the panel moved to Class · Settings; the name it was given is what
+        # travelled with it.
+        self.assertIn("Courses in this class", settings_source())
         # Neither of the two names that hid what it manages.
-        self.assertNotIn("Linked content", STUDIO)
-        self.assertNotIn("Books &amp; shared content", STUDIO)
+        for surface in (STUDIO, settings_source()):
+            self.assertNotIn("Linked content", surface)
+            self.assertNotIn("Books &amp; shared content", surface)
 
     def test_planning_a_course_is_not_a_rival_build_path(self):
         self.assertIn("Add units &amp; lessons", STUDIO)

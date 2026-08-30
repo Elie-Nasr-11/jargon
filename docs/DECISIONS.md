@@ -2611,3 +2611,65 @@ that had no opinion about where it lives — the same failure mode R78 fixed for
 the teacher console. tests/admin_sources.py now reads the admin SURFACE, not the
 file. A publish-order pin also broke on a reformat because it pinned the column
 its two statements sat in; it asserts the order now.
+
+## R83 — step 6 of the rebuild brief: People, and the class's Settings (2026-08-30)
+
+THE BRIEF'S WORDS, WHICH ARE ALSO THE TEST. "Class · People: who's in the class,
+in what section, how each is doing. Add from the school directory · remove from
+this class. Never account creation." And "Class · Settings: which courses this
+class teaches (today's mis-named 'Linked content'). Class name, sections,
+archive." The step retires "the Students room as-is", which is what Law 6 asks of
+every release that adds a screen.
+
+NO BACKEND. Every write step 6 needs was already permitted, and I checked before
+designing rather than after: class_memberships has 'removed' in its own check
+constraint and a "Class teachers can manage class memberships" FOR ALL policy;
+classes has 'archived' and a class-teacher update policy. So removing a student,
+renaming a section, renaming a class and archiving one are four direct table
+writes under RLS — no edge function, no deploy, and no admin token in a teacher's
+hands. A pin asserts these screens never reach for admin-ops, because the moment
+one does, a teacher needs an admin to run their own class.
+
+REMOVAL IS A STATUS, NOT A DELETE. The membership is marked 'removed'; the
+account, the evidence and the person's other classes are untouched, and the
+confirm says so by name before it happens. Archiving a class is the same shape.
+Nothing on either screen destroys a row — the one place accounts are created or
+destroyed is the school directory in admin, and People says that out loud where
+a teacher might otherwise assume the "Add" button makes one.
+
+SETTINGS IS A SCREEN, NOT A PILL. The brief lists four class screens; it does not
+say all four get equal chrome. A teacher renames a class about once a term, so a
+fourth pill would sit beside the three daily rooms all year claiming to be their
+peer — Law 4, nothing always-on that isn't always needed. It gets the gear beside
+the class name: one click, no daily noise. This is the only section the console
+renders that is not a CLASS_SECTIONS value, and the pins say so deliberately
+rather than leaving it looking like an oversight.
+
+THE COURSE-LINK PANEL FINALLY HAS ONE HOME. "Courses in this class" is the only
+control in the product that changes what a student can SEE, and it has been a
+drawer under the curriculum (R45), then an overflow-menu dialog on the Course
+screen (R80, with a note in its own copy saying it moves to settings when that
+screen is built). It is now the first card in Settings, and the file moved with
+it. R80's promise, kept.
+
+CONTENT BECAME COURSE. The lexicon retired "Content" as a noun in step 0 and the
+brief's screen list has always called it "Class · Course"; the pill went on
+saying Content for three releases after that. Renamed, with every legacy ?tab=
+value still resolving through normalizeClassSection so bookmarks and notification
+links keep landing.
+
+DEAD COMPUTE, FOUND WHILE READING. reviewRows, liveStudents and workItems were
+still being derived on every render of every class — workItems doing a full pass
+over every submission and every attempt to build maps — with nothing having read
+them since R81 deleted the Activity room. Deleted. ClassDetail went 835 → 470
+lines and is now a router and a grading face rather than a screen.
+
+WALKED, and it found three things the 1,256 pins did not: the gear was lucide's
+Settings2, which is a sliders icon and reads as "filters"; the course panel's
+blurb still said "the outline above shows the same set" from when it lived under
+the outline; and removing a section — one click that relabels every student in it
+— asked for no confirmation while removing a single student asked by name. All
+three fixed. The three new writes were then exercised for real against the
+fixture backend rather than assumed: PATCH /classes 200 with the new name in the
+sidebar, PATCH /class_memberships 200 with the roster going 4 → 3, and a section
+rename moving both of its students at once.

@@ -42,7 +42,9 @@ NOTIFICATIONS = (SRC / "components" / "NotificationsMenu.tsx").read_text(encodin
 
 class LandingTests(unittest.TestCase):
     def test_today_is_the_default_and_leads_the_spine(self):
-        self.assertIn('export type ClassSection = "today" | "students" | "content";', NAV)
+        self.assertIn(
+            'export type ClassSection = "today" | "people" | "course" | "settings";', NAV
+        )
         self.assertIn('{ value: "today", label: "Today" }', NAV)
         # The default arm of the legacy map — an unknown or absent tab lands here.
         self.assertIn('return "today";', NAV.split("switch (tab) {", 1)[1])

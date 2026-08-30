@@ -26,7 +26,7 @@ from pathlib import Path
 import re
 import unittest
 from tests.admin_sources import admin_paths, admin_source
-from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source
+from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source, people_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,7 +116,15 @@ class R52StructureTests(unittest.TestCase):
         live = CONSOLE.split("In a lesson now", 1)[1].split("Waiting on you", 1)[0]
         self.assertIn("flex items-center gap-3 rounded-card border border-border", live)
         self.assertIn("Watch", live)
-        self.assertIn("the section picker lives inside", CONSOLE)
+        # The People row: its section picker and its remove button sit inside the same
+        # row container as the name, rather than floating beside it. Pinned as structure
+        # (R83) — the previous pin quoted a code comment, which a rewrite of the room
+        # broke without changing a single pixel.
+        row = people_source().split("group.students.map((studentId)", 1)[1]
+        row = row.split("</div>\n                    );", 1)[0]
+        self.assertIn("flex items-center gap-3 rounded-card border", row)
+        self.assertIn("<select", row)
+        self.assertIn("Remove ${displayName", row)
 
     def test_class_tabs_use_the_solid_active_pill(self):
         # R53 evolved the active pill from graphite to the primary blue (the owner

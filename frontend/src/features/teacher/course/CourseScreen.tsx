@@ -12,15 +12,11 @@ import { AlertCircle, BookOpen, ClipboardCheck, Layers3, Paperclip } from "lucid
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { OverflowMenu } from "@/components/OverflowMenu";
 import { RouteLoader } from "@/components/RouteLoader";
-import { LinkedCoursesPanel } from "@/features/teacher/LinkedCoursesPanel";
 import {
   AiOutlinePanel,
   BuildFromMaterialPanel,
 } from "@/features/teacher/authoring/generatePanels";
-import {
-  CourseBuildProgress,
-  CourseReviewPanel,
-} from "@/features/teacher/course/coursePanels";
+import { CourseBuildProgress, CourseReviewPanel } from "@/features/teacher/course/coursePanels";
 import { CourseOutline } from "@/features/teacher/course/CourseOutline";
 import { useCourseBuild } from "@/features/teacher/course/useCourseBuild";
 import { useCourseData } from "@/features/teacher/course/useCourseData";
@@ -39,7 +35,6 @@ export function CourseScreen({
   const build = useCourseBuild(classId, course);
   const [buildCourseId, setBuildCourseId] = useState<string | null>(null);
   const [buildForUnitId, setBuildForUnitId] = useState<string | null>(null);
-  const [coursesOpen, setCoursesOpen] = useState(false);
 
   const openLesson = useCallback(
     (lessonId: string) => {
@@ -153,11 +148,6 @@ export function CourseScreen({
                   disabled: course.busy,
                   onClick: openCourseBuild,
                 },
-                {
-                  label: "Courses in this class…",
-                  icon: BookOpen,
-                  onClick: () => setCoursesOpen(true),
-                },
                 onAddMaterial
                   ? {
                       label: "Add material to this class…",
@@ -252,26 +242,6 @@ export function CourseScreen({
               build.closeReview();
               openLesson(lessonId);
             }}
-          />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={coursesOpen} onOpenChange={(open) => (open ? null : setCoursesOpen(false))}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[560px]">
-          <DialogHeader>
-            <DialogTitle>Courses in this class</DialogTitle>
-          </DialogHeader>
-          <p className="mb-3 flex items-start gap-1.5 text-meta text-muted-foreground">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
-            This is the only surface that changes what students see. It moves to the class&apos;s
-            settings when that screen is built.
-          </p>
-          <LinkedCoursesPanel
-            classId={classId}
-            courses={course.courseOptions}
-            linked={course.linkedCourseIds}
-            peerNames={course.peerClassNames}
-            onSaved={() => void course.resync()}
           />
         </DialogContent>
       </Dialog>

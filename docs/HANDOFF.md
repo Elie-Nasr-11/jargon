@@ -12300,3 +12300,62 @@ pulls a 454kB chunk. The Today digest still cannot be exercised in fixtures (the
 mock returns 403 for admin-ops, four times per load).
 Suggested next task: step 6 — People + Settings, which retires the Students room
 as it stands and gives "courses in this class" its real home.
+
+## Claude -> Codex / Human - 2026-08-30 08:05
+
+Status: Starting
+Task: R83 — step 6 of the rebuild brief. Class · People (the roster: who is in the
+class, in what section, how each is doing; add from the school directory, remove
+from this class, never account creation) and Class · Settings (which courses this
+class teaches — today's mis-named "Linked content" — plus class name, sections,
+archive). Retires the Students room as it stands.
+Files I expect to touch: new features/teacher/people/ and features/teacher/settings/,
+shell/teacherNav.ts (rooms become today | people | course | settings),
+console/ClassDetail.tsx (Students branch deleted), course/CourseScreen.tsx
+(courses-in-class leaves its overflow menu), LinkedCoursesPanel.tsx (moves or
+dissolves), lib/api.ts (remove-from-class and class name/archive writes), tests.
+Notes: every write step 6 needs is already permitted by RLS — class_memberships
+has status 'removed' and a "Class teachers can manage class memberships" FOR ALL
+policy; classes has status 'archived' and a class-teacher update policy. So this
+is a frontend-only release: no edge function changes, no deploy. Also renaming
+the Content room to Course, which the lexicon (step 0) already retired as a noun
+and the brief's screen list already calls "Class · Course"; legacy ?tab= values
+keep mapping through normalizeClassSection.
+
+## Claude -> Codex / Human - 2026-08-30 09:20
+
+Status: Finished
+Summary: R83 (see DECISIONS) — step 6 of the rebuild brief. Class · People is the
+roster the brief describes (who, in what section, how each is doing; add from the
+school directory, remove from this class, never account creation) and Class ·
+Settings holds the rare, real things (which courses this class teaches, its name,
+its sections, archive). The Students room is deleted, and the Content room is
+renamed Course, which the lexicon retired as a noun in step 0. Frontend only: every
+write was already permitted by an existing class-teacher RLS policy, so there is no
+edge function change and nothing to deploy.
+Files changed: new features/teacher/people/ (PeopleScreen, roster) and
+features/teacher/settings/ (ClassSettingsScreen + LinkedCoursesPanel, moved in),
+shell/teacherNav.ts (today | people | course | settings; Settings is a screen, not
+a pill), console/ClassDetail.tsx (Students branch deleted, 835 → 470 lines, plus
+three dead R81 derivations removed), TeacherConsole.tsx (remove-from-class write,
+back pill lands on People), course/CourseScreen.tsx (courses-in-class leaves its
+overflow menu), lib/api.ts (removeFromClass, updateClassDetails,
+renameClassSection), docs/LEXICON.md, tests (new R83 file; teacher_sources gains
+people/settings accessors; R42, R43, R45, R47, R52, R75, R77, R81 and the
+authoring-studio pins re-pointed).
+Tests run: python 1270 green / 4 skipped; tsc clean; vite build succeeds; eslint on
+the teacher surface 43 → 41 pre-existing prettier errors; R83's pins mutation-tested
+(hard-delete removal, a button that stops saying where students come from, Settings
+promoted to a pill — each fails as it should); walked in a real browser against the
+offline fixture backend, including both legacy deep links (?tab=students → People,
+?tab=content → Course) and all three new writes exercised for real.
+Remaining concerns: renaming a section and adding a new one still use window.prompt,
+inherited from the old roster — crude next to the rest of the console, and worth a
+proper inline edit when someone is next in these files. The Today digest still 403s
+four times per load against admin-ops in fixtures (OPEN_QUESTIONS). Sections remain
+a text label on each membership rather than an object, which is why "rename" is a
+scoped bulk update — fine today, but it means two sections cannot share a name and
+an empty section cannot exist.
+Suggested next task: step 7 — the admin window as Setup / People / Classes / Health,
+with list_pilot_readiness as the spine of an ordered, stateful checklist, retiring
+the Seeding tab.

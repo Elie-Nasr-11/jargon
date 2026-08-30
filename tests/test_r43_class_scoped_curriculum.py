@@ -15,14 +15,14 @@ Pins:
 """
 from pathlib import Path
 import unittest
-from tests.teacher_sources import authoring_source, console_source
+from tests.teacher_sources import authoring_source, console_source, settings_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend" / "src"
 API = (FRONTEND / "lib" / "api.ts").read_text(encoding="utf-8")
 STUDIO = authoring_source()
-PANEL = (FRONTEND / "features" / "teacher" / "LinkedCoursesPanel.tsx").read_text(
+PANEL = (FRONTEND / "features" / "teacher" / "settings" / "LinkedCoursesPanel.tsx").read_text(
     encoding="utf-8"
 )
 CONSOLE = console_source()
@@ -90,10 +90,11 @@ class ClassScopedStudioTests(unittest.TestCase):
         self.assertIn("This course is shared — changes here also reach", STUDIO)
 
     def test_panel_is_mounted_controlled_by_the_studio(self):
-        self.assertIn("<LinkedCoursesPanel", STUDIO)
-        self.assertIn("linked={course.linkedCourseIds}", STUDIO)
-        self.assertIn("peerNames={course.peerClassNames}", STUDIO)
-        self.assertNotIn("LinkedCoursesPanel", CONSOLE)
+        # R83: mounted by Class · Settings, the screen the brief gives it.
+        self.assertIn("<LinkedCoursesPanel", settings_source())
+        self.assertIn("linked={course.linkedCourseIds}", settings_source())
+        self.assertIn("peerNames={course.peerClassNames}", settings_source())
+        self.assertNotIn("LinkedCoursesPanel", STUDIO)
 
 
 class CoursesPanelTests(unittest.TestCase):

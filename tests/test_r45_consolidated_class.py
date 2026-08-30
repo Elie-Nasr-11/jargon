@@ -19,7 +19,7 @@ Pins:
 """
 from pathlib import Path
 import unittest
-from tests.teacher_sources import authoring_source, console_source
+from tests.teacher_sources import authoring_source, console_source, settings_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -118,11 +118,10 @@ class ClassIsTheCourseTests(unittest.TestCase):
         # shared content never competes with the class's own curriculum — and it is still
         # the only surface that can trim what students see, so it is not deleted.
         self.assertNotIn("Books &amp; shared content", STUDIO)
-        # R80: "which courses this class teaches" is rarer still — it opens from the
-        # Course screen's menu, and moves to the class's settings when that exists.
-        self.assertIn("const [coursesOpen, setCoursesOpen] = useState(false);", STUDIO)
-        self.assertIn("open={coursesOpen}", STUDIO)
-        self.assertIn("<LinkedCoursesPanel", STUDIO)
+        # R83 finished the move R80 promised: "which courses this class teaches" is
+        # not on the outline page at all any more, it is the first card in Settings.
+        self.assertNotIn("LinkedCoursesPanel", STUDIO)
+        self.assertIn("<LinkedCoursesPanel", settings_source())
 
     def test_shared_units_stay_honest_without_eating_the_title(self):
         # Long peer lists live in the tooltip; the row shows a short "shared" chip and

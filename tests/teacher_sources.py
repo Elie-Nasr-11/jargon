@@ -34,6 +34,10 @@ CONSOLE_SHELL = SRC / "features" / "teacher" / "TeacherConsole.tsx"
 CONSOLE_DIR = SRC / "features" / "teacher" / "console"
 # R81: Today is a room of the console, so it reads as part of the same surface.
 TODAY_DIR = SRC / "features" / "teacher" / "today"
+# R83: and so are People and Settings — the roster and the class's rare controls left
+# TeacherConsole/ClassDetail for their own modules.
+PEOPLE_DIR = SRC / "features" / "teacher" / "people"
+SETTINGS_DIR = SRC / "features" / "teacher" / "settings"
 
 
 def _modules(directory: Path) -> list[Path]:
@@ -62,7 +66,13 @@ def authoring_paths() -> list[Path]:
 
 def console_paths() -> list[Path]:
     """Every file that makes up the console shell, entry point first."""
-    return [CONSOLE_SHELL] + _modules(CONSOLE_DIR) + _modules(TODAY_DIR)
+    return (
+        [CONSOLE_SHELL]
+        + _modules(CONSOLE_DIR)
+        + _modules(TODAY_DIR)
+        + _modules(PEOPLE_DIR)
+        + _modules(SETTINGS_DIR)
+    )
 
 
 def authoring_source() -> str:
@@ -71,6 +81,16 @@ def authoring_source() -> str:
 
 def console_source() -> str:
     return _join(console_paths())
+
+
+def people_source() -> str:
+    """Class · People — the roster room, which R83 made a module of its own."""
+    return _join(_modules(PEOPLE_DIR))
+
+
+def settings_source() -> str:
+    """Class · Settings — the class's rare controls, likewise its own module."""
+    return _join(_modules(SETTINGS_DIR))
 
 
 def teacher_source() -> str:

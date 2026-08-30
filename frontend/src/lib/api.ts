@@ -1996,6 +1996,64 @@ export function setMemberSection(input: {
   });
 }
 
+// R83 — Class · People and Class · Settings. Every write below is a direct table write
+// governed by an existing RLS policy for the CLASS TEACHER, so none of them needs an edge
+// function or an admin token:
+//   class_memberships — "Class teachers can manage class memberships" (FOR ALL,
+//                        is_class_teacher(class_id))
+//   classes           — "Teachers and org admins can update classes" (is_class_teacher(id))
+// A teacher who is not on the class simply gets zero rows back, which is the same answer
+// the policy gives every other surface.
+
+/**
+ * Remove a student FROM THIS CLASS. Not a deletion: the membership is marked 'removed',
+ * which is the third value the column's own check constraint allows. The student's
+ * account, their evidence, and their rows in other classes are untouched — this screen
+ * never creates or destroys accounts (that is the school directory's job, in admin).
+ */
+export async function removeFromClass(input: { classId: string; userId: string }): Promise<void> {
+  const { error } = await supabase
+    .from("class_memberships")
+    .update({ status: "removed", updated_at: new Date().toISOString() })
+    .eq("class_id", input.classId)
+    .eq("user_id", input.userId)
+    .eq("role", "student");
+  if (error) throw error;
+}
+
+/** Rename or archive the class itself. Archiving is a status flip, never a delete. */
+export async function updateClassDetails(input: {
+  classId: string;
+  name?: string;
+  status?: "active" | "archived";
+}): Promise<void> {
+  const patch: Record<string, string> = { updated_at: new Date().toISOString() };
+  if (input.name !== undefined) patch.name = input.name;
+  if (input.status !== undefined) patch.status = input.status;
+  const { error } = await supabase.from("classes").update(patch).eq("id", input.classId);
+  if (error) throw error;
+}
+
+/**
+ * Rename a section across the whole class, or clear it (`to: null`) so its students fall
+ * back to "No section". A section is not a row anywhere — it is a label on each
+ * membership — so renaming one is a single scoped update rather than a rename of an
+ * object that does not exist.
+ */
+export async function renameClassSection(input: {
+  classId: string;
+  from: string;
+  to: string | null;
+}): Promise<void> {
+  const { error } = await supabase
+    .from("class_memberships")
+    .update({ section: input.to, updated_at: new Date().toISOString() })
+    .eq("class_id", input.classId)
+    .eq("role", "student")
+    .eq("section", input.from);
+  if (error) throw error;
+}
+
 // v4.0 Phase 5: the signed-in teacher's/admin's persistent notifications (RLS owner-read).
 export async function fetchNotifications(limit = 50): Promise<Notification[]> {
   const { data, error } = await supabase

@@ -16,7 +16,7 @@ Pins the structural contract of slice 1, updated through R47:
 """
 from pathlib import Path
 import unittest
-from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source
+from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source, people_source, settings_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,14 +40,19 @@ class ClassSectionsTests(unittest.TestCase):
         # rooms), rendered from CLASS_SECTIONS. R81 replaced Activity with Today: the
         # live strip and the review queue ARE "what needs me now", so they lead the
         # landing instead of hiding one tab away.
-        self.assertIn('export type ClassSection = "today" | "students" | "content";', NAV)
+        self.assertIn(
+            'export type ClassSection = "today" | "people" | "course" | "settings";', NAV
+        )
         self.assertIn('{ value: "today", label: "Today" }', NAV)
-        self.assertIn('{ value: "students", label: "Students" }', NAV)
-        self.assertIn('{ value: "content", label: "Content" }', NAV)
+        self.assertIn('{ value: "people", label: "People" }', NAV)
+        self.assertIn('{ value: "course", label: "Course" }', NAV)
+        # R83: Settings is a section but NOT a pill — Law 4, nothing always-on that
+        # isn't always needed. It is reached from the gear beside the class name.
+        self.assertNotIn('label: "Settings"', NAV)
         for retired in (
             '"live", label',
             '"classwork", label',
-            '"people", label',
+            '"students", label',
             '"grades", label',
             '"overview"',
             '"structure", label',
@@ -68,8 +73,8 @@ class ClassSectionsTests(unittest.TestCase):
             with self.subTest(case=case):
                 self.assertIn(f'case "{case}":', NAV)
         self.assertIn('return "today";', NAV)
-        self.assertIn('return "content";', NAV)
-        self.assertIn('return "students";', NAV)
+        self.assertIn('return "course";', NAV)
+        self.assertIn('return "people";', NAV)
         self.assertNotIn('return "overview"', NAV)
         self.assertNotIn('return "activity"', NAV)
 
@@ -95,15 +100,14 @@ class ConsoleTests(unittest.TestCase):
         self.assertIn('import("@/features/teacher/course/CourseScreen")', CONSOLE)
         self.assertIn("module.CourseScreen", CONSOLE)
         self.assertIn("<CourseScreen", CONSOLE)
-        self.assertIn('{section === "content" ? (', CONSOLE)
+        self.assertIn('{section === "course" ? (', CONSOLE)
 
     def test_students_section_owns_the_roster_and_no_overview_remains(self):
         # R60: the roster (sections, enrolment) lives in Students, now with each row's
         # grades + activity context. No overview strips, no hidden review room.
-        people_block = CONSOLE.split('{section === "students" ? (')[1].split(
-            "<Dialog open={enrollOpen}"
-        )[0]
-        self.assertIn("Add students", people_block)
+        # R83: the room is a module now, so the pin reads the module rather than
+        # slicing a marker out of the concatenated console.
+        self.assertIn("Add from the school directory", people_source())
         self.assertNotIn("ClassOverviewStrips", CONSOLE)
         self.assertFalse(
             (FRONTEND / "features" / "teacher" / "ClassOverview.tsx").exists(),
@@ -121,13 +125,16 @@ class ConsoleTests(unittest.TestCase):
         )
         # R43: the courses panel lives INSIDE the studio (it scopes the outline), so the
         # console no longer mounts it directly.
-        self.assertIn("<LinkedCoursesPanel", STUDIO)
-        self.assertNotIn("LinkedCoursesPanel", CONSOLE)
+        # R83: the courses panel has exactly one home — Class · Settings. It used to
+        # ride inside the studio, where it scoped the outline; the outline no longer
+        # needs to own the control that decides what a class teaches.
+        self.assertIn("<LinkedCoursesPanel", settings_source())
+        self.assertNotIn("LinkedCoursesPanel", STUDIO)
 
     def test_class_level_deep_links_land_on_the_new_sections(self):
         # Student-page back pill lands on Students; notification deep links land on
         # Today, where the work was waiting — nothing points at the retired rooms.
-        self.assertIn('search: { tab: "students" }', CONSOLE)
+        self.assertIn('search: { tab: "people" }', CONSOLE)
         self.assertIn('tab: "today"', NOTIFICATIONS)
         self.assertNotIn('tab: "live"', CONSOLE)
         self.assertNotIn('tab: "classwork"', NOTIFICATIONS)

@@ -34,6 +34,7 @@ import {
   createLessonResource,
   createTeacherNote,
   enrollStudents,
+  removeFromClass,
   fetchEnrollableStudents,
   fetchTeacherDashboard,
   gradeAssignmentSubmission,
@@ -210,6 +211,17 @@ export function TeacherConsole() {
     if (!session) throw new Error("Sign in again.");
     return fetchEnrollableStudents({ accessToken: session.access_token, classId });
   }, []);
+
+  // R83: removing a student marks THIS membership 'removed' (a value the column's own
+  // check constraint already allows) — the account, its evidence and its other classes
+  // are untouched. The dashboard refetch drops them from every roster and count at once.
+  const removeFromThisClass = useCallback(
+    async (classId: string, studentId: string) => {
+      await removeFromClass({ classId, userId: studentId });
+      await loadDashboard();
+    },
+    [loadDashboard],
+  );
 
   const enrollIntoClass = useCallback(
     async (classId: string, userIds: string[], section: string | null) => {
@@ -740,7 +752,7 @@ export function TeacherConsole() {
       classes={dashboard?.classes ?? []}
       activeView={selectedClassId || selectedStudentId ? "class" : "home"}
       activeClassId={selectedClassId}
-      activeSection={selectedStudentId ? "students" : selectedClassId ? effectiveSection : null}
+      activeSection={selectedStudentId ? "people" : selectedClassId ? effectiveSection : null}
     >
       {/* Keyed per navigation level so the page's entrance fade + focus handoff re-run on
           landing → class → student moves, like the student views. */}
@@ -753,8 +765,9 @@ export function TeacherConsole() {
                 navigate({
                   to: "/teacher/class/$classId",
                   params: { classId: selectedClassId ?? "" },
-                  // The drill-down opens from Students (and Activity) — land back on the landing tab.
-                  search: { tab: "students" },
+                  // A student drill-down is opened FROM People (and from Today's live and
+                  // waiting rows) — Back returns to the roster the student is listed in.
+                  search: { tab: "people" },
                 })
             : selectedClassId
               ? () => navigate({ to: "/teacher" })
@@ -875,6 +888,8 @@ export function TeacherConsole() {
                       onEnroll={(userIds, sectionLabel) =>
                         enrollIntoClass(selectedClass.id, userIds, sectionLabel)
                       }
+                      onRemove={(studentId) => removeFromThisClass(selectedClass.id, studentId)}
+                      onRosterChanged={() => void loadDashboard()}
                       savingResource={savingResource}
                       savingAssignment={savingAssignment}
                       savingAssessment={savingAssessment}
