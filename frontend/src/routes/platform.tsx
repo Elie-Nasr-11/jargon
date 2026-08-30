@@ -1,5 +1,11 @@
+import { Suspense, lazy } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AdminPage, validateAdminSearch } from "@/routes/admin";
+import { RouteLoader } from "@/components/RouteLoader";
+import { validateAdminSearch } from "@/routes/admin";
+
+const AdminPage = lazy(() =>
+  import("@/features/admin/AdminPage").then((module) => ({ default: module.AdminPage })),
+);
 
 // The platform-admin portal. Renders the same admin screen as /admin, but the
 // screen keys its level off the signed-in account (platform admins land here;
@@ -12,5 +18,13 @@ export const Route = createFileRoute("/platform")({
       { name: "description", content: "Platform-wide administration for Jargon." },
     ],
   }),
-  component: AdminPage,
+  component: PlatformRoute,
 });
+
+function PlatformRoute() {
+  return (
+    <Suspense fallback={<RouteLoader />}>
+      <AdminPage />
+    </Suspense>
+  );
+}

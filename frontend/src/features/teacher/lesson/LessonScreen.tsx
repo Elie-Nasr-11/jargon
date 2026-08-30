@@ -61,8 +61,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
   });
   const dashboard = dashboardQuery.data ?? null;
   const refreshDashboard = useCallback(
-    () =>
-      queryClient.invalidateQueries({ queryKey: ["teacherDashboard", authoring.teacherId] }),
+    () => queryClient.invalidateQueries({ queryKey: ["teacherDashboard", authoring.teacherId] }),
     [queryClient, authoring.teacherId],
   );
 
@@ -196,7 +195,10 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
       void navigate({
         to: "/teacher/class/$classId",
         params: { classId },
-        search: kind === "assignment" ? { tab: "today", assignment: id } : { tab: "today", assessment: id },
+        search:
+          kind === "assignment"
+            ? { tab: "today", assignment: id }
+            : { tab: "today", assessment: id },
       });
     },
     [navigate, classId],
@@ -217,7 +219,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
 
   return (
     <TeacherShell
-      email=""
+      email={authoring.email}
       classes={authoring.data?.classes ?? []}
       activeView="class"
       activeClassId={classId}
@@ -239,54 +241,58 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
           {/* The header sticks, so the band behind it has to be opaque — otherwise the
               steps scroll through the gap between the header card and the next one. */}
           <div className="sticky top-0 z-20 -mt-2 bg-background pb-2 pt-2">
-          <LessonHeader
-            lesson={lesson}
-            fields={meta.fields}
-            onField={meta.set}
-            bookPages={authoring.bookPages}
-            busy={authoring.busy}
-            unsaved={unsaved}
-            saving={saving}
-            onSave={saveAll}
-            onPublish={() => {
-              saveAll();
-              authoring.setPublication("publish_lesson");
-            }}
-            actions={[
-              { label: "Lesson settings…", icon: Settings2, onClick: () => setSettingsOpen(true) },
-              { label: "Preview as a student", icon: Eye, onClick: () => setPreviewOpen(true) },
-              {
-                label: "Ideas & vocabulary",
-                icon: BookOpen,
-                onClick: () => setKnowledgeOpen(true),
-              },
-              {
-                label: "Draft steps from a brief…",
-                icon: Sparkles,
-                onClick: () => setBriefOpen(true),
-              },
-              {
-                label: "Move to another unit…",
-                separatorBefore: true,
-                disabled: authoring.busy,
-                onClick: () => setMoveOpen(true),
-              },
-              {
-                label: "Archive",
-                icon: Archive,
-                disabled: authoring.busy,
-                onClick: () => authoring.setPublication("archive_lesson"),
-              },
-              {
-                label: "Delete lesson",
-                icon: Trash2,
-                tone: "danger",
-                separatorBefore: true,
-                disabled: authoring.busy,
-                onClick: () => setConfirmDelete(true),
-              },
-            ]}
-          />
+            <LessonHeader
+              lesson={lesson}
+              fields={meta.fields}
+              onField={meta.set}
+              bookPages={authoring.bookPages}
+              busy={authoring.busy}
+              unsaved={unsaved}
+              saving={saving}
+              onSave={saveAll}
+              onPublish={() => {
+                saveAll();
+                authoring.setPublication("publish_lesson");
+              }}
+              actions={[
+                {
+                  label: "Lesson settings…",
+                  icon: Settings2,
+                  onClick: () => setSettingsOpen(true),
+                },
+                { label: "Preview as a student", icon: Eye, onClick: () => setPreviewOpen(true) },
+                {
+                  label: "Ideas & vocabulary",
+                  icon: BookOpen,
+                  onClick: () => setKnowledgeOpen(true),
+                },
+                {
+                  label: "Draft steps from a brief…",
+                  icon: Sparkles,
+                  onClick: () => setBriefOpen(true),
+                },
+                {
+                  label: "Move to another unit…",
+                  separatorBefore: true,
+                  disabled: authoring.busy,
+                  onClick: () => setMoveOpen(true),
+                },
+                {
+                  label: "Archive",
+                  icon: Archive,
+                  disabled: authoring.busy,
+                  onClick: () => authoring.setPublication("archive_lesson"),
+                },
+                {
+                  label: "Delete lesson",
+                  icon: Trash2,
+                  tone: "danger",
+                  separatorBefore: true,
+                  disabled: authoring.busy,
+                  onClick: () => setConfirmDelete(true),
+                },
+              ]}
+            />
           </div>
 
           <LessonSteps

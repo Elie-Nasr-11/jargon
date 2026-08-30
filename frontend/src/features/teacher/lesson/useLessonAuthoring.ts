@@ -273,8 +273,7 @@ export function useLessonAuthoring(classId: string, lessonId: string) {
   const moveToUnit = useCallback(
     (targetUnitId: string) =>
       reloading(
-        (accessToken) =>
-          moveCurriculumLesson({ accessToken, classId, lessonId, targetUnitId }),
+        (accessToken) => moveCurriculumLesson({ accessToken, classId, lessonId, targetUnitId }),
         "Could not move the lesson.",
       ),
     [classId, lessonId, reloading],
@@ -399,6 +398,7 @@ export function useLessonAuthoring(classId: string, lessonId: string) {
     missing: Boolean(data) && !lesson,
     busy: authoring.busy,
     teacherId: authoring.teacherId,
+    email: authoring.email,
     data,
     lesson,
     milestone,

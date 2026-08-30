@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { RouteLoader } from "@/components/RouteLoader";
 import { getSession, signOut } from "@/lib/api";
-import { StudentApp } from "@/student/StudentApp";
 import {
   isDestination,
   isSection,
@@ -14,6 +14,12 @@ import {
 //
 // Nav state lives in the URL (?section=home&to=classes) so back/forward, refresh, and deep
 // links all work — the same contract the previous surface depended on.
+// R82: the student surface loads on demand — a teacher never downloads the transcript,
+// the maths renderer or the brain graph, and a student never downloads the console.
+const StudentApp = lazy(() =>
+  import("@/student/StudentApp").then((module) => ({ default: module.StudentApp })),
+);
+
 export const Route = createFileRoute("/learn")({
   component: LearnRoute,
   validateSearch: (
@@ -57,36 +63,38 @@ function LearnRoute() {
   };
 
   return (
-    <StudentApp
-      email={email}
-      section={activeSection}
-      destination={to}
-      classId={classId}
-      // Section switches KEEP the selected class — the class is the student's working
-      // context, not a per-section detail. Home with a class = that class's summary page.
-      onSelectSection={(nextSection) => go({ section: nextSection, class: classId })}
-      onSelectClass={(nextClassId) =>
-        go({ section: activeSection, class: nextClassId ?? undefined })
-      }
-      onSelectDestination={(destination) =>
-        go({ section: activeSection, to: destination, class: classId })
-      }
-      onCloseDestination={() => go({ section: activeSection, class: classId })}
-      onSelectMenuItem={(item) => {
-        // Every menu item does something real (MVP bar: no dead nav). Profile's stats live
-        // in Reports; Customize opens the mentor controls; sign-out clears the session.
-        if (item === "profile") go({ section: activeSection, to: "profile", class: classId });
-        else if (item === "customize")
-          go({ section: activeSection, to: "customize", class: classId });
-        else if (item === "sign-out") {
-          void signOut()
-            .catch(() => {
-              // A failed server-side sign-out still leaves for /login; the auth listener
-              // clears local state either way.
-            })
-            .finally(() => void navigate({ to: "/login" }));
+    <Suspense fallback={<RouteLoader />}>
+      <StudentApp
+        email={email}
+        section={activeSection}
+        destination={to}
+        classId={classId}
+        // Section switches KEEP the selected class — the class is the student's working
+        // context, not a per-section detail. Home with a class = that class's summary page.
+        onSelectSection={(nextSection) => go({ section: nextSection, class: classId })}
+        onSelectClass={(nextClassId) =>
+          go({ section: activeSection, class: nextClassId ?? undefined })
         }
-      }}
-    />
+        onSelectDestination={(destination) =>
+          go({ section: activeSection, to: destination, class: classId })
+        }
+        onCloseDestination={() => go({ section: activeSection, class: classId })}
+        onSelectMenuItem={(item) => {
+          // Every menu item does something real (MVP bar: no dead nav). Profile's stats live
+          // in Reports; Customize opens the mentor controls; sign-out clears the session.
+          if (item === "profile") go({ section: activeSection, to: "profile", class: classId });
+          else if (item === "customize")
+            go({ section: activeSection, to: "customize", class: classId });
+          else if (item === "sign-out") {
+            void signOut()
+              .catch(() => {
+                // A failed server-side sign-out still leaves for /login; the auth listener
+                // clears local state either way.
+              })
+              .finally(() => void navigate({ to: "/login" }));
+          }
+        }}
+      />
+    </Suspense>
   );
 }

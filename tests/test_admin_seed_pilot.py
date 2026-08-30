@@ -3,6 +3,7 @@ strip (the gradebook is the progress view now — see docs/MVP_SCOPE.md §4); it
 fingerprint was dropped from the teacher-dashboard test below."""
 from pathlib import Path
 import unittest
+from tests.admin_sources import admin_source
 from tests.teacher_sources import console_source
 
 
@@ -11,7 +12,6 @@ ADMIN_SEED = ROOT / "supabase" / "functions" / "admin-seed" / "index.ts"
 CHAT_FUNCTION = ROOT / "supabase" / "functions" / "chat" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 ROUTE_TREE = ROOT / "frontend" / "src" / "routeTree.gen.ts"
-ADMIN_ROUTE = ROOT / "frontend" / "src" / "routes" / "admin.tsx"
 TEACHER_ROUTE = ROOT / "frontend" / "src" / "routes" / "teacher.tsx"
 # The teacher console UI moved out of the thin route file into this feature module.
 TEACHER_RLS = ROOT / "supabase" / "migrations" / "0011_teacher_runtime_read_policies.sql"
@@ -25,7 +25,7 @@ class AdminSeedPilotStaticTests(unittest.TestCase):
         cls.chat = CHAT_FUNCTION.read_text(encoding="utf-8")
         cls.api = API.read_text(encoding="utf-8")
         cls.route_tree = ROUTE_TREE.read_text(encoding="utf-8")
-        cls.admin_route = ADMIN_ROUTE.read_text(encoding="utf-8")
+        cls.admin_route = admin_source()
         cls.teacher_route = TEACHER_ROUTE.read_text(encoding="utf-8")
         cls.teacher_console = console_source()
         cls.teacher_rls = TEACHER_RLS.read_text(encoding="utf-8")

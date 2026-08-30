@@ -6,13 +6,14 @@ server-side scoping/audit/no-plaintext-password pins survive both eras."""
 from pathlib import Path
 import unittest
 
+from tests.admin_sources import admin_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN_OPS = ROOT / "supabase" / "functions" / "admin-ops" / "index.ts"
 API = ROOT / "frontend" / "src" / "lib" / "api.ts"
 SUPABASE = ROOT / "frontend" / "src" / "lib" / "supabase.ts"
 TYPES = ROOT / "frontend" / "src" / "lib" / "types.ts"
-ADMIN_ROUTE = ROOT / "frontend" / "src" / "routes" / "admin.tsx"
 
 
 class AdminOpsStaticTests(unittest.TestCase):
@@ -22,7 +23,7 @@ class AdminOpsStaticTests(unittest.TestCase):
         cls.api = API.read_text(encoding="utf-8")
         cls.supabase = SUPABASE.read_text(encoding="utf-8")
         cls.types = TYPES.read_text(encoding="utf-8")
-        cls.route = ADMIN_ROUTE.read_text(encoding="utf-8")
+        cls.route = admin_source()
 
     def test_admin_ops_is_scoped_admin_service_role_only(self):
         for fragment in (

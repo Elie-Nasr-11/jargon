@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
-import { AmbientCanvas } from "@/components/AmbientCanvas";
+import { AmbientBackdrop } from "@/components/AmbientBackdrop";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { prefersReducedMotion } from "@/lib/motion";
 import { fetchPrimaryRole, getSession, roleHomeNav, signIn } from "@/lib/api";
@@ -122,7 +122,7 @@ function LoginPage() {
     // the old full-strength rainbow wash. The ambient stays as a whisper at the
     // working-surface intensity, tinted neutral like the consoles.
     <div className="relative min-h-screen overflow-hidden">
-      <AmbientCanvas intensity={0.16} hue="--ambient-neutral" />
+      <AmbientBackdrop intensity={0.16} hue="--ambient-neutral" />
       <ThemeToggle floating />
       <div
         ref={wrapRef}

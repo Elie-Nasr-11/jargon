@@ -1,5 +1,6 @@
+import { Suspense, lazy } from "react";
+import { RouteLoader } from "@/components/RouteLoader";
 import { createFileRoute } from "@tanstack/react-router";
-import { TeacherConsole } from "@/features/teacher/TeacherConsole";
 
 // Class workspace. Same console component as `/teacher`; it reads `classId`
 // from the path and the active tab from `?tab=`, so the URL is the source of
@@ -7,6 +8,15 @@ import { TeacherConsole } from "@/features/teacher/TeacherConsole";
 // tab's selected node (subject/course/unit/lesson) and open work item
 // (assignment/assessment) ride the same URL, so lesson editing and grading
 // inside a class are deep-linkable too.
+// R82: the portal loads on demand. Every route module used to import its surface
+// statically, so one 2.6 MB chunk held the student app, the teacher console and the
+// admin window — and a teacher paid for all three before anything rendered.
+const TeacherConsole = lazy(() =>
+  import("@/features/teacher/TeacherConsole").then((module) => ({
+    default: module.TeacherConsole,
+  })),
+);
+
 export const Route = createFileRoute("/teacher/class/$classId")({
   validateSearch: (
     search: Record<string, unknown>,
@@ -27,5 +37,13 @@ export const Route = createFileRoute("/teacher/class/$classId")({
     assignment: typeof search.assignment === "string" ? search.assignment : undefined,
     assessment: typeof search.assessment === "string" ? search.assessment : undefined,
   }),
-  component: TeacherConsole,
+  component: TeacherConsoleRoute,
 });
+
+function TeacherConsoleRoute() {
+  return (
+    <Suspense fallback={<RouteLoader />}>
+      <TeacherConsole />
+    </Suspense>
+  );
+}
