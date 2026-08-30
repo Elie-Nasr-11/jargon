@@ -12469,3 +12469,16 @@ has NOT been exercised against the real API. Mechanism A covers the objective an
 steps but not the TITLE (a lesson is created with one, so there is rarely an empty
 title to propose into) — worth revisiting if lesson stubs start arriving unnamed.
 Suggested next task: step 9 — delete the old routes. Not deprecate. Delete.
+
+## Claude -> Codex / Human - 2026-08-30 13:30
+
+Status: Correction to the R85 entry above
+Summary: I wrote "curriculum-admin should move v42 -> v43 — confirm it". I confirmed
+it, and it did not. deploy-backend.yml failed with
+`unexpected list functions status 401: {"message":"Unauthorized"}` — the
+SUPABASE_ACCESS_TOKEN secret is expired or revoked. curriculum-admin is live at v42,
+still on OpenAI. The frontend half of R85 is live and works against v42 (no new edge
+action was added), so nothing is broken — the "one provider" change just has not
+shipped. Fix: rotate the Supabase account access token, update the secret, re-run
+the workflow. Do not assume the provider switch is live until `list_edge_functions`
+shows curriculum-admin v43.
