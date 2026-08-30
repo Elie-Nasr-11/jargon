@@ -47,7 +47,10 @@ export type StudentAnalytics = {
   resourceOpened: number;
 };
 
-export function studentAnalyticsFor(dashboard: TeacherDashboardData, studentId: string): StudentAnalytics {
+export function studentAnalyticsFor(
+  dashboard: TeacherDashboardData,
+  studentId: string,
+): StudentAnalytics {
   const sessions = dashboard.sessions.filter((session) => session.user_id === studentId);
   const completed = sessions.filter((session) => session.status === "complete");
   const quizAttempts = dashboard.quizAttempts.filter((attempt) => attempt.user_id === studentId);
@@ -273,7 +276,10 @@ export function gradebookRowForStudent(
   };
 }
 
-export function summarizeStudent(dashboard: TeacherDashboardData, studentId: string): StudentSummary {
+export function summarizeStudent(
+  dashboard: TeacherDashboardData,
+  studentId: string,
+): StudentSummary {
   return {
     sessions: dashboard.sessions.filter((session) => session.user_id === studentId).length,
     completedSessions: dashboard.sessions.filter(
@@ -288,7 +294,12 @@ export function summarizeStudent(dashboard: TeacherDashboardData, studentId: str
 // R60 Students roster: the per-student grade rollup behind the row chip. Mirrors
 // fetchStudentGrades exactly — released statuses only, final_score ?? score — so the
 // teacher's chip and the student's own grades list can never disagree.
-export type StudentGradeSummary = { avg: number | null; graded: number; waiting: number; overdue: number };
+export type StudentGradeSummary = {
+  avg: number | null;
+  graded: number;
+  waiting: number;
+  overdue: number;
+};
 
 export function gradeSummariesForClass(
   dashboard: TeacherDashboardData,

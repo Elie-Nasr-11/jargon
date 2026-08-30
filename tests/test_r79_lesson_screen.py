@@ -49,7 +49,9 @@ LEXICON = ROOT / "docs" / "LEXICON.md"
 
 class FourSectionsTests(unittest.TestCase):
     def test_the_page_is_exactly_four_sections(self):
-        composed = SCREEN.split("<div className=\"grid gap-4\">", 1)[1].split("</PageShell>", 1)[0]
+        # Matched on the class PREFIX: this ratchet is about which sections compose the
+        # page, and adding a spacing utility to the wrapper is not a section.
+        composed = SCREEN.split('<div className="grid gap-4', 1)[1].split("</PageShell>", 1)[0]
         for section in ("<LessonHeader", "<LessonSteps", "<LessonWork", "<LessonMaterials"):
             with self.subTest(section=section):
                 self.assertIn(section, composed)
@@ -111,16 +113,30 @@ class OwnAddressTests(unittest.TestCase):
 
 class EmptyStateDoesTheWorkTests(unittest.TestCase):
     def test_an_empty_lesson_offers_its_steps_rather_than_a_draft_button(self):
+        # R85 finished what this pin was written for. R79 removed the always-on panel
+        # and left a PRESS — "Draft the steps" — which is still a button asking whether
+        # you want help. The brief's wording has no press: the steps are there when you
+        # arrive. So the empty state now drafts on mount, and the only button in it
+        # writes a step by hand.
         empty = STEPS.split("steps.length === 0 && !proposal", 1)[1].split("{proposal ?", 1)[0]
         self.assertIn("Nothing here yet.", empty)
-        self.assertIn("Draft the steps", empty)
-        # Grounded by default: the offer names the book pages it would read.
-        self.assertIn("This lesson follows ${sourceLabel}", empty)
+        self.assertIn("Add the first step", empty)
+        self.assertNotIn("Draft the steps", empty)
+        # Grounded by default: while it drafts, it names what it is reading.
+        self.assertIn("`From ${sourceLabel}.`", empty)
         # And it is NOT the old always-on panel with a brief field to fill in first.
         # (Scoped past the module's doc block, which names what it replaced.)
         body = STEPS.split("*/", 1)[1]
         self.assertNotIn("Draft steps with AI", body)
         self.assertNotIn("<AiStepsPanel", body)
+
+    def test_the_draft_runs_once_and_a_no_is_remembered(self):
+        # An assistant that re-offers what you just dismissed is a nag, and one that
+        # re-drafts on every render is a bill.
+        self.assertIn("const askedFor = useRef<string | null>(null);", STEPS)
+        self.assertIn("if (askedFor.current === lesson.id) return;", STEPS)
+        self.assertIn("setDeclined(true);", STEPS)
+        self.assertIn("declined || busy) return;", STEPS)
 
     def test_the_proposal_writes_nothing_until_it_is_kept(self):
         self.assertIn("Nothing is saved yet", STEPS)
@@ -137,11 +153,14 @@ class QuietAssistTests(unittest.TestCase):
     """Owner on R76: "not as just an AI button for everything. It should be more
     subtle. It should be better engineered." So the assist is not standing chrome."""
 
-    def test_the_assist_shows_for_an_empty_field_or_one_being_written_in(self):
-        self.assertIn('const [writing, setWriting] = useState<"title" | "objective" | null>', HEADER)
-        self.assertIn('writing === field || !fields[field].trim()', HEADER)
-        self.assertIn('{assistOn("title") ? (', HEADER)
-        self.assertIn('{assistOn("objective") ? (', HEADER)
+    def test_the_header_carries_no_assist_button_at_all(self):
+        # R79 made the assist quiet — visible only for an empty field or one being
+        # written in. R85 removes it: an empty field ARRIVES proposed, and a written one
+        # is refined by selecting the words you want changed. A button that asks "do you
+        # want help?" is the chrome the brief's failure mode 3 is about.
+        self.assertNotIn("DraftFieldButton", HEADER)
+        self.assertNotIn("assistOn(", HEADER)
+        self.assertIn("<SelectionRefine", HEADER)
 
     def test_the_header_does_not_repeat_the_back_link(self):
         # A hand-authored lesson has no book to name, and the page's back link already

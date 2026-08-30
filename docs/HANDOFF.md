@@ -12413,3 +12413,59 @@ draw column headers above "No model usage recorded yet.", which is pre-existing 
 slightly odd. Org admins were not walked; only the platform-admin path was.
 Suggested next task: step 8 — the AI mechanisms A–D across the new screens, whose
 principle is "the assistant is the empty state and the default, never a button".
+
+## Claude -> Codex / Human - 2026-08-30 11:30
+
+Status: Starting
+Task: R85 — step 8 of the rebuild brief: the four AI mechanisms, replacing twelve
+buttons. A things arrive already drafted; B empty states do the work (no press); C
+one command surface (⌘K "Ask Jargon"); D selection-scoped refinement. Deletes all
+Draft buttons. Plus the fifth non-negotiable: authoring runs on OPENAI_API_KEY
+while the mentor runs Opus 5 — unify onto the benchmark.
+Files I expect to touch: supabase/functions/curriculum-admin/index.ts
+(callModelJson, the single choke point for every authoring generation), new
+features/teacher/assist/, lesson/LessonSteps.tsx (its empty state still has a
+press), lesson/LessonHeader.tsx + LessonSettings.tsx (DraftFieldButton callers),
+DraftFieldButton.tsx (deleted), authoring/generatePanels.tsx ("Draft steps with
+AI"), tests, docs.
+Notes: the brief's failure mode 3 is my own — "'AI assist at every building point'
+became a literal button at every building point. The ask was for capability; I
+delivered chrome." So the measure of this release is buttons REMOVED, not features
+added. R79 got most of the way to mechanism B and still left a "Draft the steps"
+press; the brief's wording is that the steps are already there when you arrive.
+This release DOES change the backend, so deploy-backend.yml will run on merge and
+curriculum-admin should move v42 -> v43.
+
+## Claude -> Codex / Human - 2026-08-30 13:15
+
+Status: Finished
+Summary: R85 (see DECISIONS) — step 8 of the rebuild brief: four AI mechanisms
+replacing twelve buttons. Empty steps and an empty objective arrive already drafted,
+in proposal state, with no press (A + B). Selection-scoped refinement is the only
+visible AI control left (D). ⌘K "Ask Jargon" is the one place the removed capability
+lands (C). And authoring moved off OPENAI_API_KEY onto the mentor's benchmark, which
+was the fifth non-negotiable.
+Files changed: supabase/functions/curriculum-admin/index.ts (authoringProvider +
+callAnthropicJson behind the one callModelJson choke point), new
+features/teacher/assist/ (proposal, useFieldProposal, SelectionRefine, AskJargon),
+lesson/LessonHeader.tsx + LessonSteps.tsx + LessonScreen.tsx + LessonSettings.tsx,
+KnowledgeCard.tsx, authoring/generatePanels.tsx, DraftFieldButton.tsx (deleted),
+tests (new R85 file; R76's file re-pointed from the button to the contract it
+honoured, two R79 pins updated to the shapes that superseded them).
+Tests run: python 1305 green / 4 skipped; tsc clean; deno check clean on
+curriculum-admin via the scratchpad harness; vite build succeeds; eslint 0 errors on
+the whole teacher surface (41 before); R85's pins mutation-tested (the empty state
+stops drafting, refinement scoped to the whole field, the Anthropic branch removed —
+each fails as it should); walked in a real browser: 1 generation call on a lesson
+with one empty field, 0 on a full one, ⌘K opens, the selection affordance appears,
+and an empty lesson shows four proposed steps with no Draft button anywhere.
+Remaining concerns: THIS RELEASE DEPLOYS. deploy-backend.yml fires on a push to main
+touching supabase/functions/**, so curriculum-admin should move v42 -> v43 — confirm
+it, and confirm ANTHROPIC_API_KEY is set on the project, because without it
+authoringProvider falls back to OpenAI silently and the "one provider" change is a
+no-op in production. The Anthropic JSON path is verified by typecheck and by the pins
+only; the offline harness mocks the edge function, so the prefill-based JSON contract
+has NOT been exercised against the real API. Mechanism A covers the objective and the
+steps but not the TITLE (a lesson is created with one, so there is rarely an empty
+title to propose into) — worth revisiting if lesson stubs start arriving unnamed.
+Suggested next task: step 9 — delete the old routes. Not deprecate. Delete.

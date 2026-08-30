@@ -2736,3 +2736,67 @@ guessed, and fixed with !pl-9.
 A GUARD THE WALK ALSO EARNED: a class whose checklist comes back empty — an older
 admin-ops, or a class the checker could not read — used to render "0/0" above an
 empty bordered strip. It says what happened and offers Recheck.
+
+## R85 — step 8: the assistant stops being a button (2026-08-30)
+
+THE FAILURE MODE BEING FIXED IS MINE, AND THE BRIEF NAMES IT. "'AI assist at every
+building point' became a literal button at every building point. The ask was for
+capability; I delivered chrome. When an instruction implies a quality ('subtle',
+'helpful', 'clear'), rendering it as a widget is almost always wrong." So this
+release is measured by what it REMOVED, and the four mechanisms are what is left
+once the widgets are gone.
+
+A AND B ARE THE SAME MECHANISM AT TWO GRAINS: things arrive already drafted. An
+empty steps list drafts on arrival and shows four proposed steps; an empty
+objective on a lesson that has a title or a book arrives proposed under the field,
+in italics, saying where it came from. R79 got most of the way here and left a
+press on it — "Draft the steps" — which is still a button asking whether you want
+help. The brief's wording has no press in it.
+
+THE GUARDS MATTER MORE THAN THE FEATURE. An assistant that drafts on arrival can
+become a nag and a bill, so: it asks once per lesson (a ref, not a state flag,
+because state re-renders); a dismissal is remembered and it does not re-offer; and
+it refuses to draft when there is nothing to draft FROM — no title, no objective,
+no book pages — because proposing from thin air is how an assistant produces
+confident nonsense. Walking a filled lesson issues one generation call, for the
+one empty field, and none for anything already written.
+
+D IS THE ONLY VISIBLE AI CONTROL LEFT, and the brief says exactly why: "the
+selection already declared the target". Select three or more characters in a title
+or objective and shorter · simpler · more concrete appear. It replaces the
+selection and nothing else, and one Undo returns the whole field. The affordance
+fires on mousedown rather than click, because clicking blurs the field and the
+selection would be gone before the handler ran.
+
+C IS WHAT MAKES THE DELETIONS HONEST. Removing twelve buttons removes capability
+unless it lands somewhere, so ⌘K / "Ask Jargon" is the one place it lands. Commands
+come FROM the screen, not from a switch inside the bar, so it scales without this
+file learning about every screen in the product. Every command lands as a field
+value or a proposal — the bar runs nothing that writes, which is the first
+non-negotiable and the reason a command surface is safe to make this reachable.
+
+ONE PROVIDER, which was the fifth non-negotiable and the one with product weight:
+"Lesson quality is what a school judges." Authoring ran on OPENAI_API_KEY and
+gpt-4o-mini while the mentor ran Opus 5. callModelJson is the single choke point
+for every authoring generation in curriculum-admin, so the switch is one function:
+prefer Anthropic, fall back to whichever key exists, AUTHORING_PROVIDER=openai pins
+the old behaviour. A deployment holding only OPENAI_API_KEY is unchanged. The JSON
+contract OpenAI enforced with response_format is carried by a system instruction
+plus an assistant prefill, which is how Anthropic is asked for strict JSON.
+
+DERIVED THINGS LOST THEIR BUTTON TOO (Law 5). The knowledge card's "Draft
+knowledge" was a Draft button on content that is produced by authoring, not asked
+for. An empty card now reads the lesson when it is opened; the control that remains
+says "Read the lesson again" and only appears once there is something to re-read.
+The per-row review gate is untouched, which is what makes reading-on-arrival safe.
+
+WALKED, and it found two things the pins did not, both of them mine from this same
+hour: the Ask Jargon bar is fixed bottom-right and was sitting on top of the last
+card's controls, and one command promised "opens the step editor with a check ready
+to write" while actually opening the brief dialog. The bar got the page a bottom
+margin; the mislabelled command was deleted rather than shipped with a description
+that was not true.
+
+Buttons removed: DraftFieldButton (deleted, three call sites), "Draft the steps",
+"Draft knowledge". Renamed away from the machinery: "Draft steps with AI" → "Draft
+steps from a brief". Teacher-surface prettier errors went 41 → 0 on the way.

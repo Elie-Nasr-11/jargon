@@ -8,7 +8,6 @@
  */
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Check } from "lucide-react";
-import { DraftFieldButton } from "@/features/teacher/DraftFieldButton";
 import { SelectInput, TextArea, TextInput } from "@/features/teacher/authoring/fields";
 import type { LessonKind, ResponseMode } from "@/features/teacher/authoring/types";
 import type { LessonMetaFields } from "@/features/teacher/lesson/lessonMeta";
@@ -64,15 +63,6 @@ export function LessonSettings({
               value={fields.tutorPrompt}
               onChange={(value) => onField("tutorPrompt", value)}
             />
-            <div className="justify-self-start">
-              <DraftFieldButton
-                field="tutor_prompt"
-                current={fields.tutorPrompt}
-                lessonId={lessonId}
-                disabled={busy}
-                onDraft={(text) => onField("tutorPrompt", text)}
-              />
-            </div>
           </div>
           <TextInput
             label="Skill keys (comma separated)"

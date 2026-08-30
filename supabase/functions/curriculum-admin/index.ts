@@ -1768,11 +1768,115 @@ function artifactModel(): string {
   );
 }
 
+/**
+ * R85 — one provider (rebuild brief, step 8's fifth non-negotiable).
+ *
+ * "Authoring currently runs on OPENAI_API_KEY while the mentor runs Opus 5. Lesson
+ * quality is what a school judges — unify onto the benchmark."
+ *
+ * Every authoring generation in this function's file goes through callModelJson, so
+ * this is the only place the choice is made. It mirrors the mentor's rule in
+ * functions/chat: prefer Anthropic, fall back to whichever key actually exists, and
+ * let the provider call raise the precise error when neither does. Existing
+ * deployments that only have OPENAI_API_KEY keep working unchanged.
+ *
+ * AUTHORING_PROVIDER=openai pins the old behaviour if a deployment needs it.
+ */
+function authoringProvider(): "anthropic" | "openai" {
+  const configured = (Deno.env.get("AUTHORING_PROVIDER") || "").trim().toLowerCase();
+  const wanted: "anthropic" | "openai" = configured === "openai" ? "openai" : "anthropic";
+  const keyFor = (p: string) =>
+    Deno.env.get(p === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY");
+  if (keyFor(wanted)) return wanted;
+  const other: "anthropic" | "openai" = wanted === "anthropic" ? "openai" : "anthropic";
+  return keyFor(other) ? other : wanted;
+}
+
+// The mentor's benchmark for authoring; a cheaper literal for the small field drafts
+// is chosen by callers through opts.model, exactly as it was with the OpenAI names.
+function anthropicModelFor(model: string | undefined): string {
+  const named = (model || "").trim();
+  if (named.startsWith("claude-")) return named;
+  const configured = Deno.env.get("ANTHROPIC_MODEL_AUTHORING")?.trim();
+  if (configured) return configured;
+  // gpt-4o-mini was the small drafter and gpt-4o the artifact model; map both onto the
+  // benchmark rather than inventing a second quality tier the school never asked for.
+  return "claude-opus-5";
+}
+
+async function callAnthropicJson(
+  systemPrompt: string,
+  userPrompt: string,
+  opts: { model?: string; maxTokens?: number; timeoutMs?: number },
+): Promise<DbRow> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("AI authoring is not configured (ANTHROPIC_API_KEY missing).");
+  const controller = new AbortController();
+  const timer = opts.timeoutMs ? setTimeout(() => controller.abort(), opts.timeoutMs) : null;
+  let res: Response;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: anthropicModelFor(opts.model),
+        max_tokens: opts.maxTokens || 4096,
+        temperature: 0.4,
+        // The JSON contract OpenAI enforced with response_format is stated in the
+        // system prompt and re-stated as a prefill, which is how Anthropic is asked
+        // for strict JSON. Callers already parse defensively.
+        system: `${systemPrompt}\n\nReply with a single JSON object and nothing else. No prose, no code fences.`,
+        messages: [
+          { role: "user", content: userPrompt },
+          { role: "assistant", content: "{" },
+        ],
+      }),
+    });
+  } catch (err) {
+    throw new Error(
+      (err as Error)?.name === "AbortError"
+        ? "The model took too long. Try again."
+        : "Model request failed.",
+    );
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  const data = await res.json();
+  if (!res.ok) {
+    const message =
+      data && typeof data === "object" && data.error && typeof data.error === "object"
+        ? String((data.error as DbRow).message || "Model request failed.")
+        : "Model request failed.";
+    throw new Error(message);
+  }
+  const parts = Array.isArray(data?.content) ? data.content : [];
+  const text = parts
+    .filter((part: DbRow) => part && part.type === "text")
+    .map((part: DbRow) => String(part.text || ""))
+    .join("");
+  // The prefilled "{" is not echoed back, so put it in front of what did come back.
+  const body = `{${text}`.trim();
+  try {
+    const parsed = JSON.parse(body);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as DbRow) : {};
+  } catch {
+    throw new Error("The model returned invalid JSON. Try again.");
+  }
+}
+
 async function callModelJson(
   systemPrompt: string,
   userPrompt: string,
   opts?: { model?: string; maxTokens?: number; timeoutMs?: number },
 ): Promise<DbRow> {
+  if (authoringProvider() === "anthropic") {
+    return await callAnthropicJson(systemPrompt, userPrompt, opts || {});
+  }
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("AI authoring is not configured (OPENAI_API_KEY missing).");
   const model = opts?.model?.trim() || Deno.env.get("OPENAI_MODEL_DEFAULT")?.trim() || "gpt-4o-mini";

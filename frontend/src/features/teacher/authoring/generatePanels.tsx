@@ -142,8 +142,8 @@ export function BuildFromMaterialPanel({
           <h4 className="text-body font-medium text-foreground">New lesson</h4>
           <p className="mt-0.5 text-meta text-muted-foreground">
             Say what the lesson should teach. Add reference material if you have it — a chapter,
-            your notes, a link — and Jargon will ground the lesson in it. Either way you get
-            steps, a wrap-up quiz and an assignment to review before anything is published.
+            your notes, a link — and Jargon will ground the lesson in it. Either way you get steps,
+            a wrap-up quiz and an assignment to review before anything is published.
           </p>
         </div>
       </div>
@@ -575,13 +575,17 @@ export function AiStepsPanel({
 
   return (
     <div>
+      {/* R85: named after what it does, not after the machinery. "Draft steps with AI"
+          framed the assistant as the point; the teacher's point is the steps. This is
+          the one deliberate path for "I know what I want, here is the brief" — the
+          empty lesson drafts on its own without ever coming here. */}
       <div className="mb-2 flex items-center gap-2 text-title font-medium text-foreground">
         <Sparkles className="h-4 w-4" strokeWidth={1.7} />
-        Draft steps with AI
+        Draft steps from a brief
       </div>
       <p className="mb-3 text-meta text-muted-foreground">
-        Describe the lesson. The AI sees the lesson context and any reference material you attach.
-        Refine individual steps, then add them.
+        Say what this lesson should teach. Jargon reads the lesson and any material you attach, and
+        proposes the steps — refine any of them, then add them.
       </p>
       <TextArea label="Brief" value={prompt} onChange={setPrompt} />
       <div className="mt-3">

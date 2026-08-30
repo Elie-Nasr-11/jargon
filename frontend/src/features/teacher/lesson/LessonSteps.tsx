@@ -5,12 +5,14 @@
  * ordered, dragged, and edited in place, and adding one names what kind of beat
  * it is rather than asking afterwards.
  *
- * The empty state does the drafting (rebuild brief, mechanism B): an empty
- * lesson does not show a "Draft steps with AI" button next to "No steps yet" —
- * it offers the steps, already grounded in whatever this lesson was built from.
- * One press, then review. Nothing is written until the teacher keeps them.
+ * The empty state IS the drafting (rebuild brief, mechanism B). R79 got this half
+ * right and left a press on it — "Draft the steps" — which is still a button asking
+ * whether you want help. The brief's wording has no press in it: "Nothing here yet —
+ * here are six steps drafted from pages 31–45. Keep them, or start your own." So an
+ * empty steps list drafts on arrival and shows what it got. Nothing is written until
+ * the teacher keeps them, and dismissing leaves an empty lesson, not a mess.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Layers3, Loader2, Plus, Sparkles } from "lucide-react";
 import { StepCard } from "@/features/teacher/authoring/StepCard";
 import { ReorderList, dropClass } from "@/features/teacher/authoring/dragList";
@@ -78,6 +80,9 @@ export function LessonSteps({
   const [addOpen, setAddOpen] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [proposal, setProposal] = useState<CurriculumStepDraft[] | null>(null);
+  // Dismissing the proposal must not re-draft it on the next render — the teacher
+  // said no once, and an assistant that keeps re-offering is a nag.
+  const [declined, setDeclined] = useState(false);
   const sourceLabel = bookSourceLabel(bookSourceFor(lesson, authoring.bookPages, lesson.id));
 
   const draft = async () => {
@@ -93,6 +98,21 @@ export function LessonSteps({
     if (result?.length) setProposal(result);
     setDrafting(false);
   };
+
+  // Mechanism A/B: the steps arrive. No button was pressed and nothing was saved.
+  // Guarded so it runs once per empty lesson: only when there is genuinely nothing
+  // here, nothing already offered, nothing in flight, and the teacher has not said no.
+  const askedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (steps.length || proposal || drafting || declined || busy) return;
+    // A lesson with no title AND no objective has nothing to draft FROM; proposing
+    // from thin air is how an assistant produces confident nonsense.
+    if (!lesson.title?.trim() && !objective.trim() && !sourceLabel) return;
+    if (askedFor.current === lesson.id) return;
+    askedFor.current = lesson.id;
+    void draft();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson.id, steps.length, proposal, drafting, declined, busy, objective, sourceLabel]);
 
   const addStep = (step: CurriculumStepInput) => {
     setAddOpen(false);
@@ -113,33 +133,35 @@ export function LessonSteps({
 
       {steps.length === 0 && !proposal ? (
         <div className="rounded-card border border-dashed border-border px-4 py-6 text-center">
-          <p className="text-body text-foreground">Nothing here yet.</p>
-          <p className="mx-auto mt-1 max-w-[46ch] text-meta text-muted-foreground">
-            {sourceLabel
-              ? `This lesson follows ${sourceLabel}. Jargon can draft the steps from it — you keep what works.`
-              : "Jargon can draft the steps from this lesson's title, objective and material — you keep what works."}
-          </p>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => void draft()}
-              disabled={drafting || busy}
-              className="btn btn-primary btn-sm"
-            >
-              {drafting ? (
+          {drafting ? (
+            <>
+              <p className="flex items-center justify-center gap-2 text-body text-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
-              )}
-              {drafting ? "Drafting…" : "Draft the steps"}
-            </button>
+                Drafting the steps…
+              </p>
+              <p className="mx-auto mt-1 max-w-[46ch] text-meta text-muted-foreground">
+                {sourceLabel ? `From ${sourceLabel}.` : "From this lesson's title and objective."}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-body text-foreground">Nothing here yet.</p>
+              <p className="mx-auto mt-1 max-w-[46ch] text-meta text-muted-foreground">
+                {declined
+                  ? "Add the first step whenever you're ready."
+                  : "Give this lesson a title or an objective and Jargon will draft the steps from it."}
+              </p>
+            </>
+          )}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={() => setAddOpen((value) => !value)}
               disabled={busy}
-              className="btn btn-ghost btn-sm"
+              className="btn btn-secondary btn-sm"
             >
-              or write the first one yourself
+              <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Add the first step
             </button>
           </div>
         </div>
@@ -153,7 +175,11 @@ export function LessonSteps({
             authoring.applySteps(proposal);
             setProposal(null);
           }}
-          onDiscard={() => setProposal(null)}
+          onDiscard={() => {
+            // Said no once: leave the lesson empty and do not re-offer.
+            setProposal(null);
+            setDeclined(true);
+          }}
         />
       ) : null}
 

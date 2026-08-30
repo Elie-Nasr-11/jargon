@@ -6,12 +6,7 @@
  * rooms read, so nothing here can disagree with the class view.
  */
 import { useState } from "react";
-import {
-  Tabs,
-  WorkspacePanel,
-  WorkspaceTab,
-  WorkspaceTabList,
-} from "@/components/WorkspaceTabs";
+import { Tabs, WorkspacePanel, WorkspaceTab, WorkspaceTabList } from "@/components/WorkspaceTabs";
 import {
   displayName,
   formatDateTime,

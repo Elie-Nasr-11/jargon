@@ -30,7 +30,18 @@ from tests.teacher_sources import authoring_source
 ROOT = Path(__file__).resolve().parents[1]
 ADMIN = (ROOT / "supabase" / "functions" / "curriculum-admin" / "index.ts").read_text(encoding="utf-8")
 API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
-BUTTON = (ROOT / "frontend" / "src" / "features" / "teacher" / "DraftFieldButton.tsx").read_text(encoding="utf-8")
+# R85 deleted DraftFieldButton.tsx — the brief's failure mode 3 was this file's
+# subject ("the ask was for capability; I delivered chrome"). What survives is the
+# CONTRACT the button honoured, which the mechanisms that replaced it must too: the
+# assist improves rather than replaces, and it never saves. That contract now lives in
+# selection-scoped refinement and the command surface.
+ASSIST = "\n".join(
+    path.read_text(encoding="utf-8")
+    for path in sorted((ROOT / "frontend" / "src" / "features" / "teacher" / "assist").glob("*.ts*"))
+)
+HEADER = (
+    ROOT / "frontend" / "src" / "features" / "teacher" / "lesson" / "LessonHeader.tsx"
+).read_text(encoding="utf-8")
 STUDIO = authoring_source()
 
 
@@ -76,17 +87,22 @@ class ClientTests(unittest.TestCase):
         self.assertIn("export type DraftableField =", API)
 
     def test_the_assist_improves_rather_than_replaces(self):
-        self.assertIn("current: current?.trim() || undefined", BUTTON)
-        self.assertIn('{current?.trim() ? "Improve" : label}', BUTTON)
+        # The button passed the field's CURRENT value so pressing it on filled text
+        # improved rather than overwrote. Selection refinement keeps that and sharpens
+        # it: the scope is the passage the teacher pointed at, not the whole field.
+        self.assertIn("const selected = value.slice(range.start, range.end);", ASSIST)
+        self.assertIn("current: selected,", ASSIST)
 
     def test_the_assist_never_saves(self):
         # It hands the field a draft; committing stays the teacher's Save.
         for writer in ("saveCurriculumLessonMeta", "upsertCurriculumStep", "invokeCurriculumAdmin"):
-            self.assertNotIn(writer, BUTTON)
+            self.assertNotIn(writer, ASSIST)
 
-    def test_the_written_fields_carry_an_assist(self):
-        for field in ('field="lesson_title"', 'field="lesson_objective"', 'field="tutor_prompt"'):
-            self.assertIn(field, STUDIO)
+    def test_the_written_fields_still_reach_the_assist(self):
+        # Not as a button any more — the fields are wrapped, so a selection inside them
+        # is refinable. That is the same capability with none of the chrome.
+        for field in ('field="lesson_title"', 'field="lesson_objective"'):
+            self.assertIn(field, HEADER)
 
 
 class OneKindOfBuildingTests(unittest.TestCase):

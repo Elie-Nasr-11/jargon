@@ -43,7 +43,8 @@ export function CourseReviewPanel({
 }) {
   const drafts = review.filter((item) => item.publication_status !== "published");
   const publishable = drafts.filter((item) => item.ready);
-  const allSelected = publishable.length > 0 && publishable.every((item) => selected.has(item.lesson_id));
+  const allSelected =
+    publishable.length > 0 && publishable.every((item) => selected.has(item.lesson_id));
   const blocked = drafts.filter((item) => !item.ready);
 
   return (
@@ -112,7 +113,10 @@ export function CourseReviewPanel({
                               }`}
                             >
                               {flag.level === "blocking" ? (
-                                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                                <AlertCircle
+                                  className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                                  strokeWidth={2}
+                                />
                               ) : (
                                 <span className="mt-1.5 inline-block h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" />
                               )}
