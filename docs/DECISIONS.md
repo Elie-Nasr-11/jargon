@@ -2800,3 +2800,30 @@ that was not true.
 Buttons removed: DraftFieldButton (deleted, three call sites), "Draft the steps",
 "Draft knowledge". Renamed away from the machinery: "Draft steps with AI" → "Draft
 steps from a brief". Teacher-surface prettier errors went 41 → 0 on the way.
+
+### R85 postscript — the backend did NOT deploy (2026-08-30)
+
+deploy-backend.yml ran on the merge and failed in 17 seconds:
+
+    unexpected list functions status 401: {"message":"Unauthorized"}
+
+The SUPABASE_ACCESS_TOKEN repository secret is present but rejected by the
+Supabase API — an expired or revoked account access token. Nothing to do with
+this release's code; the same workflow last succeeded on R76.
+
+STATE OF THE WORLD, stated plainly so the next session does not assume otherwise:
+curriculum-admin is LIVE AT v42, still calling OpenAI. The frontend half of R85
+IS live (Render deploys from main independently), and it works correctly against
+v42 — R85 added no new edge-function action, it only changed which provider
+callModelJson picks, so `mode: "text_field"` and `mode: "lesson_steps"` are the
+same calls v42 already serves. Nothing is broken. The "one provider"
+non-negotiable simply has not shipped.
+
+TO FINISH IT: rotate the Supabase account access token (Dashboard > Account >
+Access Tokens), update the SUPABASE_ACCESS_TOKEN secret, and re-run the workflow.
+Two things to check on the way, both flagged in the PR: ANTHROPIC_API_KEY must be
+set on the project or authoringProvider() falls back to OpenAI and the change is a
+no-op; and the Anthropic JSON path (system instruction + assistant prefill) has
+been verified by typecheck and pins only — the offline harness mocks the edge
+function, so its first contact with the real API will be in production.
+AUTHORING_PROVIDER=openai reverts it without a deploy.
