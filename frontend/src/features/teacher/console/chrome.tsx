@@ -6,7 +6,6 @@
  * so that the same thing looks the same in all three rooms.
  */
 import type { ReactNode } from "react";
-import { NumberFlip } from "@/features/teacher/HotlistFeed";
 import { lessonName } from "@/features/teacher/classShared";
 import type { ClassSignals } from "@/features/teacher/console/derive";
 import type {
@@ -158,5 +157,18 @@ export function ClassButton({
         )}
       </div>
     </button>
+  );
+}
+
+// Count badge whose NUMBER flips in on change (DESIGN_V6 §3: number flips animate; badges
+// never blink). Keying the inner span on the value re-triggers the .num-flip animation;
+// reduced motion neutralizes it globally. Exported for the console's other count badges.
+export function NumberFlip({ value }: { value: number | string }) {
+  return (
+    <span className="inline-block overflow-hidden align-bottom">
+      <span key={String(value)} className="num-flip inline-block tabular-nums">
+        {value}
+      </span>
+    </span>
   );
 }

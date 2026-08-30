@@ -724,11 +724,11 @@ export function TeacherConsole() {
     }
   };
 
-  // R60: an open work item always lives in Activity, whatever the URL's ?tab says — old
-  // bookmarks and notification emails carry ?tab=classwork&assignment=…, and grading must
-  // never strand behind a renamed tab.
+  // R60: an open work item takes the room whatever the URL's ?tab says — old bookmarks
+  // and notification emails carry ?tab=classwork&assignment=…, and grading must never
+  // strand behind a renamed tab. R81: that room is Today, where the work was waiting.
   const effectiveSection: ClassSection =
-    search.assignment || search.assessment ? "activity" : normalizeClassSection(search.tab);
+    search.assignment || search.assessment ? "today" : normalizeClassSection(search.tab);
 
   if (!authChecked) {
     return <RouteLoader label="Loading…" />;
@@ -823,8 +823,8 @@ export function TeacherConsole() {
                         params: { classId: row.classId },
                         search:
                           row.kind === "assignment"
-                            ? { tab: "activity", assignment: row.itemId }
-                            : { tab: "activity", assessment: row.itemId },
+                            ? { tab: "today", assignment: row.itemId }
+                            : { tab: "today", assessment: row.itemId },
                       })
                     }
                   />

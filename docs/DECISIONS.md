@@ -2508,3 +2508,42 @@ ONE HONEST NUMBER: the Content room takes ~15s to first paint against the
 offline fixture backend (62 requests, none slower than 110ms). That is NOT a
 regression — the old studio measured 14.4s on the same fixtures — but it says
 the authoring payload is over-fetched. Worth its own release.
+
+## R81 — step 5 of the rebuild brief: Today, and the class landing (2026-08-29)
+
+Jobs 4 and 5: see who's learning, act on what needs me. The brief's step 5 is
+"Build Today. Digest + needs-me. Becomes the landing", and it retires the
+hotlist duplication.
+
+TODAY IS THREE THINGS, IN ORDER. The weekly digest — what the class actually
+learned this week (R71, unchanged) — then who is in a lesson right now, then
+what is waiting to be marked. Nothing else. A teacher who opens Jargon and does
+nothing else still learns something, which is the whole point of a landing.
+
+TODAY CREATES NOTHING. Work is set on the lesson it belongs to (Law 2); this
+screen only reports and opens. A live row opens the student, its Watch opens
+their session; a waiting row opens the grading view, which still takes the room
+whatever the URL's ?tab says.
+
+THE ROOM IT REPLACED. R60's Activity held the same two live surfaces one tab
+away, plus a class-level list of every quiz and assignment and a class-level
+Create. The surfaces lead the landing now. The list belonged to each lesson from
+R79 and is gone from class scope rather than kept in two places. The Create is
+gone too: it asked "which lesson?" after the fact, which is exactly the generic
++ Create the brief kills. So Activity is deleted, not kept beside Today — the
+spine is Today / Students / Content, and step 6 turns Students into People and
+Settings.
+
+THE HOTLIST IS DELETED. HotlistFeed.tsx was 280 lines that nothing had rendered
+since R46 and that duplicated the review queue. Only the NumberFlip odometer
+survived, into the console's own chrome. That is the step's named deletion, and
+it had been dead in the tree for eight releases.
+
+A DEFECT FIXED ON THE WAY, FOUND BY WALKING: "in a lesson now" listed a student
+who was in ANOTHER class's lesson. A student can be in two of a teacher's
+classes, so class membership alone is not enough — the row must also be a lesson
+this class teaches. This is R71's cross-class counting bug in a second place; it
+was live in the Activity room and would have been worse on the landing. Scoped
+through the class's course links, with R43's discipline kept: an unreadable link
+set falls back to unscoped rather than hiding a live student from the teacher
+who could help them.

@@ -110,8 +110,11 @@ class R52TableTests(unittest.TestCase):
 
 class R52StructureTests(unittest.TestCase):
     def test_rows_contain_their_actions(self):
-        self.assertIn("ONE row container owns the chrome", CONSOLE)
-        # People rows: the section picker sits inside the row container now.
+        # The live row's Watch button sits INSIDE the row container (it moved to Today
+        # with the rest of "what needs me now"); the People row's section picker likewise.
+        live = CONSOLE.split("In a lesson now", 1)[1].split("Waiting on you", 1)[0]
+        self.assertIn("flex items-center gap-3 rounded-card border border-border", live)
+        self.assertIn("Watch", live)
         self.assertIn("the section picker lives inside", CONSOLE)
 
     def test_class_tabs_use_the_solid_active_pill(self):

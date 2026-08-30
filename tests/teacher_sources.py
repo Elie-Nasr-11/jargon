@@ -32,6 +32,8 @@ LESSON_DIR = SRC / "features" / "teacher" / "lesson"
 COURSE_DIR = SRC / "features" / "teacher" / "course"
 CONSOLE_SHELL = SRC / "features" / "teacher" / "TeacherConsole.tsx"
 CONSOLE_DIR = SRC / "features" / "teacher" / "console"
+# R81: Today is a room of the console, so it reads as part of the same surface.
+TODAY_DIR = SRC / "features" / "teacher" / "today"
 
 
 def _modules(directory: Path) -> list[Path]:
@@ -60,7 +62,7 @@ def authoring_paths() -> list[Path]:
 
 def console_paths() -> list[Path]:
     """Every file that makes up the console shell, entry point first."""
-    return [CONSOLE_SHELL] + _modules(CONSOLE_DIR)
+    return [CONSOLE_SHELL] + _modules(CONSOLE_DIR) + _modules(TODAY_DIR)
 
 
 def authoring_source() -> str:

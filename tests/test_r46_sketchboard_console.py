@@ -37,7 +37,9 @@ class HomeTests(unittest.TestCase):
         self.assertNotIn("<HotlistFeed", CONSOLE)
         self.assertNotIn("deriveHotlist", CONSOLE)
         self.assertNotIn("openHotlistItem", CONSOLE)
-        self.assertIn('import { NumberFlip } from "@/features/teacher/HotlistFeed";', CONSOLE)
+        # R81 deleted the feed module too — unrendered since R46, and a duplicate of the
+        # review queue. Only the NumberFlip odometer survived, into the console's chrome.
+        self.assertIn("export function NumberFlip(", CONSOLE)
 
     def test_class_cards_carry_their_own_signals(self):
         self.assertIn("signals={classSignals(dashboard, item.id)}", CONSOLE)

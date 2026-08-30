@@ -1,33 +1,30 @@
 // Nav-level derivations shared by the teacher shell (sidebar) and TeacherConsole (landing class
 // picker). Living here — not in TeacherConsole — avoids a console ↔ sidebar import cycle.
 
-// R60 three-room console: a class workspace is exactly three fixed rooms, each answering one
-// teacher question — Students (who's in it and how are they doing), Activity (what's happening
-// and what work is out — live students, quizzes, assignments, what needs review), Content
-// (what gets taught — units and lessons, editable and previewable). Tabs never appear or
-// disappear. R47's four rooms folded down: People+Grades → Students, Live+work items →
-// Activity, the curriculum studio → Content.
-export type ClassSection = "students" | "activity" | "content";
+// R81: a class workspace is Today (what the class learned and what needs me now — the
+// landing), Students (who is in it and how they are doing), Content (what gets taught).
+// Tabs never appear or disappear. R60's Activity room is gone: its live strip and review
+// queue ARE "what needs me now", so they lead Today instead of hiding one tab away, and
+// work is set on the lesson it belongs to rather than from a class-level Create.
+export type ClassSection = "today" | "students" | "content";
 
 export const CLASS_SECTIONS: ReadonlyArray<{ value: ClassSection; label: string }> = [
+  { value: "today", label: "Today" },
   { value: "students", label: "Students" },
-  { value: "activity", label: "Activity" },
   { value: "content", label: "Content" },
 ];
 
 // Legacy ?tab= values (old bookmarks, stale notification deep links) map onto the room that
-// now owns their content: happening/work-shaped values (the old Live tab, assignment and
-// assessment deep links, the old Review section) → activity; content-shaped values (the old
-// Classwork/Curriculum/Structure sections, builder and resources deep links) → content;
-// people/grades-shaped values and anything unknown → students, the default landing.
+// now owns their content: content-shaped values (the old Classwork/Curriculum/Structure
+// sections, builder and resources deep links) → content; people/grades-shaped values →
+// students; everything happening-or-work shaped, and anything unknown, → today, the landing.
 export function normalizeClassSection(tab: string | undefined): ClassSection {
   switch (tab) {
-    case "activity":
-    case "live":
-    case "assignments":
-    case "assessments":
-    case "review":
-      return "activity";
+    case "students":
+    case "people":
+    case "grades":
+    case "roster":
+      return "students";
     case "content":
     case "classwork":
     case "curriculum":
@@ -36,7 +33,7 @@ export function normalizeClassSection(tab: string | undefined): ClassSection {
     case "resources":
       return "content";
     default:
-      return "students";
+      return "today";
   }
 }
 

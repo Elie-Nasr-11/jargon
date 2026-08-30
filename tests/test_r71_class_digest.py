@@ -111,8 +111,12 @@ class ClientTests(unittest.TestCase):
         self.assertIn("Nothing at all", CARD)
         self.assertIn("Moving well", CARD)
 
-    def test_card_is_wired_into_the_activity_room(self):
-        self.assertIn("<ClassDigestCard classId={item.id} />", CONSOLE)
+    def test_card_leads_the_landing_room(self):
+        # R73 put it at the top of Students, the room a teacher landed in. R81 built
+        # Today as the landing, and the digest is the first thing on it.
+        self.assertIn("<ClassDigestCard classId={classId} />", CONSOLE)
+        today = CONSOLE.split("export function TodayScreen(", 1)[1]
+        self.assertLess(today.index("<ClassDigestCard"), today.index("In a lesson now"))
 
 
 if __name__ == "__main__":

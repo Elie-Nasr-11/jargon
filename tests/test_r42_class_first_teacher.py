@@ -36,11 +36,13 @@ NOTIFICATIONS = (FRONTEND / "components" / "NotificationsMenu.tsx").read_text(en
 
 class ClassSectionsTests(unittest.TestCase):
     def test_class_workspace_has_the_three_fixed_sections(self):
-        # R60 three-room console: the class spine is Students / Activity / Content —
-        # every tab always visible (no hidden rooms), rendered from CLASS_SECTIONS.
-        self.assertIn('export type ClassSection = "students" | "activity" | "content";', NAV)
+        # The class spine is three fixed rooms, every tab always visible (no hidden
+        # rooms), rendered from CLASS_SECTIONS. R81 replaced Activity with Today: the
+        # live strip and the review queue ARE "what needs me now", so they lead the
+        # landing instead of hiding one tab away.
+        self.assertIn('export type ClassSection = "today" | "students" | "content";', NAV)
+        self.assertIn('{ value: "today", label: "Today" }', NAV)
         self.assertIn('{ value: "students", label: "Students" }', NAV)
-        self.assertIn('{ value: "activity", label: "Activity" }', NAV)
         self.assertIn('{ value: "content", label: "Content" }', NAV)
         for retired in (
             '"live", label',
@@ -56,19 +58,20 @@ class ClassSectionsTests(unittest.TestCase):
                 self.assertNotIn(f"value: {retired}", NAV)
 
     def test_legacy_tabs_map_into_the_three_sections(self):
-        # Happening/work-shaped legacy values land on Activity; content-shaped ones on
-        # Content; people/grades-shaped and unknown/absent land on Students (default).
-        for case in ("live", "assignments", "assessments", "review"):
+        # Content-shaped legacy values land on Content; people/grades-shaped ones on
+        # Students; everything happening-or-work shaped, and anything unknown, lands on
+        # Today — which is both the default and where that work now waits.
+        for case in ("people", "grades", "roster"):
             with self.subTest(case=case):
                 self.assertIn(f'case "{case}":', NAV)
         for case in ("classwork", "curriculum", "structure", "lessons", "resources"):
             with self.subTest(case=case):
                 self.assertIn(f'case "{case}":', NAV)
-        self.assertIn('return "activity";', NAV)
+        self.assertIn('return "today";', NAV)
         self.assertIn('return "content";', NAV)
         self.assertIn('return "students";', NAV)
         self.assertNotIn('return "overview"', NAV)
-        self.assertNotIn('return "live"', NAV)
+        self.assertNotIn('return "activity"', NAV)
 
 
 class SidebarTests(unittest.TestCase):
@@ -123,9 +126,9 @@ class ConsoleTests(unittest.TestCase):
 
     def test_class_level_deep_links_land_on_the_new_sections(self):
         # Student-page back pill lands on Students; notification deep links land on
-        # Activity (grading lives ON the work) — nothing points at the retired rooms.
+        # Today, where the work was waiting — nothing points at the retired rooms.
         self.assertIn('search: { tab: "students" }', CONSOLE)
-        self.assertIn('tab: "activity"', NOTIFICATIONS)
+        self.assertIn('tab: "today"', NOTIFICATIONS)
         self.assertNotIn('tab: "live"', CONSOLE)
         self.assertNotIn('tab: "classwork"', NOTIFICATIONS)
 

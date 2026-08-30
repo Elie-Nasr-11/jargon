@@ -9,7 +9,6 @@ import { Suspense, lazy, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AssessmentWorkView } from "@/features/teacher/AssessmentGrading";
 import { AssignmentWorkView } from "@/features/teacher/AssignmentGrading";
-import { ClassDigestCard } from "@/features/teacher/ClassDigestCard";
 import type { ClassworkItem } from "@/features/teacher/authoring/types";
 import { displayName, lessonName } from "@/features/teacher/classShared";
 import { AssessmentManager } from "@/features/teacher/console/AssessmentManager";
@@ -17,6 +16,7 @@ import type { AssessmentFormValues } from "@/features/teacher/console/Assessment
 import { AssignmentManager } from "@/features/teacher/console/AssignmentManager";
 import type { AssignmentFormValues } from "@/features/teacher/console/AssignmentManager";
 import { GradebookTable } from "@/features/teacher/console/GradebookTable";
+import { TodayScreen } from "@/features/teacher/today/TodayScreen";
 import { ResourceManager } from "@/features/teacher/console/ResourceManager";
 import type { ResourceFormValues } from "@/features/teacher/console/ResourceManager";
 import {
@@ -355,18 +355,6 @@ export function ClassDetail({
     dashboard.assignmentSubmissions,
     dashboard.assessmentAttempts,
   ]);
-  const activityItems = useMemo(
-    () =>
-      workItems
-        .filter((entry) => entry.kind !== "material")
-        .slice()
-        .sort(
-          (a, b) =>
-            b.needsReviewCount - a.needsReviewCount ||
-            (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999"),
-        ),
-    [workItems],
-  );
   const [studentsView, setStudentsView] = useState<"roster" | "gradebook">("roster");
 
   const openAssignment = openAssignmentId
@@ -382,7 +370,7 @@ export function ClassDetail({
     navigate({
       to: "/teacher/class/$classId",
       params: { classId: item.id },
-      search: { tab: "activity" },
+      search: { tab: "today" },
     });
 
   const changeSection = async (studentId: string, value: string) => {
@@ -436,197 +424,45 @@ export function ClassDetail({
             </div>
           </div>
 
-          {/* Activity = what's happening and what's out for work (R60: the old Live room
-              plus every quiz and assignment, one door). An open work item takes the room —
-              rendered outside the card, below. */}
-          {section === "activity" && !openAssignmentId && !openAssessmentId ? (
-            <div className="panel-fade mt-4 grid gap-6">
-              <h3 className="sr-only">Activity</h3>
-              <div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
-                  <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                    Live now
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCreateOpen("assignment")}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      New assignment
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCreateOpen("assessment")}
-                      className="btn btn-primary btn-sm"
-                    >
-                      New quiz
-                    </button>
-                  </div>
-                </div>
-                {liveStudents.length ? (
-                  <div className="grid gap-3">
-                    {liveStudents.map((studentId) => {
-                      const profile = profilesById.get(studentId) || null;
-                      const live = liveByStudent.get(studentId)!;
-                      return (
-                        // R52: ONE row container owns the chrome; the open-student hit
-                        // area and the Watch action both live INSIDE it (previously two
-                        // detached pills side by side).
-                        <div
-                          key={studentId}
-                          className="flex items-center gap-3 rounded-card border border-border bg-depth-sub py-2 pl-4 pr-2"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => onSelectStudent(studentId)}
-                            className="flex min-w-0 flex-1 items-center gap-3 rounded-control py-1 text-left transition-colors hover:opacity-80"
-                          >
-                            <span className="relative flex h-2.5 w-2.5 shrink-0">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
-                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
-                            </span>
-                            <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
-                              {displayName(profile, studentId)}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                              {lessonName(lessonsById, live.lesson_id)}
-                              {live.stage ? ` · ${live.stage}` : ""} ·{" "}
-                              {relTime(live.updated_at, nowMs)}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              navigate({
-                                to: "/teacher/class/$classId/student/$studentId",
-                                params: { classId: item.id, studentId },
-                                search: { tab: "overview", session: live.id },
-                              })
-                            }
-                            className="btn btn-secondary btn-sm shrink-0"
-                          >
-                            Watch
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-meta text-muted-foreground">
-                    No one is live right now — students appear here the moment they start a lesson.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  To review
-                </span>
-                {reviewRows.length ? (
-                  <div className="mt-2 grid gap-2">
-                    {reviewRows.map((row) => (
-                      <button
-                        key={`${row.kind}:${row.itemId}:${row.studentName}:${row.at}`}
-                        type="button"
-                        onClick={() =>
-                          navigate({
-                            to: "/teacher/class/$classId",
-                            params: { classId: item.id },
-                            search:
-                              row.kind === "assignment"
-                                ? { tab: "activity", assignment: row.itemId }
-                                : { tab: "activity", assessment: row.itemId },
-                          })
-                        }
-                        className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
-                      >
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-warning" />
-                        <span className="min-w-0 flex-1 truncate text-body text-foreground">
-                          {row.studentName}
-                          <span className="text-muted-foreground"> · {row.itemTitle}</span>
-                        </span>
-                        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-meta text-muted-foreground">
-                          {row.kind === "assignment" ? "assignment" : "quiz"}
-                        </span>
-                        <span className="shrink-0 text-meta text-muted-foreground">
-                          {relTime(row.at, nowMs)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-meta text-muted-foreground">
-                    Nothing waiting on you — submitted work lands here the moment it arrives.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <span className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                  Quizzes &amp; assignments
-                </span>
-                {activityItems.length ? (
-                  <div className="mt-2 grid gap-2">
-                    {activityItems.map((entry) => (
-                      <button
-                        key={`${entry.kind}:${entry.id}`}
-                        type="button"
-                        onClick={() =>
-                          navigate({
-                            to: "/teacher/class/$classId",
-                            params: { classId: item.id },
-                            search:
-                              entry.kind === "assignment"
-                                ? { tab: "activity", assignment: entry.id }
-                                : { tab: "activity", assessment: entry.id },
-                          })
-                        }
-                        className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
-                      >
-                        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-meta text-muted-foreground">
-                          {entry.kind === "assignment" ? "assignment" : "quiz"}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-body text-foreground">
-                          {entry.title}
-                        </span>
-                        {entry.needsReviewCount > 0 ? (
-                          <span className="shrink-0 rounded-full border border-warning/40 bg-warning/12 px-2 py-0.5 text-meta text-warning">
-                            {entry.needsReviewCount} to review
-                          </span>
-                        ) : null}
-                        <span className="shrink-0 text-meta text-muted-foreground">
-                          {entry.status}
-                          {entry.dueAt
-                            ? ` · due ${new Date(entry.dueAt).toLocaleDateString()}`
-                            : ""}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-meta text-muted-foreground">
-                    No quizzes or assignments yet — create one above, or add a quiz step inside a
-                    lesson under Content.
-                  </p>
-                )}
-              </div>
-            </div>
+          {/* Today = what the class learned, and the only two things that can need a
+              person: someone in a lesson right now, and work waiting to be marked. The
+              landing (R81) — a teacher who opens Jargon and does nothing else still
+              learns something. */}
+          {section === "today" && !openAssignmentId && !openAssessmentId ? (
+            <TodayScreen
+              classId={item.id}
+              dashboard={dashboard}
+              profilesById={profilesById}
+              lessonsById={lessonsById}
+              onOpenStudent={onSelectStudent}
+              onWatch={(studentId, sessionId) =>
+                navigate({
+                  to: "/teacher/class/$classId/student/$studentId",
+                  params: { classId: item.id, studentId },
+                  search: { tab: "overview", session: sessionId },
+                })
+              }
+              onOpenWork={(kind, itemId) =>
+                navigate({
+                  to: "/teacher/class/$classId",
+                  params: { classId: item.id },
+                  search:
+                    kind === "assignment"
+                      ? { tab: "today", assignment: itemId }
+                      : { tab: "today", assessment: itemId },
+                })
+              }
+            />
           ) : null}
 
           {/* Students = who's in the class and how they're doing — the roster with
               sections and enrolment, each row carrying its own signals (live dot, last
               activity, grade average), and the full gradebook one toggle away (R60 merge
-              of the old People + Grades rooms). The landing tab. */}
+              of the old People + Grades rooms). R81: no longer the landing, and no longer
+              carrying the digest — Today opens the class and reports what it learned. */}
           {section === "students" ? (
             <div className="panel-fade mt-4">
               <h3 className="sr-only">Students</h3>
-              {/* R73: Students is the room a teacher lands in, so it opens with what
-                  the class LEARNED — the "reports back" half of the pitch — before the
-                  roster. Activity keeps answering "who needs me right this second". */}
-              <div className="mb-4">
-                <ClassDigestCard classId={item.id} />
-              </div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-meta text-muted-foreground">
                   {studentIds.length} student{studentIds.length === 1 ? "" : "s"}
@@ -838,10 +674,10 @@ export function ClassDetail({
         </div>
       </section>
 
-      {/* R60 Activity, grading face: an open assignment or quiz (student-work view)
-          takes the whole room — rendered OUTSIDE the header card so grading gets the
-          full page width (the R47 precedence contract, now scoped to Activity). */}
-      {section === "activity" && (openAssignmentId || openAssessmentId) ? (
+      {/* The grading face: an open assignment or quiz (student-work view) takes the whole
+          room — rendered OUTSIDE the header card so grading gets the full page width (the
+          R47 precedence contract). R81: reached from Today, where the work was waiting. */}
+      {section === "today" && (openAssignmentId || openAssessmentId) ? (
         <div className="panel-fade flex flex-col gap-4">
           <h3 className="sr-only">Student work</h3>
           {openAssignment ? (
