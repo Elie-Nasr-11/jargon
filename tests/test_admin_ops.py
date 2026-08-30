@@ -134,37 +134,50 @@ class AdminOpsStaticTests(unittest.TestCase):
         self.assertIn("Open alerts", export_section)
 
     def test_admin_route_tabs(self):
-        # R51 admin tab set: Overview / People / Classes (management over admin-ops)
-        # plus the original Seeding + Live + (platform-admin only) Cost & runtime,
-        # with stale ?tab= deep links falling back to Overview, which every admin
-        # level can see.
+        # R84 admin tab set: Setup / People / Classes / Health — the same four for
+        # every admin level. "Seeding" is gone; its three unrelated jobs went to the
+        # screen that owns each, and stale ?tab= deep links resolve through
+        # normalizeAdminTab rather than dumping the admin on an arbitrary screen.
         for fragment in (
-            'const visibleTabs = isPlatformLevel\n'
-            '    ? ["overview", "people", "classes", "seeding", "live", "cost"]\n'
-            '    : ["overview", "people", "classes", "seeding", "live"];',
-            'search.tab && visibleTabs.includes(search.tab) ? search.tab : "overview"',
-            '<WorkspaceTab value="overview">Overview</WorkspaceTab>',
+            'const visibleTabs = ["setup", "people", "classes", "health"];',
+            "const adminTab = normalizeAdminTab(search.tab, visibleTabs);",
+            '<WorkspaceTab value="setup">Setup</WorkspaceTab>',
             '<WorkspaceTab value="people">People</WorkspaceTab>',
             '<WorkspaceTab value="classes">Classes</WorkspaceTab>',
-            # The R51 panels mount inside the org-scoped tab frame.
-            "<OverviewPanel",
+            '<WorkspaceTab value="health">Health</WorkspaceTab>',
+            "<SetupPanel",
             "<PeoplePanel",
             "<ClassesPanel",
-            '<WorkspaceTab value="seeding">Seeding</WorkspaceTab>',
-            '<WorkspaceTab value="live">Live</WorkspaceTab>',
-            '<WorkspaceTab value="cost">Cost &amp; runtime</WorkspaceTab>',
-            # Seeding tab: roster seeding via the admin-seed edge fn; passwords never
-            # persist. R51: the panel renders for BOTH admin levels (org admins used to
-            # get a blank tab because the panel body was platform-gated).
-            '<WorkspacePanel value="seeding">',
+            "<HealthPanel",
+            # The tabs that died, and must not come back as tabs.
+            *(),
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.route)
+        for gone in (
+            '<WorkspaceTab value="overview">',
+            '<WorkspaceTab value="seeding">',
+            '<WorkspaceTab value="live">',
+            '<WorkspaceTab value="cost">',
+        ):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, self.route)
+
+    def test_the_contracts_survived_the_move(self):
+        # The three Seeding jobs and the two Health reads still exist — this release
+        # moved them, it did not quietly drop any.
+        surface = self.route
+        for fragment in (
+            # roster import (People) — still the admin-seed edge fn, still no stored password
             "invokeAdminSeed",
-            "Seed classroom",
-            "Passwords are sent only to Supabase Auth and are not stored in Jargon tables.",
-            # Live tab: the active-sessions fleet view.
+            "Import a roster",
+            # demo logins (the fenced developer corner)
+            "seedDemoLogins",
+            "Developer corner",
+            # Health
             "fetchActiveSessions",
             "Live sessions",
             "No students are in a live session right now.",
-            # Cost & runtime tab: usage/reliability with dollar cost gated to platform admins.
             "fetchCostModelDashboard",
             "AI/runtime operations",
             "Usage, reliability, and model load",
@@ -175,7 +188,7 @@ class AdminOpsStaticTests(unittest.TestCase):
             "Dollar-cost totals stay platform-admin only.",
         ):
             with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.route)
+                self.assertIn(fragment, surface)
 
 
 if __name__ == "__main__":

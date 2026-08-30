@@ -2673,3 +2673,66 @@ three fixed. The three new writes were then exercised for real against the
 fixture backend rather than assumed: PATCH /classes 200 with the new name in the
 sidebar, PATCH /class_memberships 200 with the roster going 4 → 3, and a section
 rename moving both of its students at once.
+
+## R84 — step 7 of the rebuild brief: the admin window (2026-08-30)
+
+THE CHECKLIST WAS ALREADY THERE. The brief asks for "an ordered, stateful
+checklist driven by list_pilot_readiness, which already returns
+teacher/student/published-lesson counts per class and is barely used." It
+understates the case: admin-ops has been emitting a six-item ReadinessChecklistItem
+array per class since R51 — Active teacher · Active students · Published lessons ·
+Work/resources prepared · Recent completion · No open alerts — plus a per-class
+`issues` list, and the frontend rendered NEITHER. R51's Overview showed the status
+CHIP and threw the reasons away, so an admin could read "Needs setup" and still
+not know what to do about it. Setup renders the checklist, worst class first, and
+every missing item names the screen that fixes it.
+
+SIX TABS BECAME FOUR. Overview and Seeding dissolved into Setup; Live and Cost &
+runtime became Health, because "is anything wrong right now?" was one question
+split across two tabs. Cost also stopped being a platform-admin-only TAB: the
+window's SHAPE no longer depends on who you are. admin-ops already withholds
+dollar totals from org admins server-side, so Health renders what it is given —
+a section with fewer numbers is easier to explain than a tab that exists for some
+people and not others.
+
+ONE DOOR EACH, WHICH WAS THE BRIEF'S ACTUAL COMPLAINT. "A class can be created in
+two of them. Students arrive through three different doors that do subtly
+different things (one creates accounts, two only link existing ones)." Classes is
+now the only caller of adminCreateClass and the roster importer is the only caller
+of invokeAdminSeed — both pinned by COUNT, so a second door fails the suite rather
+than shipping. The importer also changed on the way: it targets a class that
+already EXISTS, chosen from a list, instead of asking for an organization name and
+a class name. Typing a name that did not match silently created a second class,
+which is how a pilot ended up with the same class twice.
+
+SEEDING DIED, AND ITS THREE JOBS WENT HOME. Class creation was a duplicate and is
+simply gone. Roster import stands in People, which is what makes "the only place
+accounts are created" true rather than aspirational. Demo logins are fenced three
+ways — platform admins only, folded shut, and labelled as a demo tool that creates
+real accounts on a shared password. It stays because demoing the product is a real
+job; it is not a tab because running a school is not that job.
+
+WHAT I REFUSED TO DELETE. Overview held two things the brief's one-line summary of
+Health does not enumerate: a "never signed in" count and the admin audit trail.
+Dropping them because a summary did not list them would be scope-narrowing by
+accident. Never-signed-in is a setup signal (accounts exist, nobody has used them)
+and now sits in Setup's header; the audit trail is read-only observation and sits
+in Health. Both kept their adminData derivations, so R51's pins re-pointed instead
+of dying.
+
+AdminPage went 1,534 → 497 lines, and every module in features/admin is now under
+460. tsc --noUnusedLocals reports nothing left behind.
+
+WALKED, and it found three things the 1,271 pins did not — two of them stale copy
+that had been lying to admins since the tabs changed under it. The page header
+still said "seed pilot rosters, watch live sessions, and track AI/runtime cost",
+and the organization picker still said "manage its people, classes, seeding, live
+sessions, and cost": both described the six-tab window, so they named jobs an admin
+could no longer find. The third was older and real: People's search field put the
+magnifier glyph on top of the placeholder's first letter, because jargon-input's
+own padding (12.8px) beat the pl-9 utility against a 28px icon. Measured, not
+guessed, and fixed with !pl-9.
+
+A GUARD THE WALK ALSO EARNED: a class whose checklist comes back empty — an older
+admin-ops, or a class the checker could not read — used to render "0/0" above an
+empty bordered strip. It says what happened and offers Recheck.

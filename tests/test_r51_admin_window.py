@@ -37,7 +37,13 @@ PEOPLE = (ROOT / "frontend" / "src" / "features" / "admin" / "PeoplePanel.tsx").
 CLASSES = (ROOT / "frontend" / "src" / "features" / "admin" / "ClassesPanel.tsx").read_text(
     encoding="utf-8"
 )
-OVERVIEW = (ROOT / "frontend" / "src" / "features" / "admin" / "OverviewPanel.tsx").read_text(
+# R84 dissolved OverviewPanel: its readiness list became Setup, its "never signed in"
+# count moved into Setup's header, and its audit trail moved to Health. The facts
+# survived the screen, so these pins read the surface that now holds each.
+SETUP = (ROOT / "frontend" / "src" / "features" / "admin" / "SetupPanel.tsx").read_text(
+    encoding="utf-8"
+)
+HEALTH = (ROOT / "frontend" / "src" / "features" / "admin" / "HealthPanel.tsx").read_text(
     encoding="utf-8"
 )
 CONFIRM = (ROOT / "frontend" / "src" / "features" / "admin" / "ConfirmButton.tsx").read_text(
@@ -78,23 +84,26 @@ class R51RouteTests(unittest.TestCase):
         self.assertIn("onScope={applyScopeResult}", ROUTE)
 
     def test_readiness_is_shared_and_lazy(self):
-        # One readiness load backs both Overview and Classes, fetched the first
-        # time either tab opens.
-        self.assertIn('if (adminTab !== "overview" && adminTab !== "classes") return;', ROUTE)
+        # One readiness load backs both Setup (its home since R84) and Classes,
+        # fetched the first time either opens.
+        self.assertIn('if (adminTab !== "setup" && adminTab !== "classes") return;', ROUTE)
         self.assertIn("fetchPilotReadiness", ROUTE)
         self.assertEqual(ROUTE.count("fetchPilotReadiness("), 1)
 
-    def test_overview_shares_the_live_fleet_poll(self):
-        self.assertIn(
-            'if ((adminTab !== "live" && adminTab !== "overview") || !token) return;', ROUTE
-        )
+    def test_the_live_fleet_poll_belongs_to_health(self):
+        # R84: Health is the only screen that reads the fleet, so the 30s poll runs
+        # for that screen alone instead of also for a landing tab that showed a count.
+        self.assertIn('if (adminTab !== "health" || !token) return;', ROUTE)
 
-    def test_seeding_panel_is_no_longer_platform_gated(self):
-        # The org-admin blank-tab bug: the tab was visible to both levels but the
-        # panel body rendered only for platform admins.
-        self.assertNotIn('isPlatformLevel ? (\n                <WorkspacePanel value="seeding">', ROUTE)
-        self.assertIn('<WorkspacePanel value="seeding">', ROUTE)
-        # The demo-entry section inside stays platform-only.
+    def test_roster_import_reaches_both_admin_levels(self):
+        # The org-admin blank-tab bug this pin was written for: the Seeding tab was
+        # visible to both levels but its body rendered only for platform admins.
+        # R84 killed the tab; the importer lives in People and is not level-gated.
+        self.assertNotIn('WorkspacePanel value="seeding"', ROUTE)
+        self.assertIn("<RosterImport", ROUTE)
+        self.assertNotIn("isPlatformAdmin ? (\n                      <RosterImport", ROUTE)
+        # Demo logins DO stay platform-only, now behind the fenced developer corner.
+        self.assertIn("isPlatformAdmin ? <DeveloperCorner", ROUTE)
         self.assertIn("Create demo logins", ROUTE)
 
 
@@ -145,11 +154,11 @@ class R51DerivationTests(unittest.TestCase):
         self.assertIn('if (membership.status !== "active") continue;', DATA)
 
     def test_overview_counts_never_signed_in(self):
-        self.assertIn("!person.lastSignInAt", OVERVIEW)
-        self.assertIn("Never signed in", OVERVIEW)
+        self.assertIn("!person.lastSignInAt", SETUP)
+        self.assertIn("never signed in", SETUP)
 
     def test_audit_feed_is_org_scoped(self):
-        self.assertIn("orgAuditEvents", OVERVIEW)
+        self.assertIn("orgAuditEvents", HEALTH)
         self.assertIn(
             "scope.audit_events.filter((event) => event.organization_id === organizationId)",
             DATA,
