@@ -196,7 +196,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
       void navigate({
         to: "/teacher/class/$classId",
         params: { classId },
-        search: kind === "assignment" ? { tab: "activity", assignment: id } : { tab: "activity", assessment: id },
+        search: kind === "assignment" ? { tab: "today", assignment: id } : { tab: "today", assessment: id },
       });
     },
     [navigate, classId],

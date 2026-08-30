@@ -34,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "frontend" / "src" / "features" / "teacher" / "bookSource.ts").read_text(encoding="utf-8")
 ROUTE = authoring_source()
 CONSOLE = console_source()
+NAV = (ROOT / "frontend" / "src" / "features" / "teacher" / "shell" / "teacherNav.ts").read_text(encoding="utf-8")
 TYPES = (ROOT / "frontend" / "src" / "lib" / "types.ts").read_text(encoding="utf-8")
 API = (ROOT / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
 
@@ -105,8 +106,11 @@ class BookLeadsTests(unittest.TestCase):
 
 class LandingReportsBackTests(unittest.TestCase):
     def test_the_digest_opens_the_room_a_teacher_lands_in(self):
-        students = CONSOLE.split('{section === "students" ? (', 1)[1][:900]
-        self.assertIn("<ClassDigestCard classId={item.id} />", students)
+        # R81 moved the landing from Students to Today; the digest moved with it, and
+        # still opens the room rather than hiding below a roster.
+        self.assertIn('return "today";', NAV)
+        today = CONSOLE.split("export function TodayScreen(", 1)[1]
+        self.assertLess(today.index("<ClassDigestCard"), today.index("In a lesson now"))
 
     def test_it_is_not_duplicated_in_activity(self):
         self.assertEqual(CONSOLE.count("<ClassDigestCard"), 1)

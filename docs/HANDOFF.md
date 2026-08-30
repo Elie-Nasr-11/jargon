@@ -12235,3 +12235,30 @@ review_unit. Steps 5-9 remain: Today, People + Settings, admin, the AI
 mechanisms, and deleting what they replace.
 Suggested next task: step 5 — build Today (digest + needs-me) and make it the
 landing, retiring the hotlist duplication.
+
+## Claude -> Codex / Human - 2026-08-29 22:10
+
+Status: Finished
+Summary: R81 (see DECISIONS) — step 5 of the rebuild brief. Today is the class
+landing: the weekly digest, who is in a lesson now, and what is waiting to be
+marked. The Activity room is deleted (its live surfaces lead Today; its work
+list belongs to each lesson since R79; its class-level Create violated Law 2),
+and HotlistFeed.tsx — 280 lines unrendered since R46 — is gone. Fixed a
+cross-class defect the walk exposed: "in a lesson now" was reporting students
+who were in another class's lesson.
+Files changed: new frontend/src/features/teacher/today/ (TodayScreen, needsYou),
+teacherNav.ts (today|students|content, Today the default), ClassDetail (Activity
+room replaced, digest moved off Students), NotificationsMenu + console + lesson
+deep links now ?tab=today, HotlistFeed deleted (NumberFlip → console/chrome),
+tests (new R81 file; R42, R46, R47, R52, R71, R73 pins re-pointed).
+Tests run: python 1246 green / 4 skipped; tsc clean; vite build succeeds; eslint
+unchanged at 94 pre-existing prettier errors; walked in a real browser against
+the offline fixture backend (screenshots in r81/), including the legacy
+?tab=activity link and a waiting row opening the grading view.
+Remaining concerns: the class still takes ~13s to first paint on fixtures — the
+authoring payload over-fetch flagged in R80 is now on the critical path for the
+LANDING screen, so it should be the next thing fixed. The digest could not be
+exercised in fixtures (the mock returns 403 for admin-ops).
+Suggested next task: either the payload fix, or step 6 — People + Settings,
+which retires the Students room as it stands and gives "courses in this class"
+its real home.

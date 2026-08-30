@@ -50,7 +50,7 @@ class TabSpineTests(unittest.TestCase):
         # ONE source of truth: the header pills map CLASS_SECTIONS (as the sidebar does),
         # so a new tab can never exist in one place and not the other.
         self.assertIn("CLASS_SECTIONS.map((tabItem)", CONSOLE)
-        header = _slice(CONSOLE, "R60 header", '{section === "activity" ? (')
+        header = _slice(CONSOLE, "R60 header", '{section === "today" &&')
         self.assertIn("search: { tab: tabItem.value }", header)
 
     def test_no_hidden_rooms(self):
@@ -69,26 +69,27 @@ class TabSpineTests(unittest.TestCase):
                 self.assertNotIn(retired, CONSOLE)
         self.assertIn('{section === "students" ? (', CONSOLE)
         self.assertIn('{section === "content" ? (', CONSOLE)
-        # Activity renders twice by design — the in-card body and the full-width
+        # R81: Today renders twice by design — the in-card body and the full-width
         # work-view face — both gated on the same section value.
-        self.assertIn('{section === "activity" && !openAssignmentId && !openAssessmentId ? (', CONSOLE)
-        self.assertIn('{section === "activity" && (openAssignmentId || openAssessmentId) ? (', CONSOLE)
+        self.assertIn('{section === "today" && !openAssignmentId && !openAssessmentId ? (', CONSOLE)
+        self.assertIn('{section === "today" && (openAssignmentId || openAssessmentId) ? (', CONSOLE)
 
     def test_open_work_overrides_a_stale_tab(self):
         # R60: old bookmarks and notification emails carry ?tab=classwork&assignment=… —
         # the work-item params, not the tab name, decide the room. Grading never hides.
         self.assertIn(
-            'search.assignment || search.assessment ? "activity" : normalizeClassSection(search.tab)',
+            'search.assignment || search.assessment ? "today" : normalizeClassSection(search.tab)',
             CONSOLE,
         )
 
 
 class StudentsTests(unittest.TestCase):
-    STUDENTS = _slice(CONSOLE, '{section === "students" ? (', '{section === "activity" ? (')
+    STUDENTS = _slice(CONSOLE, '{section === "students" ? (', "{/* The grading face")
 
-    def test_students_is_the_landing_room(self):
-        self.assertIn('return "students";', NAV)
-        # And the student drill-down's back pill returns there.
+    def test_students_is_a_room_the_back_pill_returns_to(self):
+        # R81: Today is the landing; Students is still where a student drill-down
+        # returns to, because that is the room the student was in.
+        self.assertIn('return "today";', NAV)
         self.assertIn('search: { tab: "students" }', CONSOLE)
 
     def test_roster_admin_survives_the_merge(self):
@@ -115,38 +116,39 @@ class StudentsTests(unittest.TestCase):
         self.assertIn("recipient.final_score ?? recipient.score", helper)
 
 
-class ActivityTests(unittest.TestCase):
-    ACTIVITY = _slice(
-        CONSOLE,
-        '{section === "activity" && !openAssignmentId && !openAssessmentId ? (',
-        '{section === "students" ? (',
-    )
+class TodayTests(unittest.TestCase):
+    """R47's Activity room, rebuilt as Today (R81) — same two live surfaces, leading
+    the landing instead of hiding one tab away."""
+
+    TODAY = _slice(CONSOLE, "export function TodayScreen(", "function ")
 
     def test_live_strip_with_watch(self):
-        self.assertIn("liveStudents.map", self.ACTIVITY)
-        self.assertIn("Watch", self.ACTIVITY)
-        self.assertIn('search: { tab: "overview", session: live.id }', self.ACTIVITY)
-        self.assertIn("No one is live right now", self.ACTIVITY)
+        self.assertIn("live.map", self.TODAY)
+        self.assertIn("Watch", self.TODAY)
+        self.assertIn("onWatch(row.studentId, row.sessionId)", self.TODAY)
+        self.assertIn('search: { tab: "overview", session: sessionId }', CONSOLE)
+        self.assertIn("No one is in a lesson right now", self.TODAY)
 
     def test_class_review_queue(self):
-        self.assertIn("reviewRows.map", self.ACTIVITY)
-        self.assertIn("To review", self.ACTIVITY)
+        self.assertIn("toMark.map", self.TODAY)
+        self.assertIn("Waiting on you", self.TODAY)
 
-    def test_work_list_is_quizzes_and_assignments_only(self):
-        self.assertIn("activityItems.map", self.ACTIVITY)
-        # Materials belong to Content — the memo filters them out.
-        self.assertIn('.filter((entry) => entry.kind !== "material")', CONSOLE)
+    def test_the_work_list_moved_to_the_lesson_that_owns_it(self):
+        # R47 listed every quiz and assignment at class scope. R79 gave each lesson its
+        # own Work section, and R81 removed the class-level list rather than keep two.
+        self.assertNotIn("activityItems", CONSOLE)
+        self.assertNotIn("Quizzes &amp; assignments", CONSOLE)
 
-    def test_create_buttons_live_here(self):
-        self.assertIn("New assignment", self.ACTIVITY)
-        self.assertIn("New quiz", self.ACTIVITY)
-        self.assertIn('setCreateOpen("assignment")', self.ACTIVITY)
-        self.assertIn('setCreateOpen("assessment")', self.ACTIVITY)
+    def test_creation_moved_to_the_lesson_too(self):
+        # Law 2: work is created ON the lesson it belongs to, never from a class-level
+        # button that then asks which lesson.
+        self.assertNotIn("New assignment", self.TODAY)
+        self.assertNotIn("New quiz", self.TODAY)
 
     def test_work_item_views_take_the_room(self):
         work = _slice(
             CONSOLE,
-            '{section === "activity" && (openAssignmentId || openAssessmentId) ? (',
+            '{section === "today" && (openAssignmentId || openAssessmentId) ? (',
             '{section === "content" ? (',
         )
         a = work.index("<AssignmentWorkView")
@@ -217,8 +219,8 @@ class RoutingTests(unittest.TestCase):
     def test_notifications_deep_link_to_the_work_item(self):
         self.assertIn('typeof ref.assignment_id === "string"', NOTIFICATIONS)
         self.assertIn('typeof ref.assessment_id === "string"', NOTIFICATIONS)
-        self.assertIn('{ tab: "activity", assignment: assignmentId }', NOTIFICATIONS)
-        self.assertIn('{ tab: "activity", assessment: assessmentId }', NOTIFICATIONS)
+        self.assertIn('{ tab: "today", assignment: assignmentId }', NOTIFICATIONS)
+        self.assertIn('{ tab: "today", assessment: assessmentId }', NOTIFICATIONS)
 
 
 class HomeQueueTests(unittest.TestCase):
@@ -226,8 +228,8 @@ class HomeQueueTests(unittest.TestCase):
         self.assertIn("function globalReviewRows(", CONSOLE)
         self.assertIn("<GlobalReviewQueue", CONSOLE)
         self.assertIn("To review", CONSOLE)
-        self.assertIn('? { tab: "activity", assignment: row.itemId }', CONSOLE)
-        self.assertIn(': { tab: "activity", assessment: row.itemId }', CONSOLE)
+        self.assertIn('? { tab: "today", assignment: row.itemId }', CONSOLE)
+        self.assertIn(': { tab: "today", assessment: row.itemId }', CONSOLE)
 
 
 if __name__ == "__main__":
