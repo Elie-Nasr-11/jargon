@@ -95,7 +95,7 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         # bookmarks.
         self.assertNotIn('navigate({ to: "/teacher/curriculum" })', self.teacher_sidebar)
         self.assertIn(
-            '{ value: "content", label: "Content" }', TEACHER_NAV.read_text(encoding="utf-8")
+            '{ value: "course", label: "Course" }', TEACHER_NAV.read_text(encoding="utf-8")
         )
 
     def test_authoring_types_cover_blueprint_contract(self):

@@ -1,10 +1,20 @@
+/**
+ * "Courses in this class" — the class's course links.
+ *
+ * The only control in the product that changes what a student can SEE: students in
+ * this class see exactly the linked courses' published lessons, and nothing is implied
+ * by an empty set except "nothing yet". It replaces the class's whole link set on save,
+ * which is why an unreadable baseline disables editing rather than guessing.
+ */
 import { useEffect, useMemo, useState } from "react";
 import { BookMarked } from "lucide-react";
 import { getSession, setClassCourses } from "@/lib/api";
 
-// R43 "Courses in this class" — the single management surface for a class's course links,
-// now CONTROLLED by the curriculum studio (which owns the link data and scopes its outline
-// by it). Semantics are strict class-first: students in the class see exactly the linked
+// R43 "Courses in this class" — the single management surface for a class's course links.
+// R83 moved it to Class · Settings, the screen the rebuild brief gives it: this is the only
+// control in the product that changes what a student can see, and it does not belong in an
+// overflow menu on the outline it happens to scope.
+// Semantics are strict class-first: students in the class see exactly the linked
 // courses' published lessons; nothing is implied by an empty set except "nothing yet".
 // The write goes through curriculum-admin `set_class_courses` (auditable, re-checks author
 // access server-side) and REPLACES the class's whole link set.
@@ -104,8 +114,8 @@ export function LinkedCoursesPanel({
         Courses in this class
       </div>
       <p className="mb-3 text-meta leading-relaxed text-muted-foreground">
-        Students see exactly the courses linked here — and the outline above shows the same set. A
-        course can be shared by several classes; edits reach them all.
+        Students see exactly the courses linked here, and the class's Course screen shows the same
+        set. A course can be shared by several classes; edits reach them all.
       </p>
       {!linked ? (
         <p className="text-meta text-muted-foreground">

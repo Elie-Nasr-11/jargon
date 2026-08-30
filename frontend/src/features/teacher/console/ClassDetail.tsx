@@ -1,32 +1,25 @@
 /**
- * One class, in three rooms: Students, Activity, Content.
+ * One class, in three rooms — Today, People, Course — and a fourth screen, Settings,
+ * behind the gear.
  *
- * This is the surface the rebuild brief is aimed at. It is extracted whole and
- * unchanged so that the redesign happens against readable code rather than
- * inside a 4,500-line file.
+ * By R83 this file is a router and a grading face, not a screen: each room owns its own
+ * module under features/teacher/, loads its own data and does its own derivations. What
+ * is left here is the header, the room switch, the work-grading view that takes the page
+ * over, and the create dialogs.
  */
-import { Suspense, lazy, useMemo, useState } from "react";
+import { Suspense, lazy, useState } from "react";
+import { Settings } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AssessmentWorkView } from "@/features/teacher/AssessmentGrading";
 import { AssignmentWorkView } from "@/features/teacher/AssignmentGrading";
-import type { ClassworkItem } from "@/features/teacher/authoring/types";
-import { displayName, lessonName } from "@/features/teacher/classShared";
 import { AssessmentManager } from "@/features/teacher/console/AssessmentManager";
 import type { AssessmentFormValues } from "@/features/teacher/console/AssessmentManager";
 import { AssignmentManager } from "@/features/teacher/console/AssignmentManager";
 import type { AssignmentFormValues } from "@/features/teacher/console/AssignmentManager";
-import { GradebookTable } from "@/features/teacher/console/GradebookTable";
+import { PeopleScreen } from "@/features/teacher/people/PeopleScreen";
 import { TodayScreen } from "@/features/teacher/today/TodayScreen";
 import { ResourceManager } from "@/features/teacher/console/ResourceManager";
 import type { ResourceFormValues } from "@/features/teacher/console/ResourceManager";
-import {
-  classSignals,
-  globalReviewRows,
-  gradeChipLabel,
-  gradeSummariesForClass,
-  relTime,
-  studentContextLine,
-} from "@/features/teacher/console/derive";
 import { CLASS_SECTIONS } from "@/features/teacher/shell/teacherNav";
 import type { ClassSection } from "@/features/teacher/shell/teacherNav";
 import type {
@@ -42,7 +35,6 @@ import type {
   AssignmentSubmission,
   AssignmentSubmissionFile,
   CurriculumQuizItem,
-  LearningSession,
   Lesson,
   LessonResource,
   Profile,
@@ -57,6 +49,14 @@ import { useNavigate } from "@tanstack/react-router";
 const CourseScreen = lazy(() =>
   import("@/features/teacher/course/CourseScreen").then((module) => ({
     default: module.CourseScreen,
+  })),
+);
+
+// Settings pulls the whole course-link picker with it and is opened about once a term —
+// exactly the shape that should never ride in the chunk every teacher downloads (R82).
+const ClassSettingsScreen = lazy(() =>
+  import("@/features/teacher/settings/ClassSettingsScreen").then((module) => ({
+    default: module.ClassSettingsScreen,
   })),
 );
 
@@ -100,6 +100,8 @@ export function ClassDetail({
   onSetSection,
   onListEnrollable,
   onEnroll,
+  onRemove,
+  onRosterChanged,
 }: {
   item: TeacherClassSummary;
   dashboard: TeacherDashboardData;
@@ -153,6 +155,10 @@ export function ClassDetail({
   onSetSection: (studentId: string, section: string | null) => Promise<void>;
   onListEnrollable: () => Promise<Array<{ user_id: string; name: string; grade: string | null }>>;
   onEnroll: (userIds: string[], section: string | null) => Promise<void>;
+  // R83: remove-from-class and the settings writes both change data the console already
+  // holds, so the console refetches rather than each screen keeping its own copy.
+  onRemove: (studentId: string) => Promise<void>;
+  onRosterChanged: () => void;
 }) {
   const navigate = useNavigate();
   // R47: the one + Create menu — everything a teacher makes starts from the same button.
@@ -167,195 +173,10 @@ export function ClassDetail({
   // A material row opened for editing from the Classwork list.
   const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
 
-  // R45 sections: the roster is grouped by section (a label on the class membership).
-  const sectionByStudent = useMemo(() => {
-    const map = new Map<string, string | null>();
-    for (const membership of dashboard.memberships) {
-      if (membership.class_id === item.id && membership.role === "student") {
-        map.set(membership.user_id, membership.section ?? null);
-      }
-    }
-    return map;
-  }, [dashboard.memberships, item.id]);
-  const sectionNames = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          Array.from(sectionByStudent.values()).filter((value): value is string => Boolean(value)),
-        ),
-      ).sort((a, b) => a.localeCompare(b)),
-    [sectionByStudent],
-  );
-  const sectionGroups = useMemo(() => {
-    const groups = new Map<string | null, string[]>();
-    for (const studentId of studentIds) {
-      const label = sectionByStudent.get(studentId) ?? null;
-      const list = groups.get(label) ?? [];
-      list.push(studentId);
-      groups.set(label, list);
-    }
-    const named = (
-      Array.from(groups.entries()).filter(([label]) => label !== null) as Array<[string, string[]]>
-    ).sort((a, b) => a[0].localeCompare(b[0]));
-    const result: Array<{ label: string | null; students: string[] }> = named.map(
-      ([label, students]) => ({ label, students }),
-    );
-    const unsectioned = groups.get(null);
-    if (unsectioned) result.push({ label: null, students: unsectioned });
-    return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentIds.join(","), sectionByStudent]);
-
-  const [enrollOpen, setEnrollOpen] = useState(false);
-  const [enrollable, setEnrollable] = useState<Array<{
-    user_id: string;
-    name: string;
-    grade: string | null;
-  }> | null>(null);
-  const [enrollChecked, setEnrollChecked] = useState<Set<string>>(() => new Set());
-  const [enrollSection, setEnrollSection] = useState("");
-  const [enrollBusy, setEnrollBusy] = useState(false);
-  const [rosterError, setRosterError] = useState<string | null>(null);
-
-  const openEnroll = () => {
-    setEnrollOpen(true);
-    setEnrollable(null);
-    setEnrollChecked(new Set());
-    setRosterError(null);
-    void onListEnrollable()
-      .then(setEnrollable)
-      .catch((error) => {
-        setEnrollable([]);
-        setRosterError((error as Error).message || "Could not load the school's students.");
-      });
-  };
-
-  const submitEnroll = async () => {
-    if (!enrollChecked.size) return;
-    setEnrollBusy(true);
-    setRosterError(null);
-    try {
-      await onEnroll(Array.from(enrollChecked), enrollSection.trim() || null);
-      setEnrollOpen(false);
-    } catch (error) {
-      setRosterError((error as Error).message || "Could not add those students.");
-    } finally {
-      setEnrollBusy(false);
-    }
-  };
-
-  // R46 roster context: who's live right now, and who has work waiting in Review.
-  const nowMs = Date.now();
-  const liveByStudent = useMemo(() => {
-    const map = new Map<string, LearningSession>();
-    for (const session of dashboard.sessions) {
-      if (session.status === "complete") continue;
-      const existing = map.get(session.user_id);
-      if (!existing || session.updated_at > existing.updated_at) {
-        map.set(session.user_id, session);
-      }
-    }
-    return map;
-  }, [dashboard.sessions]);
-  const signals = useMemo(() => classSignals(dashboard, item.id), [dashboard, item.id]);
-  // R60 Students: per-student grade rollup for the roster chips, one pass per snapshot.
-  const gradeSummaries = useMemo(
-    () => gradeSummariesForClass(dashboard, item.id),
-    [dashboard, item.id],
-  );
-  // R60 Activity: this class's slice of the review queue (materials belong to Content).
-  const reviewRows = useMemo(
-    () =>
-      globalReviewRows(dashboard, profilesById, lessonsById).filter(
-        (row) => row.classId === item.id,
-      ),
-    [dashboard, profilesById, lessonsById, item.id],
-  );
-  // Live tab rows: this class's students with an unfinished session, most recent first.
-  const liveStudents = useMemo(
-    () =>
-      studentIds
-        .filter((studentId) => liveByStudent.has(studentId))
-        .sort((a, b) =>
-          (liveByStudent.get(b)?.updated_at ?? "").localeCompare(
-            liveByStudent.get(a)?.updated_at ?? "",
-          ),
-        ),
-    [studentIds, liveByStudent],
-  );
-
-  // R47 Classwork: every work item as a lightweight row for the studio's list — the studio
-  // groups them under its unit headings via the item's lesson. Counts feed the row badges.
-  const workItems = useMemo<ClassworkItem[]>(() => {
-    const submittedByAssignment = new Map<string, { submitted: number; toReview: number }>();
-    for (const submission of dashboard.assignmentSubmissions) {
-      const entry = submittedByAssignment.get(submission.assignment_id) ?? {
-        submitted: 0,
-        toReview: 0,
-      };
-      entry.submitted += 1;
-      if (submission.status === "submitted") entry.toReview += 1;
-      submittedByAssignment.set(submission.assignment_id, entry);
-    }
-    const attemptsByAssessment = new Map<string, { submitted: number; toReview: number }>();
-    for (const attempt of dashboard.assessmentAttempts) {
-      const entry = attemptsByAssessment.get(attempt.assessment_id) ?? {
-        submitted: 0,
-        toReview: 0,
-      };
-      entry.submitted += 1;
-      if (attempt.status === "submitted") entry.toReview += 1;
-      attemptsByAssessment.set(attempt.assessment_id, entry);
-    }
-    return [
-      ...assignments
-        .filter((assignment) => assignment.status !== "archived")
-        .map((assignment) => ({
-          kind: "assignment" as const,
-          id: assignment.id,
-          lessonId: assignment.lesson_id,
-          activityId: assignment.activity_id ?? null,
-          title: assignment.title || "Assignment",
-          status: assignment.status,
-          dueAt: assignment.due_at,
-          needsReviewCount: submittedByAssignment.get(assignment.id)?.toReview ?? 0,
-          submittedCount: submittedByAssignment.get(assignment.id)?.submitted ?? 0,
-        })),
-      ...assessments
-        .filter((assessment) => assessment.status !== "archived")
-        .map((assessment) => ({
-          kind: "assessment" as const,
-          id: assessment.id,
-          lessonId: assessment.lesson_id,
-          activityId: assessment.activity_id ?? null,
-          title: assessment.title || "Quiz",
-          status: assessment.status,
-          dueAt: assessment.due_at,
-          needsReviewCount: attemptsByAssessment.get(assessment.id)?.toReview ?? 0,
-          submittedCount: attemptsByAssessment.get(assessment.id)?.submitted ?? 0,
-        })),
-      ...resources
-        .filter((resource) => resource.status !== "archived")
-        .map((resource) => ({
-          kind: "material" as const,
-          id: resource.id,
-          lessonId: resource.lesson_id,
-          activityId: resource.activity_id ?? null,
-          title: resource.title || "Material",
-          status: resource.status,
-          dueAt: null,
-          needsReviewCount: 0,
-          submittedCount: 0,
-        })),
-    ];
-  }, [
-    assignments,
-    assessments,
-    resources,
-    dashboard.assignmentSubmissions,
-    dashboard.assessmentAttempts,
-  ]);
-  const [studentsView, setStudentsView] = useState<"roster" | "gradebook">("roster");
+  // R83: the roster's own derivations (sections, live dots, grade rollups) moved with
+  // it to features/teacher/people. reviewRows, liveStudents and workItems went with the
+  // Activity room in R81 — they kept being COMPUTED on every render for eight releases
+  // with nothing reading them, including a full pass over every submission and attempt.
 
   const openAssignment = openAssignmentId
     ? (assignments.find((assignment) => assignment.id === openAssignmentId) ?? null)
@@ -373,20 +194,6 @@ export function ClassDetail({
       search: { tab: "today" },
     });
 
-  const changeSection = async (studentId: string, value: string) => {
-    let next: string | null = value || null;
-    if (value === "__new__") {
-      const name = window.prompt("Section name (e.g. 7A)")?.trim();
-      if (!name) return;
-      next = name.slice(0, 60);
-    }
-    setRosterError(null);
-    try {
-      await onSetSection(studentId, next);
-    } catch (error) {
-      setRosterError((error as Error).message || "Could not update the section.");
-    }
-  };
   return (
     <>
       {/* min-w-0: this card is a grid item, and grid items refuse to shrink below their
@@ -400,7 +207,7 @@ export function ClassDetail({
               never disagree; tabs never appear or disappear (principle P2: no hidden rooms). */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-serif text-display text-foreground">{item.name}</h2>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {CLASS_SECTIONS.map((tabItem) => (
                 <button
                   key={tabItem.value}
@@ -421,6 +228,29 @@ export function ClassDetail({
                   {tabItem.label}
                 </button>
               ))}
+              {/* Settings gets an icon, not a pill: it is a screen a teacher opens about
+                  once a term, and a fourth pill would sit beside the three daily rooms
+                  all year claiming equal weight. */}
+              <button
+                type="button"
+                onClick={() =>
+                  navigate({
+                    to: "/teacher/class/$classId",
+                    params: { classId: item.id },
+                    search: { tab: "settings" },
+                  })
+                }
+                aria-label="Class settings"
+                aria-current={section === "settings" ? "page" : undefined}
+                title="Class settings"
+                className={`rounded-full border p-2 transition-colors ${
+                  section === "settings"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                }`}
+              >
+                <Settings className="h-4 w-4" strokeWidth={1.7} />
+              </button>
             </div>
           </div>
 
@@ -455,221 +285,46 @@ export function ClassDetail({
             />
           ) : null}
 
-          {/* Students = who's in the class and how they're doing — the roster with
-              sections and enrolment, each row carrying its own signals (live dot, last
-              activity, grade average), and the full gradebook one toggle away (R60 merge
-              of the old People + Grades rooms). R81: no longer the landing, and no longer
-              carrying the digest — Today opens the class and reports what it learned. */}
-          {section === "students" ? (
-            <div className="panel-fade mt-4">
-              <h3 className="sr-only">Students</h3>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-meta text-muted-foreground">
-                  {studentIds.length} student{studentIds.length === 1 ? "" : "s"}
-                  {signals.sections.length ? ` · sections ${signals.sections.join(" · ")}` : ""}
-                </span>
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1 rounded-full border border-border p-0.5">
-                    {(["roster", "gradebook"] as const).map((view) => (
-                      <button
-                        key={view}
-                        type="button"
-                        onClick={() => setStudentsView(view)}
-                        className={`rounded-full px-3 py-1 text-meta transition-colors ${
-                          studentsView === view
-                            ? "bg-primary font-medium text-primary-foreground"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {view === "roster" ? "Roster" : "Gradebook"}
-                      </button>
-                    ))}
-                  </div>
-                  <button type="button" onClick={openEnroll} className="btn btn-secondary btn-sm">
-                    Add students
-                  </button>
-                </div>
-              </div>
-              {rosterError ? <p className="mb-2 text-meta text-danger">{rosterError}</p> : null}
-              {studentsView === "gradebook" ? (
-                <GradebookTable
-                  lessons={lessons}
-                  lessonsById={lessonsById}
-                  studentIds={studentIds}
-                  dashboard={dashboard}
-                  profilesById={profilesById}
-                  selectedLessonId={selectedLessonId}
-                  selectedStudentId={selectedStudentId}
-                  onSelectLesson={onSelectLesson}
-                  onSelectStudent={onSelectStudent}
-                />
-              ) : (
-                <div className="grid gap-4">
-                  {sectionGroups.length ? (
-                    sectionGroups.map((group) => (
-                      <div key={group.label ?? "__none__"}>
-                        {sectionGroups.length > 1 || group.label ? (
-                          <div className="mb-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                            {group.label ? `Section ${group.label}` : "No section"} ·{" "}
-                            {group.students.length}
-                          </div>
-                        ) : null}
-                        <div className="grid gap-3">
-                          {group.students.map((studentId) => {
-                            const profile = profilesById.get(studentId) || null;
-                            return (
-                              // R52: one row container; the section picker lives inside
-                              // the row instead of floating next to it. Row fill stays
-                              // distinct from field chrome so rows never read as inputs.
-                              <div
-                                key={studentId}
-                                className={`flex items-center gap-3 rounded-card border py-2 pl-4 pr-2 transition-colors ${
-                                  selectedStudentId === studentId
-                                    ? "border-primary/45 bg-depth-card"
-                                    : "border-border bg-depth-sub"
-                                }`}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => onSelectStudent(studentId)}
-                                  className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left transition-colors hover:opacity-80"
-                                >
-                                  {liveByStudent.has(studentId) ? (
-                                    <span className="relative flex h-2.5 w-2.5 shrink-0">
-                                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
-                                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
-                                    </span>
-                                  ) : (
-                                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-border" />
-                                  )}
-                                  <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
-                                    {displayName(profile, studentId)}
-                                  </span>
-                                  <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
-                                    {studentContextLine(
-                                      profile,
-                                      dashboard.sessions,
-                                      studentId,
-                                      lessonsById,
-                                      nowMs,
-                                    )}
-                                  </span>
-                                  <span className="shrink-0 rounded-full border border-border px-2.5 py-0.5 text-meta text-muted-foreground">
-                                    {gradeChipLabel(gradeSummaries.get(studentId))}
-                                  </span>
-                                </button>
-                                <label className="flex shrink-0 items-center">
-                                  <span className="sr-only">
-                                    Section for {displayName(profile, studentId)}
-                                  </span>
-                                  <select
-                                    value={sectionByStudent.get(studentId) ?? ""}
-                                    onChange={(event) =>
-                                      void changeSection(studentId, event.target.value)
-                                    }
-                                    className="jargon-input !w-auto"
-                                  >
-                                    <option value="">No section</option>
-                                    {sectionNames.map((name) => (
-                                      <option key={name} value={name}>
-                                        {name}
-                                      </option>
-                                    ))}
-                                    <option value="__new__">New section…</option>
-                                  </select>
-                                </label>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-card border border-border bg-depth-sub p-5 text-body text-muted-foreground">
-                      No students in this class yet — add your students and group them into
-                      sections.
-                    </div>
-                  )}
-                </div>
-              )}
+          {/* People = the roster: who is in this class, in what section, how each is
+              doing. Adding picks from the school directory and removing marks one
+              membership 'removed' — this screen never creates or destroys an account
+              (R83, brief step 6, replacing the Students room). */}
+          {section === "people" ? (
+            <PeopleScreen
+              classId={item.id}
+              dashboard={dashboard}
+              profilesById={profilesById}
+              lessons={lessons}
+              lessonsById={lessonsById}
+              studentIds={studentIds}
+              selectedLessonId={selectedLessonId}
+              selectedStudentId={selectedStudentId}
+              onSelectLesson={onSelectLesson}
+              onSelectStudent={onSelectStudent}
+              onSetSection={onSetSection}
+              onListEnrollable={onListEnrollable}
+              onEnroll={onEnroll}
+              onRemove={onRemove}
+            />
+          ) : null}
 
-              <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
-                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[480px]">
-                  <DialogHeader>
-                    <DialogTitle>Add students</DialogTitle>
-                  </DialogHeader>
-                  <p className="text-meta text-muted-foreground">
-                    Pick from your school's registered students. New accounts are created by your
-                    admin.
-                  </p>
-                  <label className="grid gap-1 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
-                    Section (optional)
-                    <input
-                      value={enrollSection}
-                      onChange={(event) => setEnrollSection(event.target.value)}
-                      placeholder="e.g. 7A"
-                      className="jargon-input normal-case tracking-normal"
-                    />
-                  </label>
-                  {enrollable === null ? (
-                    <p className="text-meta text-muted-foreground">Loading students…</p>
-                  ) : enrollable.length === 0 ? (
-                    <p className="text-meta text-muted-foreground">
-                      Every registered student is already in this class.
-                    </p>
-                  ) : (
-                    <div className="grid max-h-[300px] gap-1.5 overflow-y-auto">
-                      {enrollable.map((student) => (
-                        <label
-                          key={student.user_id}
-                          className="flex items-center gap-2.5 rounded-control border border-border bg-depth-field px-3 py-2 text-meta text-foreground"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={enrollChecked.has(student.user_id)}
-                            onChange={() =>
-                              setEnrollChecked((current) => {
-                                const next = new Set(current);
-                                if (next.has(student.user_id)) next.delete(student.user_id);
-                                else next.add(student.user_id);
-                                return next;
-                              })
-                            }
-                            className="h-4 w-4 shrink-0 accent-foreground"
-                          />
-                          <span className="min-w-0 flex-1 truncate">{student.name}</span>
-                          {student.grade ? (
-                            <span className="shrink-0 text-meta text-muted-foreground">
-                              Grade {student.grade}
-                            </span>
-                          ) : null}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  {rosterError ? <p className="text-meta text-danger">{rosterError}</p> : null}
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEnrollOpen(false)}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void submitEnroll()}
-                      disabled={enrollBusy || !enrollChecked.size}
-                      className="btn btn-secondary btn-sm"
-                    >
-                      {enrollBusy
-                        ? "Adding…"
-                        : `Add ${enrollChecked.size || ""} student${enrollChecked.size === 1 ? "" : "s"}`}
-                    </button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
+          {/* Settings = the rare, real things: which courses this class teaches, its
+              name, its sections, archiving it. Not a pill — reached from the gear by the
+              class name, because none of it is daily work (Law 4). */}
+          {section === "settings" ? (
+            <Suspense
+              fallback={
+                <div className="mt-4 text-body text-muted-foreground">Loading settings…</div>
+              }
+            >
+              <ClassSettingsScreen
+                classId={item.id}
+                className={item.name}
+                dashboard={dashboard}
+                studentIds={studentIds}
+                onChanged={onRosterChanged}
+              />
+            </Suspense>
           ) : null}
         </div>
       </section>
@@ -736,11 +391,12 @@ export function ClassDetail({
         </div>
       ) : null}
 
-      {/* R60 Content: the units and lessons — the studio, full width. Work items live in
-          Activity now; opening one from a lesson's step navigates there. */}
-      {section === "content" ? (
+      {/* Course: the units and lessons — the outline, full width. R83 renamed the room
+          from "Content", a word the lexicon retired as a noun; ?tab=content still lands
+          here through normalizeClassSection. */}
+      {section === "course" ? (
         <div className="panel-fade flex flex-col gap-4">
-          <h3 className="sr-only">Content</h3>
+          <h3 className="sr-only">Course</h3>
           <Suspense
             fallback={
               <section className="rounded-card border border-border bg-depth-card shadow-card">
@@ -748,10 +404,7 @@ export function ClassDetail({
               </section>
             }
           >
-            <CourseScreen
-              classId={item.id}
-              onAddMaterial={() => setCreateOpen("material")}
-            />
+            <CourseScreen classId={item.id} onAddMaterial={() => setCreateOpen("material")} />
           </Suspense>
         </div>
       ) : null}

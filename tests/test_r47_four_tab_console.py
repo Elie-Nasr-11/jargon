@@ -20,7 +20,7 @@ over the URL's ?tab so old links keep working.
 """
 from pathlib import Path
 import unittest
-from tests.teacher_sources import authoring_source, console_source
+from tests.teacher_sources import authoring_source, console_source, people_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,7 +59,7 @@ class TabSpineTests(unittest.TestCase):
         for retired in (
             '{section === "live" ? (',
             '{section === "classwork" ? (',
-            '{section === "people" ? (',
+            '{section === "students" ? (',
             '{section === "grades" ? (',
             '{section === "review" ? (',
             '{section === "curriculum" ? (',
@@ -67,8 +67,13 @@ class TabSpineTests(unittest.TestCase):
         ):
             with self.subTest(retired=retired):
                 self.assertNotIn(retired, CONSOLE)
-        self.assertIn('{section === "students" ? (', CONSOLE)
-        self.assertIn('{section === "content" ? (', CONSOLE)
+        self.assertIn('{section === "people" ? (', CONSOLE)
+        self.assertIn('{section === "course" ? (', CONSOLE)
+        # R83: Settings is a section the console renders but NOT a pill — the one
+        # deliberate exception to "every section is a CLASS_SECTIONS value", because
+        # it is a screen a teacher opens once a term (Law 4).
+        self.assertIn('{section === "settings" ? (', CONSOLE)
+        self.assertIn('aria-label="Class settings"', CONSOLE)
         # R81: Today renders twice by design — the in-card body and the full-width
         # work-view face — both gated on the same section value.
         self.assertIn('{section === "today" && !openAssignmentId && !openAssessmentId ? (', CONSOLE)
@@ -83,30 +88,44 @@ class TabSpineTests(unittest.TestCase):
         )
 
 
-class StudentsTests(unittest.TestCase):
-    STUDENTS = _slice(CONSOLE, '{section === "students" ? (', "{/* The grading face")
+class PeopleTests(unittest.TestCase):
+    """R47's Students room, renamed and rebuilt as People (R83).
 
-    def test_students_is_a_room_the_back_pill_returns_to(self):
-        # R81: Today is the landing; Students is still where a student drill-down
-        # returns to, because that is the room the student was in.
+    The room is its own module now, so these read the module rather than slicing a
+    marker out of the concatenated console — the room's contract is unchanged.
+    """
+
+    PEOPLE = people_source()
+
+    def test_people_is_a_room_the_back_pill_returns_to(self):
+        # R81: Today is the landing; People is still where a student drill-down
+        # returns to, because that is the room the student was listed in.
         self.assertIn('return "today";', NAV)
-        self.assertIn('search: { tab: "students" }', CONSOLE)
+        self.assertIn('search: { tab: "people" }', CONSOLE)
 
     def test_roster_admin_survives_the_merge(self):
-        self.assertIn("Add students", self.STUDENTS)
-        self.assertIn('<option value="__new__">New section…</option>', self.STUDENTS)
+        # R83 says what the button does: it picks from students the school already
+        # registered. It has never created an account and now it reads that way.
+        self.assertIn("Add from the school directory", self.PEOPLE)
+        self.assertIn('<option value="__new__">New section…</option>', self.PEOPLE)
+
+    def test_a_student_can_be_removed_from_the_class(self):
+        # The other half of the brief's roster contract. Removal is a membership
+        # status, never a delete, and it is confirmed by name.
+        self.assertIn("Remove from this class?", self.PEOPLE)
+        self.assertIn("onRemove(removing)", self.PEOPLE)
 
     def test_rows_carry_grades_and_activity(self):
         # The owner's ask verbatim: "students shows a list of students … with their info
         # like grades and activity."
-        self.assertIn("gradeChipLabel(gradeSummaries.get(studentId))", self.STUDENTS)
-        self.assertIn("studentContextLine(", self.STUDENTS)
-        self.assertIn("liveByStudent.has(studentId)", self.STUDENTS)
+        self.assertIn("gradeChipLabel(gradeSummaries.get(studentId))", self.PEOPLE)
+        self.assertIn("studentContextLine(", self.PEOPLE)
+        self.assertIn("liveByStudent.has(studentId)", self.PEOPLE)
 
     def test_gradebook_is_one_toggle_away(self):
-        self.assertIn('studentsView === "gradebook"', self.STUDENTS)
-        self.assertIn("<GradebookTable", self.STUDENTS)
-        self.assertIn("Roster", self.STUDENTS)
+        self.assertIn('view === "gradebook"', self.PEOPLE)
+        self.assertIn("<GradebookTable", self.PEOPLE)
+        self.assertIn("Roster", self.PEOPLE)
 
     def test_grade_chip_mirrors_the_student_grades_contract(self):
         # Same released set and score precedence as fetchStudentGrades — the teacher's
@@ -149,7 +168,7 @@ class TodayTests(unittest.TestCase):
         work = _slice(
             CONSOLE,
             '{section === "today" && (openAssignmentId || openAssessmentId) ? (',
-            '{section === "content" ? (',
+            '{section === "course" ? (',
         )
         a = work.index("<AssignmentWorkView")
         b = work.index("<AssessmentWorkView")
@@ -160,7 +179,7 @@ class TodayTests(unittest.TestCase):
 
 
 class ContentTests(unittest.TestCase):
-    CONTENT = CONSOLE.split('{section === "content" ? (')[1]
+    CONTENT = CONSOLE.split('{section === "course" ? (')[1]
 
     def test_the_content_room_is_the_course_screen(self):
         # R47 handed the studio the class's work items so the outline could list them.

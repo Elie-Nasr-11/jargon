@@ -57,6 +57,22 @@ that does not map to a node should not exist.
 | **Seeding** | A database word bundling demo logins, class creation and roster import. | Name the job being done. |
 | **Reference material** | A second name for material, scoped to one panel. | Material. |
 | **Activity** (in the UI) | The database name for a step. | Step. (`lesson_activities` stays as the table name.) |
+| **Students** (as a room name) | Named the people but not the job; the room also held grades, sections and enrolment. R83 renamed it. | **People** — who is in the class, in what section, how each is doing. |
+
+## The class's four screens (R83)
+
+A class is four screens, and the names are the lexicon's:
+
+| Screen | Holds | Reached by |
+|---|---|---|
+| **Today** | The weekly digest, who is in a lesson now, what is waiting to be marked. | The landing — opening the class. |
+| **People** | The roster: who, in what section, how each is doing. Add from the school directory, remove from this class. | A pill. |
+| **Course** | The outline: units → lessons. (Was "Content", a word this file retires.) | A pill. |
+| **Settings** | Which courses this class teaches, its name, its sections, archiving it. | The gear beside the class name — not a pill, because none of it is daily (Law 4). |
+
+`?tab=` still accepts every retired value (`students`, `content`, `classwork`,
+`curriculum`, `grades`, …) and resolves it to the screen that owns its content,
+so old bookmarks and notification links keep landing.
 
 ## Rules that follow from the words
 

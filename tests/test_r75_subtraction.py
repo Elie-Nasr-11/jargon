@@ -27,7 +27,7 @@ The law, pinned here:
 """
 from pathlib import Path
 import unittest
-from tests.teacher_sources import authoring_source, console_source
+from tests.teacher_sources import authoring_source, console_source, settings_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,11 +62,11 @@ class OneBuildDoorTests(unittest.TestCase):
 class DemotionTests(unittest.TestCase):
     def test_linked_content_opens_on_demand_and_still_exists(self):
         self.assertNotIn("Books &amp; shared content", STUDIO)
-        self.assertIn("open={coursesOpen}", STUDIO)
-        self.assertIn("<LinkedCoursesPanel", STUDIO)
-        # R77 renamed it after what it manages: this panel picks the class's COURSES and
-        # never had anything to do with resources, which "content" implied.
-        self.assertIn('label: "Courses in this class…"', STUDIO)
+        # R83: demoted the whole way — off the outline page and into Class · Settings,
+        # which is where the brief puts it. R77's naming survives the move.
+        self.assertNotIn("LinkedCoursesPanel", STUDIO)
+        self.assertIn("<LinkedCoursesPanel", settings_source())
+        self.assertIn("Courses in this class", settings_source())
 
     def test_knowledge_is_demoted_not_deleted(self):
         # R75 folded it into a collapsible; R79 moved it off the lesson page entirely,
