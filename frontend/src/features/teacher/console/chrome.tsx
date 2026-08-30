@@ -40,7 +40,15 @@ export function ResourceStatusChip({ status }: { status: LessonResourceStatus })
   );
 }
 
-export function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
+export function Panel({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="rounded-card border border-border bg-depth-sub p-4">
       <div className="mb-3 flex items-center gap-2 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">

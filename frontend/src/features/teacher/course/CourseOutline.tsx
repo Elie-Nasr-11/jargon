@@ -10,15 +10,7 @@
  * is where it now lives.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  BookOpen,
-  ChevronRight,
-  GripVertical,
-  Pencil,
-  Plus,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { BookOpen, ChevronRight, GripVertical, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { OverflowMenu } from "@/components/OverflowMenu";
 import { ReorderList, dropClass } from "@/features/teacher/authoring/dragList";
 import { bookSourceFor } from "@/features/teacher/bookSource";
@@ -88,8 +80,8 @@ export function CourseOutline({
       <section className="rounded-card border border-dashed border-border bg-depth-card px-4 py-10 text-center shadow-card">
         <p className="text-body text-foreground">This class has no course yet.</p>
         <p className="mx-auto mt-1 max-w-[52ch] text-meta text-muted-foreground">
-          Put your book in and Jargon drafts the units and lessons from it — you read what it
-          wrote and publish what you approve. Or start an empty unit and write it yourself.
+          Put your book in and Jargon drafts the units and lessons from it — you read what it wrote
+          and publish what you approve. Or start an empty unit and write it yourself.
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           <button type="button" onClick={onBuildCourse} disabled={busy} className="btn btn-primary">
@@ -134,7 +126,12 @@ export function CourseOutline({
         )}
       </ReorderList>
       <div className="px-1.5 pb-1 pt-2">
-        <button type="button" onClick={onAddUnit} disabled={busy} className="btn btn-secondary btn-sm">
+        <button
+          type="button"
+          onClick={onAddUnit}
+          disabled={busy}
+          className="btn btn-secondary btn-sm"
+        >
           <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
           Add a unit
         </button>
@@ -177,7 +174,10 @@ function UnitBlock({
   return (
     <div className={`rounded-card px-1.5 py-2 ${dragging ? "opacity-60" : ""}`}>
       <div className="flex items-center gap-2 px-1.5">
-        <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground" strokeWidth={1.7} />
+        <GripVertical
+          className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground"
+          strokeWidth={1.7}
+        />
         {renaming ? (
           <UnitNameInput initial={unit.title} onCommit={onRename} />
         ) : (
@@ -233,14 +233,20 @@ function UnitBlock({
                     className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground/50"
                     strokeWidth={1.7}
                   />
-                  <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+                  <BookOpen
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    strokeWidth={1.7}
+                  />
                   <span className="min-w-0 flex-1 truncate text-meta text-foreground">
                     {lesson.title}
                   </span>
                   <span className="shrink-0 text-meta text-muted-foreground">
                     {lessonStateLine(lesson, bookPages, stepCountFor(lesson.id))}
                   </span>
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+                  <ChevronRight
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    strokeWidth={1.7}
+                  />
                 </button>
               </div>
             )}

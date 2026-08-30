@@ -57,7 +57,8 @@ export function useCourseData(classId: string) {
   // never a hidden catalog — a class must not silently teach something it did not link.
   const linksQuery = useQuery({
     queryKey: ["classCourseLinks", data?.classes.map((row) => row.id).join(",") ?? ""],
-    queryFn: () => fetchClassCourseLinks((data as CurriculumAuthoringData).classes.map((row) => row.id)),
+    queryFn: () =>
+      fetchClassCourseLinks((data as CurriculumAuthoringData).classes.map((row) => row.id)),
     enabled: Boolean(data?.classes.length),
     staleTime: 60 * 1000,
   });
@@ -124,7 +125,8 @@ export function useCourseData(classId: string) {
 
   /** The units this class actually teaches, in order, with the course they came from. */
   const outlineUnits = useMemo(() => {
-    if (!data || !classSummary) return [] as Array<{ unit: CurriculumUnit; course: CurriculumCourse | null }>;
+    if (!data || !classSummary)
+      return [] as Array<{ unit: CurriculumUnit; course: CurriculumCourse | null }>;
     const rows: Array<{ unit: CurriculumUnit; course: CurriculumCourse | null }> = [];
     for (const subject of orgSubjects) {
       for (const course of coursesForSubject(subject.id)) {
@@ -170,7 +172,9 @@ export function useCourseData(classId: string) {
       if (!classLinks || !data) return [] as string[];
       return classLinks
         .filter((row) => row.course_id === courseId && row.class_id !== classId)
-        .map((row) => data.classes.find((item) => item.id === row.class_id)?.name || "another class");
+        .map(
+          (row) => data.classes.find((item) => item.id === row.class_id)?.name || "another class",
+        );
     },
     [classLinks, data, classId],
   );

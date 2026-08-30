@@ -44,8 +44,8 @@ export function LessonMaterials({
 
       {materials.length === 0 ? (
         <p className="text-meta text-muted-foreground">
-          Nothing attached. Anything you add here can be shown by a step, and the assistant
-          reads it when it drafts.
+          Nothing attached. Anything you add here can be shown by a step, and the assistant reads it
+          when it drafts.
         </p>
       ) : (
         <div className="grid gap-1.5">

@@ -345,10 +345,7 @@ export function useCourseBuild(classId: string, course: CourseData) {
     [classSummary, classId],
   );
 
-  const closeReview = useCallback(
-    () => setReview((current) => ({ ...current, open: false })),
-    [],
-  );
+  const closeReview = useCallback(() => setReview((current) => ({ ...current, open: false })), []);
 
   const toggleReviewPick = useCallback((lessonId: string) => {
     setReview((current) => {

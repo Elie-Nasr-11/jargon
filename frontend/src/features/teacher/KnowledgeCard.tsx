@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BrainCircuit, Check, ChevronRight, RefreshCw, Sparkles, X } from "lucide-react";
 import {
   extractLessonKnowledge,
@@ -49,6 +49,9 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
   // R60b: quiet by default — the header (with its "N to review" badge) stays; the body
   // opens on demand. The load stays eager because the badge IS the summary.
   const [bodyOpen, setBodyOpen] = useState(false);
+  // Mechanism B for derived content: an empty card reads the lesson rather than asking
+  // whether it should. Once per lesson, and never over knowledge that already exists.
+  const readFor = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,6 +129,17 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
     rows.practice.length +
     rows.figures.length;
 
+  // Mechanism B: the card that has nothing reads the lesson itself, once, when it is
+  // opened. Nothing reaches a student until the teacher publishes each row — the
+  // review gate below is unchanged, which is what makes reading-on-arrival safe.
+  useEffect(() => {
+    if (!bodyOpen || !loaded || loading || extracting || total > 0) return;
+    if (readFor.current === lessonId) return;
+    readFor.current = lessonId;
+    void onExtract();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bodyOpen, loaded, loading, extracting, total, lessonId]);
+
   return (
     <section className="rounded-card border border-border bg-depth-sub p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -161,15 +175,20 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
               strokeWidth={1.7}
             />
           </button>
-          <button
-            type="button"
-            onClick={() => void onExtract()}
-            disabled={extracting || loading}
-            className="btn btn-primary btn-sm"
-          >
-            <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
-            {extracting ? "Reading lesson..." : "Draft knowledge"}
-          </button>
+          {/* R85: no Draft button. Ideas and vocabulary are DERIVED (Law 5) — they are
+              produced by authoring, not asked for. An empty card reads the lesson on
+              its own; this control only re-reads it after the lesson has changed. */}
+          {total > 0 ? (
+            <button
+              type="button"
+              onClick={() => void onExtract()}
+              disabled={extracting || loading}
+              className="btn btn-secondary btn-sm"
+            >
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
+              {extracting ? "Reading lesson…" : "Read the lesson again"}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -187,9 +206,9 @@ export function KnowledgeCard({ lessonId }: { lessonId: string }) {
 
           {loaded && total === 0 && !loading ? (
             <div className="rounded-card border border-dashed border-border px-3 py-6 text-center text-meta text-muted-foreground">
-              Nothing here yet. Draft knowledge reads the steps and approved resources, then
-              proposes ideas, vocab, links, and practice for review. Figures are added when a
-              lesson&rsquo;s source material is processed.
+              {extracting
+                ? "Reading the lesson — proposing ideas, vocab, links and practice for your review."
+                : "Nothing here yet. Add a step or some material and Jargon reads the lesson on its own. Figures are added when a lesson's source material is processed."}
             </div>
           ) : (
             <div className="grid gap-4">

@@ -19,6 +19,7 @@ import { RouteLoader } from "@/components/RouteLoader";
 import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
 import { KnowledgeCard } from "@/features/teacher/KnowledgeCard";
 import { AiStepsPanel } from "@/features/teacher/authoring/generatePanels";
+import { AskJargon, type AssistCommand } from "@/features/teacher/assist/AskJargon";
 import { SelectInput } from "@/features/teacher/authoring/fields";
 import { bookSourceFor, bookSourceLabel } from "@/features/teacher/bookSource";
 import { AssessmentManager } from "@/features/teacher/console/AssessmentManager";
@@ -40,6 +41,7 @@ import {
   createAssessment,
   createAssignment,
   createLessonResource,
+  draftTextField,
   fetchTeacherDashboard,
   getSession,
 } from "@/lib/api";
@@ -170,6 +172,76 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
     [dashboard, lessonId, steps, profilesById],
   );
 
+  // Mechanism C: one command surface for this screen. Every entry lands as a field
+  // value or a proposal the teacher accepts — none of them writes, which is why a
+  // command bar is safe to make this reachable. The list is the lesson's, not the
+  // bar's: another screen supplies its own.
+  const assistCommands = useMemo<AssistCommand[]>(() => {
+    const rewrite = async (
+      field: "lesson_title" | "lesson_objective",
+      key: "title" | "objective",
+      instruction: string,
+    ) => {
+      const session = await getSession();
+      if (!session) return;
+      const text = await draftTextField({
+        accessToken: session.access_token,
+        field,
+        lessonId,
+        current: meta.fields?.[key] || undefined,
+        prompt: instruction,
+      });
+      if (text.trim()) meta.set(key, text.trim());
+    };
+    return [
+      {
+        id: "objective",
+        label: "Rewrite the objective",
+        detail: "Fills the field. Your Save still commits it.",
+        run: () =>
+          rewrite(
+            "lesson_objective",
+            "objective",
+            "Rewrite the objective so it names one thing a student can do afterwards, and can be checked.",
+          ),
+      },
+      {
+        id: "title",
+        label: "Rewrite the title",
+        detail: "Fills the field. Your Save still commits it.",
+        run: () =>
+          rewrite(
+            "lesson_title",
+            "title",
+            "Rewrite the title so it names what the lesson teaches.",
+          ),
+      },
+      {
+        id: "simplify",
+        label: "Simplify the reading level",
+        detail: "Rewrites the objective in plainer language, keeping every fact.",
+        run: () =>
+          rewrite(
+            "lesson_objective",
+            "objective",
+            "Rewrite in plainer language a student of this age reads without help. Keep every fact.",
+          ),
+      },
+      {
+        id: "brief",
+        label: "Draft steps from a brief",
+        detail: "For when you already know what the lesson should teach.",
+        run: () => setBriefOpen(true),
+      },
+      {
+        id: "preview",
+        label: "Preview as a student",
+        run: () => setPreviewOpen(true),
+      },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonId, meta.fields?.title, meta.fields?.objective]);
+
   const classSummaryRow = useMemo(
     () => dashboard?.classes.find((row) => row.id === classId) ?? null,
     [dashboard, classId],
@@ -225,6 +297,8 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
       activeClassId={classId}
       activeSection="course"
     >
+      {/* pb-20: the Ask Jargon bar is fixed to the bottom-right, and without this it
+          covered the last card's controls. Found by walking, not by a test. */}
       <PageShell
         widthClass="max-w-[1040px]"
         ariaLabel={`Lesson: ${lesson.title}`}
@@ -237,7 +311,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
         }
         backLabel={authoring.unit?.title || "Back to the course"}
       >
-        <div className="grid gap-4">
+        <div className="grid gap-4 pb-20">
           {/* The header sticks, so the band behind it has to be opaque — otherwise the
               steps scroll through the gap between the header card and the next one. */}
           <div className="sticky top-0 z-20 -mt-2 bg-background pb-2 pt-2">
@@ -576,6 +650,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
           />
         </>
       ) : null}
+      <AskJargon commands={assistCommands} />
     </TeacherShell>
   );
 }
