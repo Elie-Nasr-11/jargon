@@ -18,6 +18,7 @@ export function TeacherShell({
   activeView,
   activeClassId = null,
   activeSection = null,
+  assistant,
   children,
 }: {
   email: string;
@@ -25,6 +26,11 @@ export function TeacherShell({
   activeView: "home" | "class";
   activeClassId?: string | null;
   activeSection?: ClassSection | null;
+  // R87: the assistant is a SIBLING of the stage, not an overlay on it. Rendered here,
+  // opening it shrinks the page the way a sidebar should, instead of covering the very
+  // controls it is meant to help with. (It goes fixed on narrow screens, where there is
+  // no width to give it.)
+  assistant?: ReactNode;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -103,11 +109,6 @@ export function TeacherShell({
         </button>
       ) : null}
 
-      {/* The notification bell floats top-right, above the page scroll. */}
-      <div className="fixed right-3 top-3 z-[var(--z-header)]">
-        <NotificationsMenu />
-      </div>
-
       {/* The stage: hosts render exactly one PageShell page, which owns its own scroll. When the
           sidebar is collapsed the reopen chip floats over the stage's top-left — unlike the 880px
           student column, the wide teacher columns (1240/1440) reach it, so the stage takes top
@@ -118,8 +119,16 @@ export function TeacherShell({
           collapsed ? "lg:pt-12" : ""
         }`}
       >
+        {/* R87: the bell is absolute to the STAGE, not fixed to the viewport. While it
+            was fixed it sat on top of whatever occupied the right edge — which, once
+            the assistant became a right-hand panel, was the panel's own close button. */}
+        <div className="absolute right-3 top-3 z-[var(--z-header)]">
+          <NotificationsMenu />
+        </div>
         {children}
       </div>
+
+      {assistant}
     </div>
   );
 }

@@ -12531,3 +12531,33 @@ natural next move is the owner's, not another step: rotate the Supabase token so
 R85's backend lands, then walk the whole console as a teacher who has never seen it,
 which is the brief's own acceptance rule and the only test of whether ten releases
 of subtraction actually worked.
+
+## Claude -> Codex / Human - 2026-08-30 15:20
+
+Status: Finished
+Summary: R87 — Ask Jargon is a sidebar with a conversation in it, not a ⌘K palette.
+Owner's note: an assistant "should open into a sidebar as all assistants do". It is a
+flex sibling of the page inside TeacherShell, so opening it SHRINKS the lesson
+(1180px -> 780px at 1440) rather than covering the controls it exists to help with.
+A turn is the teacher's own words in, a proposal card out, naming the field it is for.
+Files changed: assist/AskJargon.tsx (rewritten — targets/suggestions/actions replace
+the command list; conversation state; composer with a target picker),
+shell/TeacherShell.tsx (an `assistant` slot, and the notification bell moved from
+viewport-fixed to stage-absolute), lesson/LessonScreen.tsx (declares its targets and
+suggestions, renders through the slot), assist/useFieldProposal.ts (an arrival
+proposal clears once its field is filled), tests (new R87 file; three R85 pins
+updated to the richer contract).
+Tests run: python 1325 green / 4 skipped; tsc clean; vite build succeeds; eslint 0
+errors; R87's pins mutation-tested (the bell going back to viewport-fixed, the panel
+going back to an overlay — both fail as they should); walked at 1440px: panel opens
+on ⌘K, page shrinks, a typed request round-trips to a proposal, Use this fills the
+field and flips the card to "In the field · Undo", and the inline duplicate is gone.
+Remaining concerns: the panel is wired on the LESSON screen only — Today, Course,
+People and Settings declare no targets, so ⌘K does nothing there. That is deliberate
+(a target list is a design decision per screen, not a default) but the assistant is
+inconsistent across the console until each screen declares one. On narrow screens the
+panel covers rather than shrinks; there is no width to give it, but it has not been
+walked at phone size. Unchanged from R85: curriculum-admin is still v42 on OpenAI
+until SUPABASE_ACCESS_TOKEN is rotated.
+Suggested next task: declare assist targets on the Course screen (unit titles) and
+Today, so ⌘K means the same thing everywhere in the console.
