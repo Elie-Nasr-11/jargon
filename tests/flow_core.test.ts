@@ -16,6 +16,7 @@ import {
   deriveTurn,
   emptyStepState,
   isSkipRequest,
+  learnerSteer,
   requirementsFor,
   stepDone,
   turnDirective,
@@ -977,5 +978,138 @@ Deno.test("R72: only machine-decided turns take the cheap lane", () => {
     autoTierRoute({ ...base, routedKind: "continue_signal", answerMode: "code" }),
     "default",
     "a continue signal carrying code is not a bare move-on",
+  );
+});
+
+// --- R91: rubric §19 — the cognition profile steers the mentor --------------------
+// learnerSteer turns a stored cognition profile into AT MOST TWO imperative moves for
+// the mentor. These are the promises the §19 wiring makes: if one fails, a real student
+// is being steered wrongly, so fix the steer rather than the assertion.
+
+const profile = (over: Record<string, unknown> = {}) => ({
+  retrieval: 3,
+  organization: 3,
+  reasoning: 3,
+  elaboration: 3,
+  vocabulary: 3,
+  expression: 3,
+  independence: 3,
+  metacognition: 3,
+  scaffold_earlier: 2,
+  scaffold_recent: 2,
+  turns_scored: 8,
+  ...over,
+});
+
+Deno.test("R91: no profile, or too little evidence, steers nothing", () => {
+  eq(learnerSteer(null), null, "a missing profile must not steer");
+  eq(learnerSteer(undefined), null, "an absent profile must not steer");
+  eq(
+    learnerSteer(profile({ turns_scored: 2, retrieval: 0 })),
+    null,
+    "two judged responses is below the floor — one bad answer must not set a posture",
+  );
+});
+
+Deno.test("R91: never more than two moves (EXACTLY ONE ASK survives)", () => {
+  const steer = learnerSteer(
+    profile({
+      retrieval: 1,
+      organization: 1,
+      reasoning: 1,
+      elaboration: 1,
+      vocabulary: 1,
+      expression: 1,
+      metacognition: 1,
+      independence: 1,
+    }),
+  );
+  eq(steer!.moves.length, 2, "every dimension weak still yields a short, ordered list");
+});
+
+Deno.test("R91: dependency outranks everything (§19's first rule)", () => {
+  const steer = learnerSteer(
+    profile({ independence: 1, retrieval: 0, scaffold_recent: 4, scaffold_earlier: 4 }),
+  );
+  ok(
+    steer!.moves[0].startsWith("REDUCE ASSISTANCE"),
+    "low production UNDER heavy help means the AI is doing the thinking — cut help first",
+  );
+});
+
+Deno.test("R91: low independence WITHOUT heavy help is not dependency", () => {
+  const steer = learnerSteer(
+    profile({ independence: 1, retrieval: 0, scaffold_recent: 0, scaffold_earlier: 0 }),
+  );
+  ok(
+    !steer!.moves.some((move: string) => move.startsWith("REDUCE ASSISTANCE")),
+    "never cut help a student was not actually given",
+  );
+  ok(steer!.moves[0].startsWith("RETRIEVAL FIRST"), "steer the weak dimension instead");
+});
+
+Deno.test("R91: mastery fades scaffolding and introduces transfer (§19's last rule)", () => {
+  const steer = learnerSteer(profile());
+  eq(steer!.moves.length, 1, "a mastering student needs one move, not a list");
+  ok(steer!.moves[0].startsWith("FADE AND TRANSFER"), "strong work earns transfer, not more scaffolding");
+});
+
+Deno.test("R91: the weakest dimension is steered first", () => {
+  const steer = learnerSteer(profile({ elaboration: 0, vocabulary: 2, independence: 2 }));
+  ok(
+    steer!.moves[0].startsWith("ASK THEM TO DEVELOP IT"),
+    "elaboration at 0 outranks vocabulary at 2",
+  );
+});
+
+Deno.test("R91: §18 — weak expression beside strong reasoning asks for a reformulation", () => {
+  const steer = learnerSteer(profile({ expression: 1, reasoning: 4, independence: 2 }));
+  ok(
+    steer!.moves[0].startsWith("ASK THEM TO REFORMULATE"),
+    "sound thinking in poor wording is a language fix, not a teaching one",
+  );
+});
+
+Deno.test("R91: §18 — weak expression AND weak reasoning steers the reasoning", () => {
+  const steer = learnerSteer(profile({ expression: 1, reasoning: 1, independence: 2 }));
+  ok(
+    !steer!.moves.some((move: string) => move.startsWith("ASK THEM TO REFORMULATE")),
+    "language weakness must never be mistaken for weak thinking",
+  );
+  ok(steer!.moves[0].startsWith("MAKE THEM REASON"), "the reasoning is what needs work here");
+});
+
+Deno.test("R91: a move never carries a score, a number, or the word rubric", () => {
+  // The student experiences the CHANGE, never the measurement (docs/COGNITION.md).
+  const cases = [
+    profile({ retrieval: 0, independence: 1, scaffold_recent: 4 }),
+    profile({ elaboration: 1, vocabulary: 1 }),
+    profile({ expression: 0, reasoning: 4 }),
+    profile(),
+  ];
+  for (const row of cases) {
+    for (const move of learnerSteer(row)!.moves) {
+      ok(!/\d/.test(move), `a move must carry no digits: ${move}`);
+      ok(!/rubric|score|dimension/i.test(move), `a move must not name the measurement: ${move}`);
+    }
+  }
+});
+
+Deno.test("R91: the scaffold trend reads the direction of help over time", () => {
+  eq(
+    learnerSteer(profile({ scaffold_earlier: 4, scaffold_recent: 1 }))!.scaffold_trend,
+    "falling",
+    "less help over time is the trend we want",
+  );
+  eq(
+    learnerSteer(profile({ scaffold_earlier: 1, scaffold_recent: 4, independence: 1 }))!
+      .scaffold_trend,
+    "rising",
+    "more help over time is the dependency warning",
+  );
+  eq(
+    learnerSteer(profile({ scaffold_earlier: null, scaffold_recent: null }))!.scaffold_trend,
+    null,
+    "no trend without two halves to compare",
   );
 });

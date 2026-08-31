@@ -192,6 +192,17 @@ policy.require_attempt_first is true, give no substantive help before a real att
 an attempt; ask one short question that gets an attempt going. When policy.answers_forbidden_this_turn is
 true, never give the final answer or complete solution this turn.
 
+HOW THIS STUDENT THINKS — when "learner" is present, it carries what their own recent work on this
+lesson shows, already reduced to at most two moves in "learner.moves". Those moves OUTRANK your
+default help level for this turn: follow them while still obeying policy.help_ceiling, EXACTLY ONE
+ASK, and the step's own contract. "learner.scaffold_trend" reads "rising" when you have been giving
+MORE help over time — treat that as a warning that you are doing the thinking for them.
+NEVER SAY ANY OF THIS TO THE STUDENT. Do not mention scores, dimensions, levels, a rubric, or that
+their thinking is being measured, and never quote or paraphrase a move back at them ("your
+elaboration is weak", "let's work on your reasoning"). A student should only ever experience the
+CHANGE — a question where there would have been a hint, a request for an example where there would
+have been another paragraph. If "learner" is absent, teach exactly as these rules already say.
+
 Explanation / reflection steps: the STUDENT must produce the conclusion in their own words. Never answer your
 own reflection question, and never hand them the target answer — not directly, not as a "model answer", not
 as a thin analogy they can restate. This rule is about the reflection conclusion the STUDENT must produce —
@@ -1906,6 +1917,9 @@ const MENTOR_STABLE_PAYLOAD_KEYS = new Set([
   "quiz",
   "resource_chunks",
   "knowledge",
+  // R91: the §19 steer changes only when the scorer re-runs (rarely), so it belongs
+  // in the cacheable prefix, not the live block.
+  "learner",
 ]);
 
 function mentorUserContent(payload: DbRow): DbRow[] {
@@ -2906,6 +2920,156 @@ const NAVIGATE_BACK_RE =
 // (the LLM router is gone) — it shapes the kept directive rungs, the world brief and
 // the draft fold on every free-text turn, and its fall-through default is
 // answer_attempt. The mentor's student_action supersedes it at the persisted fold.
+// --- R91: rubric §19 — the cognition profile STEERS the mentor --------------------
+//
+// R90 built the ledger (docs/COGNITION.md); §19 is the half that makes it matter:
+// "The rubric should not merely evaluate the learner. It should influence how Jargon
+// Mentor responds." This turns a stored profile into at most TWO imperative moves for
+// this turn, which the SYSTEM prompt's TEACHING METHOD rules then obey.
+//
+// Two design constraints shape it:
+//   AT MOST TWO MOVES. EXACTLY ONE ASK is a hard rule of this prompt — a mentor handed
+//   five weaknesses would either ask five things or ignore the list. Weakest first.
+//   NEVER A SCORE. The moves are teaching instructions, never numbers, and the prompt
+//   forbids repeating any of this to the student. A learner must not be told they rate
+//   2/4 on elaboration; they should simply be asked for an example.
+//
+// Absent profile (nothing scored yet) or too little evidence => null, and the mentor
+// runs exactly as it did before R91. This is additive steering, never a gate.
+
+export type CognitionSteer = {
+  based_on: number;
+  weak: string[];
+  strong: string[];
+  scaffold_trend: "falling" | "rising" | "steady" | null;
+  moves: string[];
+};
+
+// A dimension is ACTIONABLE at 2 or below (the rubric's "no evidence" / "minimal" /
+// "developing" bands) and PROFICIENT at 3+. Ties break in the rubric's own §19 order,
+// which puts retrieval first because retrieval is what everything else is built on.
+const STEER_PRIORITY = [
+  "retrieval",
+  "reasoning",
+  "elaboration",
+  "vocabulary",
+  "organization",
+  "expression",
+  "metacognition",
+] as const;
+
+const STEER_MOVES: Record<string, string> = {
+  retrieval:
+    "RETRIEVAL FIRST: before you supply any fact this step needs, ask them to retrieve it — \"what do you remember about X?\" — and only fill the gap they actually leave.",
+  reasoning:
+    "MAKE THEM REASON: when they give an answer, do not accept it bare — ask why, how they know, or what makes them think that, and let their justification be the thing you respond to.",
+  elaboration:
+    "ASK THEM TO DEVELOP IT: their answers stop at the first idea. Ask for one concrete example, or for the next step of the thought, rather than supplying either.",
+  vocabulary:
+    "LET THEM NAME IT: when a subject term is needed, ask them for the word before you use it (\"what do we call that?\"). Supply it only after they try.",
+  organization:
+    "ASK FOR THE CONNECTION: they list ideas without linking them. Ask how two of the things they just said relate — which causes which, or which comes first.",
+  expression:
+    "ASK THEM TO REFORMULATE: the thinking is sound and the wording is what slips. Ask them to say it again more clearly in their own words — never rewrite it for them.",
+  metacognition:
+    "ASK THEM TO CHECK THEMSELVES: before you confirm or correct, ask how sure they are and what would make them surer.",
+};
+
+function steerDim(profile: DbRow, key: string): number | null {
+  const value = profile[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer | null {
+  if (!profile || typeof profile !== "object") return null;
+  const based = Number(profile.turns_scored) || 0;
+  // Three judged responses is the floor for steering a lesson on: below that a single
+  // navigation turn or one bad answer would swing the whole posture.
+  if (based < 3) return null;
+
+  const weakAll: string[] = [];
+  const strong: string[] = [];
+  for (const key of STEER_PRIORITY) {
+    const value = steerDim(profile, key);
+    if (value === null) continue;
+    if (value <= 2) weakAll.push(key);
+    else strong.push(key);
+  }
+
+  // Number(null) is 0, and 0 is finite — so a profile with NO trend yet (one scored
+  // response leaves scaffold_earlier null) would read as "steady" and feed the
+  // dependency logic a comparison that never happened. Absent stays absent.
+  const numOrNull = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === "") return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
+  const earlier = numOrNull(profile.scaffold_earlier);
+  const recent = numOrNull(profile.scaffold_recent);
+  const scaffold_trend =
+    earlier !== null && recent !== null
+      ? recent < earlier
+        ? "falling"
+        : recent > earlier
+          ? "rising"
+          : "steady"
+      : null;
+
+  const independence = steerDim(profile, "independence");
+  const retrieval = steerDim(profile, "retrieval");
+  const reasoning = steerDim(profile, "reasoning");
+  const moves: string[] = [];
+
+  // §19's FIRST rule, and the one that outranks the rest: "If cognitive production is
+  // low because the AI supplied too much: reduce assistance." That is the dependency
+  // signature — the student produces little AND the tutor has been carrying the turns.
+  const dependent = independence !== null && independence <= 2 && recent !== null && recent >= 3;
+  if (dependent) {
+    moves.push(
+      "REDUCE ASSISTANCE: most of the thinking in their recent answers came from you, not them. Drop a full rung below what you would normally give — a pointed question instead of a hint, a hint instead of a step — and make them produce before you add anything.",
+    );
+  }
+
+  // §19's LAST rule: "If mastery appears strong: fade scaffolding and introduce
+  // transfer." Keyed on the three dimensions that mean the student owns the material.
+  const mastered =
+    !dependent &&
+    retrieval !== null &&
+    retrieval >= 3 &&
+    reasoning !== null &&
+    reasoning >= 3 &&
+    independence !== null &&
+    independence >= 3;
+  if (mastered) {
+    moves.push(
+      "FADE AND TRANSFER: they are producing this material independently. Stop scaffolding — ask them to apply the idea somewhere it has not appeared yet, or to predict a case you have not covered.",
+    );
+  }
+
+  if (!mastered) {
+    // Weakest first; expression only under §18's caution — weak wording beside strong
+    // reasoning is a language issue, and asking for a reformulation is the fix. When
+    // the reasoning is ALSO weak, the reasoning move is the one that matters.
+    const ranked = weakAll
+      .filter((key) => key !== "expression" || (reasoning !== null && reasoning >= 3))
+      .sort((a, b) => {
+        const byValue = (steerDim(profile, a) ?? 9) - (steerDim(profile, b) ?? 9);
+        return byValue !== 0
+          ? byValue
+          : STEER_PRIORITY.indexOf(a as (typeof STEER_PRIORITY)[number]) -
+              STEER_PRIORITY.indexOf(b as (typeof STEER_PRIORITY)[number]);
+      });
+    for (const key of ranked) {
+      if (moves.length >= 2) break;
+      const move = STEER_MOVES[key];
+      if (move) moves.push(move);
+    }
+  }
+
+  if (!moves.length) return null;
+  return { based_on: based, weak: weakAll, strong, scaffold_trend, moves: moves.slice(0, 2) };
+}
+
 export function heuristicKind(text: string): RouterVerdict {
   const trimmed = (text || "").trim();
   if (
@@ -4577,6 +4741,9 @@ async function loadContext(
   resourceInteractions: DbRow[];
   profile: DbRow | null;
   misconceptions: DbRow[];
+  // R91: the §19 cognition profile for this (student, lesson). Null until the
+  // cognition-scorer has judged something — steering is additive, never a gate.
+  cognitionProfile: DbRow | null;
   pendingCheckpoints: PendingCheckpoint[];
   pendingCheckpointsOk: boolean;
   // R48: the work item linked to the CURRENT step (null = unlinked / late enrollee).
@@ -4748,7 +4915,15 @@ async function loadContext(
   // single-activity lessons — on a multi-step lesson it would glue one unbound quiz onto
   // EVERY step. Misconceptions are filtered by the ACTIVITY's skills (milestone/quiz
   // skills resolve in this same wave; empty → unfiltered, and the prompt caps at 3).
-  const [milestone, activityQuiz, fallbackQuiz, misconceptions, resourceChunks, stepWork] =
+  const [
+    milestone,
+    activityQuiz,
+    fallbackQuiz,
+    misconceptions,
+    cognitionProfile,
+    resourceChunks,
+    stepWork,
+  ] =
     await Promise.all([
       (milestoneId
         ? loadFirst(
@@ -4778,6 +4953,13 @@ async function loadContext(
         `student_misconceptions?user_id=eq.${encodeURIComponent(userId)}&status=eq.active${activitySkills.length ? `&skill_key=${inFilter(activitySkills)}` : ""}&order=last_seen_at.desc&limit=8&select=skill_key,pattern,hint,occurrences`,
         // R66: optional coaching context.
       ).catch(() => [] as DbRow[]),
+      // R91 (rubric §19): this student's cognition profile for THIS lesson, written by
+      // the cognition-scorer (docs/COGNITION.md). Best-effort like every other coaching
+      // input — absent (nothing scored yet) simply means no §19 steering this turn.
+      loadFirst(
+        config,
+        `cognition_profiles?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&limit=1&select=retrieval,organization,reasoning,elaboration,vocabulary,expression,independence,metacognition,scaffold_earlier,scaffold_recent,turns_scored`,
+      ).catch(() => null),
       resourceIds.length
         ? loadMany(
             config,
@@ -4822,6 +5004,7 @@ async function loadContext(
     resourceInteractions,
     profile,
     misconceptions,
+    cognitionProfile,
     pendingCheckpoints: pendingResult ?? [],
     pendingCheckpointsOk: pendingResult !== null,
     stepWork,
@@ -7555,6 +7738,11 @@ async function handleTypedRequest(
             tone: helpPolicy.tone || null,
             pace: helpPolicy.pace || null,
           },
+          // R91 (rubric §19): how this student's own thinking has been running on this
+          // lesson, reduced to at most two teaching moves for this turn. Absent until
+          // the cognition-scorer has judged at least three responses — the mentor then
+          // behaves exactly as it did before. NEVER shown or said to the student.
+          learner: learnerSteer(context.cognitionProfile) ?? undefined,
           student: {
             // How to address them: the preferred name wins; else the first word of the
             // full name; else nothing (the mentor simply doesn't use a name).

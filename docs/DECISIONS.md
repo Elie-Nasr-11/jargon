@@ -3057,3 +3057,39 @@ day the token was rotated and v43 deployed. Fixed now, pinned past comments (the
 pin that matched its own explanatory comment is this session's third such lesson),
 using the live chat function's recipe: firm JSON instructions plus fence-tolerant
 extraction.
+
+## R91 — §19: measurement that changes the teaching
+
+THE HALF THAT MAKES THE RUBRIC REAL. R90 could measure a student and tell a teacher.
+That is a report card with better vocabulary. §19 is the owner's own answer to it —
+"the rubric should not merely evaluate the learner; it should influence how Jargon
+Mentor responds" — so the profile now reaches the mentor as INSTRUCTIONS that outrank
+its default help level, not as another fact in the payload it may weigh or ignore.
+
+TWO MOVES, NEVER FIVE. The rubric's §19 table has eight conditionals and a real student
+trips several at once; this prompt's hardest rule is EXACTLY ONE ASK. A mentor handed
+five weaknesses either asks five things or ignores the list, and both are worse than
+before. So the derivation ranks and truncates: weakest dimension first, ties in the
+rubric's own order, at most two — and dependency (low independence UNDER heavy
+scaffolding) pre-empts everything, because when the AI has been doing the thinking, no
+other correction matters yet.
+
+THE STUDENT NEVER HEARS IT. A learner told "your elaboration is 1/4" learns to perform
+for a meter. The move strings carry no digits and never name the measurement, and the
+prompt forbids quoting one back. What a student experiences is only the change: a
+question where there would have been a hint, a request for an example where there
+would have been another paragraph.
+
+ADDITIVE, NEVER A GATE. No profile, fewer than three judged responses, or a failed read
+all mean no steering and the mentor behaves exactly as before. A measurement system
+that can BREAK a lesson is not worth the lesson.
+
+THE PROPERTY TEST PAID FOR ITSELF IMMEDIATELY: Number(null) is 0 and 0 is finite, so a
+profile with no trend yet reported "steady" and handed the dependency rule a comparison
+that had never happened. Review would not have caught that; a test asserting "no trend
+without two halves to compare" did, on its first run.
+
+AND IT IS DARK. chat/index.ts is 417KB — far past the deploy channel R90 opened — so
+this ships correct, tested and inert. Three merged releases now wait on one expired
+credential (R85's provider switch, R89's shared-book legibility, R91's steering), which
+is itself the argument for rotating it.

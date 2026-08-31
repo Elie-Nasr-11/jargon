@@ -12722,3 +12722,57 @@ Suggested next task: wire §19 — the world brief reads cognition_profiles and 
 standing rules gain the rubric's responses (weak retrieval -> retrieval prompts
 first; low independence -> reduce assistance). It is a chat change: rotate the token
 first, or accept that it lands code-ready and dark.
+
+## Claude -> Codex / Human - 2026-08-31 16:20
+
+Status: Finished
+Task: R91 — rubric §19: the cognition profile STEERS the mentor. The ledger R90
+shipped is the input; this turns it into behavior (weak retrieval -> retrieval
+prompts before information; low independence -> reduce assistance; strong -> fade
+scaffolding and introduce transfer).
+Files I expect to touch: supabase/functions/chat/index.ts (the load, the payload's
+stable block, the TEACHING METHOD rules), docs/COGNITION.md, tests.
+Notes: chat/index.ts is 417KB — far over the MCP deploy ceiling, so this lands
+code-ready and DARK until SUPABASE_ACCESS_TOKEN is rotated. Verified by deno check +
+the deno flow suite + python pins rather than a live probe.
+
+Summary: R91 — rubric §19. The R90 ledger now STEERS the mentor. chat reads the
+student's cognition profile for the lesson each turn and derives (learnerSteer, an
+exported pure function) at most TWO imperative moves, which ride the payload's
+cacheable prefix as `learner` and which a new HOW THIS STUDENT THINKS prompt section
+places above the default help level. The rubric's conditionals in priority order:
+dependency (low independence UNDER heavy scaffolding) -> reduce assistance; then the
+weakest dimension's §19 ask; §18's caution (weak expression beside STRONG reasoning ->
+ask to reformulate, but beside weak reasoning -> steer the reasoning); mastery -> fade
+and transfer.
+Three safety properties, all pinned: at most two moves (EXACTLY ONE ASK survives); no
+move carries a digit or names the measurement, and the prompt forbids saying any of it
+to the student; absent/thin profile steers nothing, so this is additive and never a
+gate.
+VERIFIED ON THE REAL PROFILE the R90 probe wrote for the demo student (retrieval 2,
+elaboration 1, independence 3, scaffold 3.17 -> 2): trend "falling", moves "ASK THEM TO
+DEVELOP IT" then "RETRIEVAL FIRST" — the two lowest dimensions, correctly not
+"reduce assistance" (they are not dependent) and correctly not "fade" (retrieval is
+not yet proficient).
+The property test earned its keep: it caught a real bug — Number(null) is 0 and 0 is
+finite, so a profile with no trend yet (one scored response leaves scaffold_earlier
+null) reported "steady" and fed the dependency rule a comparison that never happened.
+Files changed: supabase/functions/chat/index.ts (the read, LessonContext, learnerSteer +
+STEER_MOVES, the stable payload key, the prompt section), tests/flow_core.test.ts (10
+new §19 properties, 32 total green), tests/test_r91_cognition_steer.py (new, 14 pins),
+docs/COGNITION.md (§19 section replaces the "not in R90" entry).
+Tests run: python 1384 green / 4 skips; deno flow suite 32/32; deno check on chat at
+exact HEAD parity (8 pre-existing errors, none new); both load-bearing pins
+mutation-tested (deleting the never-tell-the-student rule fails; making dependency
+ignore whether help was actually given fails 12 properties).
+Remaining concerns: THIS SLICE IS DARK. chat/index.ts is 417KB, far over the MCP
+deploy ceiling that R90 measured, so §19 ships code-ready and does nothing in
+production until SUPABASE_ACCESS_TOKEN is rotated and CI deploys chat. It was verified
+by property tests + the real profile rather than a live probe, which is weaker
+evidence than R90 had. Scoring is still teacher-triggered, so a profile only exists
+for lessons a teacher has pressed "Read the thinking" on — until scoring is scheduled,
+§19 will steer rarely in practice. §10 transfer and §11 retention remain unbuilt.
+Suggested next task: the owner's token rotation unblocks R85 (authoring provider),
+R89's legibility fix and R91 in one deploy — that is now three merged releases waiting
+on one credential. After that, schedule scoring (pg_cron is available and unwired) so
+§19 has profiles to read without a teacher pressing a button.
