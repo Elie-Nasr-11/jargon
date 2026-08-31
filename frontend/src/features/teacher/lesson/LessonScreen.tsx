@@ -278,7 +278,12 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
     <TeacherShell
       assistant={
         <AskJargon
-          context={{ kind: "Lesson", name: lesson.title || "Untitled lesson" }}
+          context={{
+            kind: "Lesson",
+            name: lesson.title || "Untitled lesson",
+            lessonId: lesson.id,
+            classId,
+          }}
           targets={assistTargets}
           suggestions={assistSuggestions}
           actions={[

@@ -51,7 +51,8 @@ export function SelectionRefine({
   children,
 }: {
   field: DraftableField;
-  lessonId?: string | null;
+  /** Required, not optional: an unscoped draft is one curriculum-admin refuses. */
+  lessonId: string;
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;

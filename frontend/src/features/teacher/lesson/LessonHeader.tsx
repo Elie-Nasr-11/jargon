@@ -6,6 +6,7 @@
  * anywhere in a long steps list — a teacher should never scroll to find it.
  */
 import { BookOpen, Check, Loader2 } from "lucide-react";
+import { AutoTextarea } from "@/components/AutoTextarea";
 import { SelectionRefine } from "@/features/teacher/assist/SelectionRefine";
 import { useFieldProposal } from "@/features/teacher/assist/useFieldProposal";
 import { OverflowMenu, type OverflowAction } from "@/components/OverflowMenu";
@@ -102,9 +103,15 @@ export function LessonHeader({
             onChange={(next) => onField("title", next)}
             disabled={busy}
           >
-            <input
+            {/* Wraps rather than scrolls: in a one-line <input> a real lesson title
+                ("Twelve pairs: reading the map") is cut off mid-word, and it got worse
+                the moment the assistant panel took 400px off the page. singleLine keeps
+                it a title — it wraps, it never takes a newline. */}
+            <AutoTextarea
               value={fields.title}
-              onChange={(event) => onField("title", event.target.value)}
+              onChange={(next) => onField("title", next)}
+              singleLine
+              maxLines={3}
               aria-label="Lesson title"
               placeholder="Name this lesson"
               className="w-full rounded-control border border-transparent bg-transparent px-1 py-0.5 font-serif text-display text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border focus:border-primary"
@@ -119,13 +126,13 @@ export function LessonHeader({
             onChange={(next) => onField("objective", next)}
             disabled={busy}
           >
-            <textarea
+            <AutoTextarea
               value={fields.objective}
-              onChange={(event) => onField("objective", event.target.value)}
+              onChange={(next) => onField("objective", next)}
+              maxLines={8}
               aria-label="Lesson objective"
-              rows={2}
               placeholder="What should a student be able to do after this lesson?"
-              className="w-full resize-y rounded-control border border-transparent bg-transparent px-1 py-0.5 text-body leading-relaxed text-muted-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border focus:border-primary focus:text-foreground"
+              className="w-full rounded-control border border-transparent bg-transparent px-1 py-0.5 text-body leading-relaxed text-muted-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-border focus:border-primary focus:text-foreground"
             />
           </SelectionRefine>
         </div>
