@@ -26,7 +26,7 @@ fixed here rather than pinned away:
 from pathlib import Path
 import unittest
 
-from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source
+from tests.teacher_sources import authoring_source, console_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +39,6 @@ BUILD = (COURSE / "useCourseBuild.ts").read_text(encoding="utf-8")
 SHARED = (SRC / "features" / "teacher" / "authoring" / "useAuthoringData.ts").read_text(
     encoding="utf-8"
 )
-REDIRECT = AUTHORING_ROUTE.read_text(encoding="utf-8")
 SURFACE = authoring_source()
 CONSOLE = console_source()
 
@@ -122,10 +121,11 @@ class WriteDisciplineTests(unittest.TestCase):
 
 
 class SubtractionTests(unittest.TestCase):
-    def test_the_studio_is_gone_and_its_route_is_a_redirect(self):
+    def test_the_studio_is_gone_and_so_is_its_route(self):
+        # R80 left the route as a 72-line redirect. R86 deleted it — step 9 of the
+        # brief is "Delete the old routes. Not deprecate. Delete."
         self.assertNotIn("CurriculumStudio", SURFACE)
-        self.assertLess(len(REDIRECT.split("\n")), 90)
-        self.assertIn("function CurriculumRedirect()", REDIRECT)
+        self.assertFalse((SRC / "routes" / "teacher.curriculum.tsx").exists())
 
     def test_the_deleted_surfaces_stay_deleted(self):
         for gone in ("BooksPanel.tsx", "lessonInventory.ts", "LessonInventoryBar.tsx"):

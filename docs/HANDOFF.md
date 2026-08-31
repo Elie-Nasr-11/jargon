@@ -12482,3 +12482,52 @@ action was added), so nothing is broken — the "one provider" change just has n
 shipped. Fix: rotate the Supabase account access token, update the secret, re-run
 the workflow. Do not assume the provider switch is live until `list_edge_functions`
 shows curriculum-admin v43.
+
+## Claude -> Codex / Human - 2026-08-30 13:45
+
+Status: Starting
+Task: R86 — step 9 of the rebuild brief, the last one: "Delete the old routes. Not
+deprecate. Delete." plus "the remainder".
+Files I expect to touch: routes/teacher.curriculum.tsx (the last old route — a
+redirect R80 left behind, which nothing in the app links to any more and which
+still forwards to the retired ?tab=content), routeTree.gen.ts, __root.tsx (the 404
+is what a dead old URL reaches once the redirect is gone, so it should land a
+signed-in teacher somewhere real rather than at "Go home"), ~36 unused vendored
+components/ui/* files (~3,100 lines nothing imports), a handful of other unimported
+modules, tests, docs.
+Notes: a dead-module sweep over frontend/src finds 3,100+ lines of vendored shadcn
+components that no screen has ever imported, plus lib/subjectIcon.ts,
+student/FlipNumber.tsx and lib/error-page.ts. Vite tree-shakes them so the win is
+readability, not bytes — but unreadable is precisely what failure mode 7 was about.
+Each one gets verified individually before it goes.
+
+## Claude -> Codex / Human - 2026-08-30 14:30
+
+Status: Finished
+Summary: R86 (see DECISIONS) — step 9, the last step of the rebuild brief. The last
+old route, routes/teacher.curriculum.tsx, is deleted rather than left redirecting.
+The 404 became load-bearing in its place and now routes a signed-in person to their
+role's home instead of saying "Go home" and waiting. "The remainder" turned out to
+be ~3,100 lines of vendored UI components no screen ever imported, plus three other
+unimported modules — 40 files in total.
+Files changed: routes/teacher.curriculum.tsx + 36 components/ui/* +
+lib/subjectIcon.ts + lib/error-page.ts + student/FlipNumber.tsx (all deleted),
+routeTree.gen.ts (hand-maintained — every TeacherCurriculum block removed
+surgically), routes/__root.tsx (the 404), tests (new R86 file; seven pins across
+R42, R52, R60, R78, R79, R80 and test_curriculum_authoring_studio re-expressed).
+Tests run: python 1305 green / 4 skipped; tsc clean; vite build succeeds; eslint 0
+errors across the WHOLE frontend; R86's pins mutation-tested (an undeclared route
+appearing, the 404 no longer taking people home — both fail as they should); walked
+in a real browser: signed out + old link -> /login, signed in + three dead URLs ->
+/teacher, and all three live teacher routes still render.
+Remaining concerns: an old bookmark carrying ?lesson=<id> used to forward to that
+lesson and now lands on the teacher's home — a real loss of fidelity, and the price
+of "delete, not deprecate". Small because lessons have had their own address since
+R79. Separately and unchanged from R85: curriculum-admin is still live at v42
+because SUPABASE_ACCESS_TOKEN is expired; the "one provider" switch has not shipped
+and will not until that token is rotated.
+Suggested next task: the brief is finished — steps 0-9 shipped as R77-R86. The
+natural next move is the owner's, not another step: rotate the Supabase token so
+R85's backend lands, then walk the whole console as a teacher who has never seen it,
+which is the brief's own acceptance rule and the only test of whether ten releases
+of subtraction actually worked.

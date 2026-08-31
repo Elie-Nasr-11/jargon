@@ -22,7 +22,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "frontend" / "src"
 
-AUTHORING_ROUTE = SRC / "routes" / "teacher.curriculum.tsx"
+# R86 deleted routes/teacher.curriculum.tsx — the last old route. The authoring
+# surface is its modules now, with no route of its own: a lesson and a class each
+# have their own address, and nothing forwards from the studio's old one.
 AUTHORING_DIR = SRC / "features" / "teacher" / "authoring"
 # R79: the lesson moved out of the studio's pane into its own screen. It is part
 # of the same authoring surface, so pins that ask "does the console let a teacher
@@ -57,8 +59,7 @@ def _join(paths: list[Path]) -> str:
 def authoring_paths() -> list[Path]:
     """Every file that makes up the authoring surface, route first."""
     return (
-        [AUTHORING_ROUTE]
-        + _modules(AUTHORING_DIR)
+        _modules(AUTHORING_DIR)
         + _modules(COURSE_DIR)
         + _modules(LESSON_DIR)
     )

@@ -83,12 +83,10 @@ class CurriculumAuthoringStudioStaticTests(unittest.TestCase):
         self.assertIn('functionUrl("curriculum-admin")', self.api)
         self.assertIn("invokeCurriculumAdmin", self.api)
         self.assertIn("fetchCurriculumAuthoringData", self.api)
-        self.assertIn('createFileRoute("/teacher/curriculum")', self.route)
-        # R42 class-first (renamed by R47, again by R60): the studio mounts inside a
-        # class workspace; its breadcrumb is rooted at the class's Content section
-        # (clearing the selection), not at a standalone studio page.
-        self.assertIn('{ label: "Content", onClick: goRoot }', self.route)
-        self.assertIn("/teacher/curriculum", self.route_tree)
+        # R86: there is no authoring ROUTE any more. R42 moved the studio inside a
+        # class, R80 reduced its page to a redirect, and step 9 deleted that too. What
+        # this pin is really about — the edge function and its client — is above.
+        self.assertNotIn("/teacher/curriculum", self.route_tree)
         # R42 class-first (renamed by R47, again by R60): the sidebar has no global
         # Curriculum destination anymore — the studio is reached through a class's
         # Content section row. The legacy route stays only as a redirect for old

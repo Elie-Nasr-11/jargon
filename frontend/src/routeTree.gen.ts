@@ -14,7 +14,6 @@ import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LearnRouteImport } from './routes/learn'
 import { Route as TeacherRouteImport } from './routes/teacher'
-import { Route as TeacherCurriculumRouteImport } from './routes/teacher.curriculum'
 import { Route as TeacherClassClassIdRouteImport } from './routes/teacher.class.$classId'
 import { Route as TeacherClassClassIdStudentStudentIdRouteImport } from './routes/teacher.class.$classId.student.$studentId'
 import { Route as TeacherClassClassIdLessonLessonIdRouteImport } from './routes/teacher.class.$classId.lesson.$lessonId'
@@ -43,11 +42,6 @@ const LearnRoute = LearnRouteImport.update({
 const TeacherRoute = TeacherRouteImport.update({
   id: '/teacher',
   path: '/teacher',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TeacherCurriculumRoute = TeacherCurriculumRouteImport.update({
-  id: '/teacher/curriculum',
-  path: '/teacher/curriculum',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TeacherClassClassIdRoute = TeacherClassClassIdRouteImport.update({
@@ -79,7 +73,6 @@ export interface FileRoutesByFullPath {
   '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
-  '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
   '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
   '/teacher/class/$classId/lesson/$lessonId': typeof TeacherClassClassIdLessonLessonIdRoute
@@ -91,7 +84,6 @@ export interface FileRoutesByTo {
   '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
-  '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
   '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
   '/teacher/class/$classId/lesson/$lessonId': typeof TeacherClassClassIdLessonLessonIdRoute
@@ -104,17 +96,16 @@ export interface FileRoutesById {
   '/learn': typeof LearnRoute
   '/login': typeof LoginRoute
   '/teacher': typeof TeacherRoute
-  '/teacher/curriculum': typeof TeacherCurriculumRoute
   '/teacher/class/$classId': typeof TeacherClassClassIdRoute
   '/teacher/class/$classId/student/$studentId': typeof TeacherClassClassIdStudentStudentIdRoute
   '/teacher/class/$classId/lesson/$lessonId': typeof TeacherClassClassIdLessonLessonIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/platform' | '/learn' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/teacher/class/$classId/lesson/$lessonId'
+  fullPaths: '/' | '/admin' | '/platform' | '/learn' | '/login' | '/teacher' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/teacher/class/$classId/lesson/$lessonId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/platform' | '/learn' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/teacher/class/$classId/lesson/$lessonId'
-  id: '__root__' | '/' | '/admin' | '/platform' | '/learn' | '/login' | '/teacher' | '/teacher/curriculum' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/teacher/class/$classId/lesson/$lessonId'
+  to: '/' | '/admin' | '/platform' | '/learn' | '/login' | '/teacher' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/teacher/class/$classId/lesson/$lessonId'
+  id: '__root__' | '/' | '/admin' | '/platform' | '/learn' | '/login' | '/teacher' | '/teacher/class/$classId' | '/teacher/class/$classId/student/$studentId' | '/teacher/class/$classId/lesson/$lessonId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -124,7 +115,6 @@ export interface RootRouteChildren {
   LearnRoute: typeof LearnRoute
   LoginRoute: typeof LoginRoute
   TeacherRoute: typeof TeacherRoute
-  TeacherCurriculumRoute: typeof TeacherCurriculumRoute
   TeacherClassClassIdRoute: typeof TeacherClassClassIdRoute
   TeacherClassClassIdStudentStudentIdRoute: typeof TeacherClassClassIdStudentStudentIdRoute
   TeacherClassClassIdLessonLessonIdRoute: typeof TeacherClassClassIdLessonLessonIdRoute
@@ -167,13 +157,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeacherRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/teacher/curriculum': {
-      id: '/teacher/curriculum'
-      path: '/teacher/curriculum'
-      fullPath: '/teacher/curriculum'
-      preLoaderRoute: typeof TeacherCurriculumRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/teacher/class/$classId': {
       id: '/teacher/class/$classId'
       path: '/teacher/class/$classId'
@@ -212,7 +195,6 @@ const rootRouteChildren: RootRouteChildren = {
   LearnRoute: LearnRoute,
   LoginRoute: LoginRoute,
   TeacherRoute: TeacherRoute,
-  TeacherCurriculumRoute: TeacherCurriculumRoute,
   TeacherClassClassIdRoute: TeacherClassClassIdRoute,
   TeacherClassClassIdStudentStudentIdRoute: TeacherClassClassIdStudentStudentIdRoute,
   TeacherClassClassIdLessonLessonIdRoute: TeacherClassClassIdLessonLessonIdRoute,

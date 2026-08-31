@@ -1,26 +1,74 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Outlet, Link, createRootRouteWithContext, useRouter } from "@tanstack/react-router";
-import { useEffect } from "react";
+import {
+  Outlet,
+  Link,
+  createRootRouteWithContext,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { onAuthStateChange, recordClientError } from "../lib/api";
+import { RouteLoader } from "@/components/RouteLoader";
+import {
+  fetchPrimaryRole,
+  getSession,
+  onAuthStateChange,
+  recordClientError,
+  roleHomeNav,
+} from "../lib/api";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
+/**
+ * R86: this is where a retired URL lands now.
+ *
+ * The rebuild deleted its old routes one release at a time, each leaving a redirect
+ * behind; step 9 deletes the redirects too ("Not deprecate. Delete."). That makes
+ * this screen the landing for every old bookmark and every link in an email sent
+ * before the rebuild — so it does not sit there saying "Go home" and waiting for a
+ * click. A signed-in person is sent to the home their role actually has; only
+ * someone signed out is asked to do anything.
+ */
 function NotFoundComponent() {
+  const navigate = useNavigate();
+  const [stranded, setStranded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const session = await getSession();
+        if (!alive) return;
+        if (!session) {
+          navigate({ to: "/login", replace: true });
+          return;
+        }
+        const role = await fetchPrimaryRole(session.access_token, session.user.id);
+        if (!alive) return;
+        navigate({ ...roleHomeNav(role), replace: true });
+      } catch {
+        // Could not tell who this is — show the page rather than bouncing them
+        // somewhere they may not be allowed.
+        if (alive) setStranded(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [navigate]);
+
+  if (!stranded) return <RouteLoader label="Taking you back…" />;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+        <h1 className="font-serif text-display text-foreground">That page has moved.</h1>
+        <p className="mt-2 text-body text-muted-foreground">
+          The link you followed points at a screen Jargon no longer has.
         </p>
         <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Go home
+          <Link to="/" className="btn btn-primary">
+            Take me to my classes
           </Link>
         </div>
       </div>

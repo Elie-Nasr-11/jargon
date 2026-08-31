@@ -25,7 +25,6 @@ import re
 import unittest
 
 from tests.teacher_sources import (
-    AUTHORING_ROUTE,
     CONSOLE_SHELL,
     authoring_paths,
     authoring_source,
@@ -55,7 +54,7 @@ ENTRY_ALLOWANCE = {
 TEACHER_FILES = sorted(
     list((SRC / "features" / "teacher").rglob("*.ts"))
     + list((SRC / "features" / "teacher").rglob("*.tsx"))
-    + [AUTHORING_ROUTE, SRC / "routes" / "teacher.tsx"]
+    + [SRC / "routes" / "teacher.tsx"]
 )
 
 
@@ -76,11 +75,15 @@ class ModuleSizeTests(unittest.TestCase):
         )
 
     def test_the_entry_points_stayed_thin(self):
-        # The route and the console keep state and write paths; the surfaces moved out.
-        route = AUTHORING_ROUTE.read_text(encoding="utf-8")
+        # R78 split a 6,301-line route and a 4,501-line console. R80 reduced the route
+        # to a redirect and R86 deleted it, so only the console shell is left to keep
+        # thin — and the ratchet tightens rather than being dropped.
         shell = CONSOLE_SHELL.read_text(encoding="utf-8")
-        self.assertLess(route.count("\n") + 1, 1_900)
         self.assertLess(shell.count("\n") + 1, 1_100)
+        self.assertFalse(
+            (SRC / "routes" / "teacher.curriculum.tsx").exists(),
+            "the authoring route was deleted in R86 — not deprecated, deleted",
+        )
 
 
 class ModuleShapeTests(unittest.TestCase):
@@ -179,7 +182,9 @@ class ModuleShapeTests(unittest.TestCase):
 class PinLocationTests(unittest.TestCase):
     """Failure mode 9 in the brief: pins that add drag to removal and none to addition."""
 
-    MEGA = re.compile(r'"(teacher\.curriculum\.tsx|TeacherConsole\.tsx)"')
+    # teacher.curriculum.tsx is gone entirely (R86), so only the console shell is
+    # left to name by path — and naming it is still the failure mode 9 this catches.
+    MEGA = re.compile(r'"TeacherConsole\.tsx"')
 
     def test_no_pin_reads_a_mega_file_by_path(self):
         offenders = []

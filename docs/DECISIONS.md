@@ -2827,3 +2827,51 @@ no-op; and the Anthropic JSON path (system instruction + assistant prefill) has
 been verified by typecheck and pins only — the offline harness mocks the edge
 function, so its first contact with the real API will be in production.
 AUTHORING_PROVIDER=openai reverts it without a deploy.
+
+## R86 — step 9, the last one: delete the old routes (2026-08-30)
+
+    9  Delete the old routes. Not deprecate. Delete.   [Deletes:] the remainder
+
+THE LAST OLD ROUTE. routes/teacher.curriculum.tsx was the authoring studio's page
+until R42 moved building inside a class; R80 reduced it to a 72-line redirect; R86
+deletes it. Nothing in the app has linked to it since R80 — it existed purely to
+forward external links, which is what "deprecate" means, and Part 6 was explicit
+that the old route goes "the moment its replacement lands".
+
+WHAT THAT COSTS, SAID OUT LOUD: an old bookmark carrying ?lesson=<id> used to
+forward to that lesson. It now lands on the teacher's home instead. That is a real
+loss of fidelity and the honest price of this step. It is small because lessons
+have had their own address since R79, so every link made in the last seven releases
+already points at the right place.
+
+DELETING THE REDIRECTS MADE THE 404 LOAD-BEARING, so it stopped being a dead end.
+It used to say "404 / Page not found / Go home" and wait for a click. It now looks
+up who you are and sends you where your role actually lives — /login if signed out
+— and only renders if that lookup FAILS, because bouncing someone to a screen they
+may not be allowed to see is worse than telling them the link moved. Walked: signed
+out lands on /login; signed in, /teacher/curriculum?lesson=…, /teacher/curriculum
+and /nope/at/all all land on /teacher.
+
+THE REMAINDER WAS BIGGER THAN THE ROUTE. A dead-module sweep found ~3,100 lines of
+vendored shadcn components that no screen has ever imported — sidebar (744 lines),
+chart, menubar, calendar, form, table, card, badge and 29 more — plus
+lib/subjectIcon.ts, lib/error-page.ts and student/FlipNumber.tsx. Vite tree-shook
+all of it, so this was never about bytes. It is failure mode 7: "at that size every
+change is a graft — you cannot see the whole room, so you add to the end of it." A
+room you cannot read is the thing that caused the accretion. 36 files gone; the 13
+components actually in use stay, and a pin says which.
+
+THE ROUTER IS NOW PINNED AS A SET. test_the_route_set_is_exactly_the_rebuilt_surface
+asserts the exact ten route files. Adding a route means editing that list, which
+means saying which screen it is and what it replaces — the ratchet Law 6 asks for,
+aimed at failure mode 1: "Every release since R43 added a surface. None removed the
+one it superseded."
+
+THE PINS THAT DIED WITH IT. Seven pins across R42, R52, R60, R78, R79, R80 and the
+authoring-studio file asserted the redirect's forwarding. Each was re-expressed as
+what is true now — mostly assertFalse(...exists()) — rather than deleted, so the
+history of what this route was and why it went stays readable in the suite. R78's
+"no pin reads a mega-file by path" sweep now names only TeacherConsole.tsx, because
+the other mega-file no longer exists.
+
+That closes the rebuild brief. Steps 0-9, R77 through R86.
