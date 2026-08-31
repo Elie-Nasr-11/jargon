@@ -11,6 +11,14 @@ Newest entries should go at the top under `Active Handoff`.
 Status: Finished
 Task: "schedule the scoring so profiles exist without a teacher pressing."
 
+FIRST UNATTENDED TICK (added after the merge, 2026-08-31 20:45 UTC): pg_cron fired on
+its own schedule — `cron.job_run_details` succeeded, and the run log reads
+`pairs_seen 2, pairs_scored 2, responses_scored 16, errors 0` in 93.7s, with
+`finished_at` populated (so the open-then-patch log works). Two students in two
+different lessons got profiles with nobody involved. Across all 6 profiles now stored:
+every one has a narrative (avg 893 chars), every one is at or past the 3-response floor
+§19 needs, and NONE mentions a percentage — §15 holds on the automated path too.
+
 Summary: R90 built the cognition ledger and R91 made it steer the mentor, but both
 depended on a teacher pressing Score — so for almost every student the profile did not
 exist and §19 had nothing to read. A pg_cron job now POSTs the scorer every 15 minutes
