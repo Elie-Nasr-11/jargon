@@ -1833,15 +1833,13 @@ async function callAnthropicJson(
       body: JSON.stringify({
         model: anthropicModelFor(opts.model),
         max_tokens: opts.maxTokens || 4096,
-        temperature: 0.4,
-        // The JSON contract OpenAI enforced with response_format is stated in the
-        // system prompt and re-stated as a prefill, which is how Anthropic is asked
-        // for strict JSON. Callers already parse defensively.
+        // No sampling params and NO assistant prefill: the Claude 5 family rejects
+        // both ("`temperature` is deprecated for this model."; "This model does not
+        // support assistant message prefill.") — both proven live by the R90 scorer
+        // probe, which runs this same call shape. JSON comes from firm instructions
+        // plus a fence-tolerant extraction, exactly like the live chat function.
         system: `${systemPrompt}\n\nReply with a single JSON object and nothing else. No prose, no code fences.`,
-        messages: [
-          { role: "user", content: userPrompt },
-          { role: "assistant", content: "{" },
-        ],
+        messages: [{ role: "user", content: userPrompt }],
       }),
     });
   } catch (err) {
@@ -1866,8 +1864,11 @@ async function callAnthropicJson(
     .filter((part: DbRow) => part && part.type === "text")
     .map((part: DbRow) => String(part.text || ""))
     .join("");
-  // The prefilled "{" is not echoed back, so put it in front of what did come back.
-  const body = `{${text}`.trim();
+  const fenced = text.trim().match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const inner = fenced ? fenced[1].trim() : text.trim();
+  const start = inner.indexOf("{");
+  const end = inner.lastIndexOf("}");
+  const body = start >= 0 && end > start ? inner.slice(start, end + 1) : inner;
   try {
     const parsed = JSON.parse(body);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as DbRow) : {};

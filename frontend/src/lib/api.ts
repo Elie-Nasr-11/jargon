@@ -4204,3 +4204,96 @@ export function warmStudentSurfaces(classId?: string | null): void {
   // Work: checkpoints/grades feed the sidebar due-tags and the assessments panel.
   warm("assessments", 60_000, fetchStudentAssessmentsUncached);
 }
+
+// --- R90: the cognition ledger (docs/COGNITION.md) ---------------------------------
+// The scorer judges constructed responses against the Independent Cognitive
+// Production Rubric, in the context of the assistance given immediately before each
+// one. The console asks for a lesson to be scored (idempotent — judged turns stay
+// judged) and renders dimensions + the teacher narrative. Never a single percentage.
+
+export type CognitionDims = {
+  retrieval: number | null;
+  organization: number | null;
+  reasoning: number | null;
+  elaboration: number | null;
+  vocabulary: number | null;
+  expression: number | null;
+  independence: number | null;
+  metacognition: number | null;
+};
+
+export type CognitionTurnScore = CognitionDims & {
+  id: string;
+  turn_id: string;
+  session_id: string;
+  lesson_id: string;
+  stage: string | null;
+  objective: string;
+  scaffold_level: number;
+  evidence: Record<string, unknown>;
+  signals: Record<string, unknown>;
+  note: string;
+  created_at: string;
+};
+
+export type CognitionProfile = CognitionDims & {
+  lesson_id: string;
+  scaffold_earlier: number | null;
+  scaffold_recent: number | null;
+  narrative: string;
+  turns_scored: number;
+  updated_at: string;
+};
+
+export type CognitionResponse = {
+  status?: string;
+  error?: string;
+  scored?: number;
+  remaining?: number;
+  profile?: CognitionProfile | null;
+  turns?: CognitionTurnScore[];
+};
+
+async function callCognitionScorer(
+  accessToken: string,
+  payload: Record<string, unknown>,
+  timeoutMs = 30000,
+): Promise<CognitionResponse> {
+  const response = await fetchWithTimeout(
+    functionUrl("cognition-scorer"),
+    { method: "POST", headers: authHeaders(accessToken), body: JSON.stringify(payload) },
+    timeoutMs,
+  );
+  const data = (await response.json()) as CognitionResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Could not read this student's thinking.");
+  }
+  return data;
+}
+
+/** Judge any not-yet-scored constructed responses, then return the fresh profile.
+ *  A scoring pass reads the whole run through the judge model — allow it minutes. */
+export function scoreCognitionLesson(input: {
+  accessToken: string;
+  userId: string;
+  lessonId: string;
+}): Promise<CognitionResponse> {
+  return callCognitionScorer(
+    input.accessToken,
+    { action: "score_lesson", user_id: input.userId, lesson_id: input.lessonId },
+    150000,
+  );
+}
+
+/** The stored profile + scored responses, no new judging. */
+export function fetchCognitionProfile(input: {
+  accessToken: string;
+  userId: string;
+  lessonId: string;
+}): Promise<CognitionResponse> {
+  return callCognitionScorer(input.accessToken, {
+    action: "profile",
+    user_id: input.userId,
+    lesson_id: input.lessonId,
+  });
+}

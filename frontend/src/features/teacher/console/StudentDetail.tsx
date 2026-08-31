@@ -19,6 +19,7 @@ import {
   Panel,
   SessionChipGroup,
 } from "@/features/teacher/console/chrome";
+import { CognitionPanel } from "@/features/teacher/console/CognitionPanel";
 import {
   formatPercent,
   inputModalityFromPayload,
@@ -113,7 +114,12 @@ export function StudentDetail({
   const [localTab, setLocalTab] = useState("overview");
   // Old deep links may still carry tab=records|messages — those tabs are gone; land on Overview.
   const requestedTab = tab ?? localTab;
-  const studentTab = requestedTab === "transcript" ? "transcript" : "overview";
+  const studentTab =
+    requestedTab === "transcript"
+      ? "transcript"
+      : requestedTab === "thinking"
+        ? "thinking"
+        : "overview";
   const setStudentTab = (value: string) => (onTabChange ? onTabChange(value) : setLocalTab(value));
   const turns = selectedSession
     ? dashboard.turns.filter((turn) => turn.session_id === selectedSession.id)
@@ -250,11 +256,18 @@ export function StudentDetail({
         <Tabs value={studentTab} onValueChange={setStudentTab}>
           <WorkspaceTabList>
             <WorkspaceTab value="overview">Overview</WorkspaceTab>
+            <WorkspaceTab value="thinking">Thinking</WorkspaceTab>
             <WorkspaceTab value="transcript">Transcript &amp; notes</WorkspaceTab>
           </WorkspaceTabList>
 
           <WorkspacePanel value="overview">
             <StudentAnalyticsPanel dashboard={dashboard} studentId={studentId} />
+          </WorkspacePanel>
+
+          {/* R90: the Independent Cognitive Production Profile (docs/COGNITION.md) —
+              what this student's own thinking produced, never a percentage. */}
+          <WorkspacePanel value="thinking">
+            <CognitionPanel studentId={studentId} sessions={sessions} lessonsById={lessonsById} />
           </WorkspacePanel>
 
           <WorkspacePanel value="transcript">
