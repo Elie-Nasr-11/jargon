@@ -20,7 +20,23 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Loader2, PanelRightClose, Sparkles, X } from "lucide-react";
+import { AutoTextarea } from "@/components/AutoTextarea";
 import { draftTextField, getSession, type DraftableField } from "@/lib/api";
+
+/**
+ * What the assistant is looking at — both how to SAY it and what to scope requests to.
+ *
+ * The scope lives in the same object as the name on purpose. curriculum-admin refuses a
+ * draft that names neither a lesson nor an organization, so a context that describes a
+ * screen without saying what it is scoped to is not a context this panel can use. R87
+ * shipped with the scope as somebody else's problem and the panel simply dropped it —
+ * every request came back "lesson_id or organization_id is required." The union below
+ * is that server rule written as a type: a call site must supply one of the two.
+ */
+export type AssistContext = { kind: string; name: string; classId?: string | null } & (
+  | { lessonId: string; organizationId?: string }
+  | { organizationId: string; lessonId?: string }
+);
 
 /** A field the assistant may propose into. The screen owns it; this panel only asks. */
 export type AssistTarget = {
@@ -59,6 +75,7 @@ type Turn =
     };
 
 const uid = () => Math.random().toString(36).slice(2);
+const escapeForWordSearch = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function isOpenChord(event: KeyboardEvent): boolean {
   return event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey);
@@ -70,8 +87,7 @@ export function AskJargon({
   suggestions,
   actions = [],
 }: {
-  /** What the assistant is looking at, so the panel can say so. */
-  context: { kind: string; name: string };
+  context: AssistContext;
   targets: AssistTarget[];
   suggestions: AssistSuggestion[];
   actions?: AssistAction[];
@@ -110,10 +126,32 @@ export function AskJargon({
   );
   const targetById = useMemo(() => new Map(targets.map((entry) => [entry.id, entry])), [targets]);
 
+  /**
+   * A typed request that names a field goes to that field.
+   *
+   * "Make the objective shorter" has already said what it is about. Asking the teacher
+   * to ALSO flip a pill — and answering about the title when they don't — is the panel
+   * being pedantic with a sentence it understood. Found by walking: after using the
+   * "Rewrite the title" starter, a typed request about the objective came back labelled
+   * TITLE. The earliest label mentioned wins, which is how the sentences read: "rewrite
+   * the title so it matches the objective" is a request about the title. A mis-route
+   * costs nothing — every proposal names its field, and nothing is saved either way.
+   */
+  const routeByWords = (prompt: string): string | null => {
+    const text = prompt.toLowerCase();
+    let best: { id: string; at: number } | null = null;
+    for (const entry of targets) {
+      const at = text.search(new RegExp(`\\b${escapeForWordSearch(entry.label.toLowerCase())}\\b`));
+      if (at >= 0 && (!best || at < best.at)) best = { id: entry.id, at };
+    }
+    return best?.id ?? null;
+  };
+
   const ask = async (prompt: string, wantedTargetId?: string) => {
-    const picked = targetById.get(wantedTargetId ?? targetId) ?? target;
+    // A starter already declared its field; a typed sentence is read for one.
+    const picked = targetById.get(wantedTargetId ?? routeByWords(prompt) ?? targetId) ?? target;
     if (!picked || !prompt.trim() || busy) return;
-    if (wantedTargetId) setTargetId(wantedTargetId);
+    if (picked.id !== targetId) setTargetId(picked.id);
     const thinkingId = uid();
     setTurns((current) => [
       ...current,
@@ -128,6 +166,9 @@ export function AskJargon({
       const text = await draftTextField({
         accessToken: session.access_token,
         field: picked.field,
+        lessonId: context.lessonId,
+        organizationId: context.organizationId,
+        classId: context.classId,
         current: picked.current.trim() || undefined,
         prompt: prompt.trim(),
       });
@@ -339,20 +380,20 @@ export function AskJargon({
           </div>
         ) : null}
         <div className="flex items-end gap-2 rounded-card border border-border bg-depth-field px-2.5 py-2 transition-colors focus-within:border-primary">
-          <textarea
+          <AutoTextarea
             ref={inputRef}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={setDraft}
+            maxLines={6}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
                 void ask(draft);
               }
             }}
-            rows={1}
             placeholder={target ? `Ask for a new ${target.label.toLowerCase()}…` : "Ask…"}
             aria-label="Ask Jargon"
-            className="max-h-32 min-h-[24px] min-w-0 flex-1 resize-none bg-transparent text-meta leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
+            className="min-w-0 flex-1 bg-transparent text-meta leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
           />
           <button
             type="button"

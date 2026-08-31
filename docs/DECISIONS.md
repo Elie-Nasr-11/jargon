@@ -2920,3 +2920,40 @@ of empty space under it instead of sitting next to the composer. And the worst o
 accepting the panel's proposal left R85's ARRIVAL proposal sitting under the same
 field, offering the same job twice — an arrival proposal now clears the moment its
 field stops being empty, whoever filled it.
+
+## R88 — a walk that agrees with production, and fields that show their text
+
+THE OWNER'S SCREENSHOT IS THE REVIEW THAT COUNTED. R87 shipped green: ~1,325 pins,
+tsc, eslint, a build, and a walk in a real browser at 1440px in which a typed request
+round-tripped to a proposal and "Use this" filled the field. The first thing the owner
+did with it was press a suggestion and get a red error — "lesson_id or organization_id
+is required." The rewrite had dropped `lessonId` from the draft call, and every layer
+that should have caught it agreed with the mistake.
+
+THE WALK PASSED BECAUSE THE MOCK WAS KINDER THAN THE SERVER. curriculum-admin refuses
+a draft that names neither a lesson nor an organization; the offline mock answered one
+happily. A harness that is more permissive than production does not just fail to catch
+a bug — it certifies it. The mock now enforces the same rule, and reverting the fix
+reproduces the owner's red error offline, which is the only evidence that the harness
+is worth running.
+
+THE FIX IS A TYPE, NOT A CALL. `AssistContext` is a union requiring `lessonId` OR
+`organizationId`, so the server's rule is now the compiler's: the exact shape R87
+shipped is a type error. `SelectionRefine` had the same hole one call site away
+(`lessonId?: string | null`) and is now required too. And a pin checks EVERY
+`draftTextField` call in the frontend for a scope, brace-balanced, so it survives the
+call moving files — the failure mode that has broken pins three releases running.
+
+A FIELD IS AS TALL AS ITS TEXT. The same screenshot showed a title cut off mid-word in
+a one-line `<input>` and an objective cut off by `rows={2}`. Both boxes were sized when
+they were written rather than when they were filled, and the assistant made it worse by
+taking 400px off the page — so `AutoTextarea` grows to its value AND re-measures on a
+width change, which is the case that produced the screenshot. A title stays a title:
+it wraps, it never takes a newline.
+
+WALKED AGAIN, and it found one more: after using the "Rewrite the title" starter, a
+typed request saying "make the objective shorter" came back labelled TITLE, because the
+picker stayed where the starter left it. A sentence that names a field now goes to that
+field — earliest label wins, which is how the sentences read ("rewrite the title so it
+matches the objective" is about the title). A starter still declares its own. Walked at
+1440 light, 1440 dark, and 390 phone; nothing hidden in any of them.

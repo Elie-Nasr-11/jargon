@@ -12561,3 +12561,53 @@ walked at phone size. Unchanged from R85: curriculum-admin is still v42 on OpenA
 until SUPABASE_ACCESS_TOKEN is rotated.
 Suggested next task: declare assist targets on the Course screen (unit titles) and
 Today, so ⌘K means the same thing everywhere in the console.
+
+## Claude -> Codex / Human - 2026-08-31 09:05
+
+Status: Finished
+Task: R88 — fix the live Ask Jargon failure the owner screenshotted ("lesson_id or
+organization_id is required."), and the two things visible in the same screenshot: a
+lesson title clipped mid-word inside a one-line input, and an objective cut off by a
+fixed rows={2} box.
+Files I expect to touch: assist/AskJargon.tsx (the context prop carries the scope),
+lesson/LessonScreen.tsx (passes it), assist/SelectionRefine.tsx (scope required, not
+optional), components/AutoTextarea.tsx (new), lesson/LessonHeader.tsx, tests.
+Notes: the R87 rewrite dropped `lessonId` from the draftTextField call and nothing
+caught it — the offline mock answered text_field without checking the scope, so the
+walk passed a request production rejects. Fixing the mock too, so the class of bug
+fails the walk rather than the owner's screen.
+
+Summary: R88 — the owner screenshotted the live app and Ask Jargon answered every
+request with "lesson_id or organization_id is required." R87's rewrite dropped the
+scope from the draft call. The scope is now part of the panel's `AssistContext` as a
+union requiring lessonId OR organizationId, so the shape R87 shipped is a compile
+error rather than a red bubble; SelectionRefine's optional `lessonId?: string | null`
+was the same hole one call site away and is required too. The offline mock enforced
+nothing, which is why the walk passed a request production refuses — it now enforces
+the server's rule, and reverting the fix reproduces the owner's error offline. The
+same screenshot showed a title clipped mid-word in a one-line input and an objective
+cut by rows={2}: both fields now grow to their text and re-measure when the panel
+changes their width. Walking that found one more — a typed request naming a field
+went to whichever field the last starter had selected.
+Files changed: components/AutoTextarea.tsx (new), assist/AskJargon.tsx (AssistContext
+carries the scope; typed requests route by the words; auto-growing composer),
+lesson/LessonScreen.tsx (passes lessonId + classId), lesson/LessonHeader.tsx (title
+and objective are AutoTextareas), assist/SelectionRefine.tsx (scope required),
+tests/test_r88_assist_scope.py (new), tests/source_text.py (new — without_comments
+extracted from the R85 suite, which had already tripped three over-broad pins),
+docs/DECISIONS.md.
+Tests run: python 1337 green / 4 skipped; tsc clean; eslint 0 errors; vite build
+succeeds. The scope pin is mutation-tested two ways — dropping the ids fails the pin
+AND fails tsc. Walked at 1440 light, 1440 dark and 390 phone: the suggestion and a
+typed request both round-trip to a correctly-labelled proposal, no text is hidden in
+either field at either width (scrollHeight - clientHeight = 0 everywhere), and the
+panel's close button is reachable at phone size.
+Remaining concerns: the mock backend lives in the session scratchpad, not the repo,
+so the guard that now catches this class of bug is not something the next session
+inherits — worth moving into the repo. The assistant is still wired on the LESSON
+screen only. The empty conversation leaves a large blank area above the first turn
+(chat convention, but stark at phone size). Unchanged since R85: curriculum-admin is
+live at v42 on OpenAI until SUPABASE_ACCESS_TOKEN is rotated.
+Suggested next task: move the walk harness (mock backend + scripts) into the repo so
+the "does the harness agree with production?" question has an answer that survives a
+session, then declare assist targets on the Course and Today screens.

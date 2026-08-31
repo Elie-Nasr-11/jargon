@@ -20,6 +20,8 @@ as much as they hold the mechanisms up.
 import unittest
 from pathlib import Path
 
+from tests.source_text import without_comments
+
 from tests.teacher_sources import authoring_source, console_source
 
 
@@ -43,21 +45,6 @@ ADMIN = (ROOT / "supabase" / "functions" / "curriculum-admin" / "index.ts").read
 SURFACE = authoring_source() + "\n" + console_source()
 
 
-def without_comments(text: str) -> str:
-    """The surface a person can read. A comment explaining what a release deleted is
-    not chrome, and a pin that cannot tell the difference forbids writing history."""
-    out, i, n = [], 0, len(text)
-    while i < n:
-        if text.startswith("/*", i):
-            i = text.find("*/", i)
-            i = n if i == -1 else i + 2
-        elif text.startswith("//", i):
-            j = text.find("\n", i)
-            i = n if j == -1 else j
-        else:
-            out.append(text[i])
-            i += 1
-    return "".join(out)
 
 
 class ButtonsRemovedTests(unittest.TestCase):
