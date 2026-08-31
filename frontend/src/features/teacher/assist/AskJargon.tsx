@@ -1,170 +1,415 @@
 /**
- * Mechanism C — one command surface, not N buttons.
+ * Ask Jargon — the assistant, as a sidebar.
  *
- * Rebuild brief: "A single ⌘K / 'Ask Jargon' bar, context-aware: on a lesson it offers
- * to rewrite the objective, add a check, simplify the reading level. Discoverable in one
- * place, invisible until wanted, and it scales to fifty capabilities without adding
- * fifty controls."
+ * Mechanism C of the rebuild brief ("one command surface, not N buttons") shipped in
+ * R85 as a ⌘K palette: a list of commands in a box in the middle of the screen. It
+ * did the job and felt like a menu. An assistant is a place you talk to something,
+ * and it lives down the right-hand side — so this is a panel, and a conversation.
  *
- * This is the mechanism that lets the twelve buttons go. Each command still lands as a
- * PROPOSAL the teacher accepts or dismisses — the bar runs nothing that writes, which is
- * the first non-negotiable and the reason a command surface is safe to make this
- * reachable. Commands are supplied by the screen, so the lesson decides what "here" can
- * do rather than this file growing a switch over every screen in the product.
+ * It is a flex sibling of the page inside TeacherShell, not an overlay, so opening it
+ * SHRINKS the page instead of covering it. (On narrow screens there is no room to
+ * shrink into, so it takes the screen.) That is the difference between a sidebar and
+ * a thing sitting on top of your work.
+ *
+ * The four non-negotiables are unchanged and structural:
+ *   Never writes      — a turn ends in a PROPOSAL; the teacher's Save still commits.
+ *   Always attributed — every proposal names the field it is for and says nothing is
+ *                       saved yet.
+ *   Always reversible — Use this keeps the previous value; Undo puts it back.
+ *   Grounded          — the model is given the field's current text and the lesson.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CornerDownLeft, Loader2, Search } from "lucide-react";
+import { ArrowUp, Loader2, PanelRightClose, Sparkles, X } from "lucide-react";
+import { draftTextField, getSession, type DraftableField } from "@/lib/api";
 
-export type AssistCommand = {
+/** A field the assistant may propose into. The screen owns it; this panel only asks. */
+export type AssistTarget = {
   id: string;
-  /** What it does, in the teacher's words. Imperative, names its target. */
+  /** How the teacher refers to it: "Objective", "Title". */
   label: string;
-  /** The one line under it — what will change, and what will not. */
-  detail?: string;
-  run: () => Promise<void> | void;
+  field: DraftableField;
+  /** The live value, so a request can improve rather than replace. */
+  current: string;
+  apply: (text: string) => void;
 };
 
-/** Cmd+K on a Mac, Ctrl+K everywhere else. */
+/** A starter — what this screen is good at, phrased as the teacher would say it. */
+export type AssistSuggestion = {
+  id: string;
+  label: string;
+  prompt: string;
+  targetId: string;
+};
+
+/** Something that is not a proposal: opens a dialog, navigates. Rare by design. */
+export type AssistAction = { id: string; label: string; run: () => void };
+
+type Turn =
+  | { id: string; role: "you"; text: string }
+  | { id: string; role: "jargon"; kind: "thinking" }
+  | { id: string; role: "jargon"; kind: "failed"; text: string }
+  | {
+      id: string;
+      role: "jargon";
+      kind: "proposal";
+      text: string;
+      targetId: string;
+      previous: string;
+      applied: boolean;
+    };
+
+const uid = () => Math.random().toString(36).slice(2);
+
 function isOpenChord(event: KeyboardEvent): boolean {
   return event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey);
 }
 
-export function AskJargon({ commands }: { commands: AssistCommand[] }) {
+export function AskJargon({
+  context,
+  targets,
+  suggestions,
+  actions = [],
+}: {
+  /** What the assistant is looking at, so the panel can say so. */
+  context: { kind: string; name: string };
+  targets: AssistTarget[];
+  suggestions: AssistSuggestion[];
+  actions?: AssistAction[];
+}) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
-  const [running, setRunning] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [draft, setDraft] = useState("");
+  const [targetId, setTargetId] = useState(targets[0]?.id ?? "");
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (isOpenChord(event)) {
         event.preventDefault();
         setOpen((value) => !value);
-        setQuery("");
-        setActive(0);
-      } else if (event.key === "Escape") {
+      } else if (event.key === "Escape" && open) {
         setOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [turns]);
 
-  const matches = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return commands;
-    return commands.filter((command) =>
-      `${command.label} ${command.detail ?? ""}`.toLowerCase().includes(needle),
-    );
-  }, [commands, query]);
+  const target = useMemo(
+    () => targets.find((entry) => entry.id === targetId) ?? targets[0] ?? null,
+    [targets, targetId],
+  );
+  const targetById = useMemo(() => new Map(targets.map((entry) => [entry.id, entry])), [targets]);
 
-  const invoke = async (command: AssistCommand) => {
-    setRunning(command.id);
+  const ask = async (prompt: string, wantedTargetId?: string) => {
+    const picked = targetById.get(wantedTargetId ?? targetId) ?? target;
+    if (!picked || !prompt.trim() || busy) return;
+    if (wantedTargetId) setTargetId(wantedTargetId);
+    const thinkingId = uid();
+    setTurns((current) => [
+      ...current,
+      { id: uid(), role: "you", text: prompt.trim() },
+      { id: thinkingId, role: "jargon", kind: "thinking" },
+    ]);
+    setDraft("");
+    setBusy(true);
     try {
-      await command.run();
-      setOpen(false);
+      const session = await getSession();
+      if (!session) throw new Error("Sign in to use the assistant.");
+      const text = await draftTextField({
+        accessToken: session.access_token,
+        field: picked.field,
+        current: picked.current.trim() || undefined,
+        prompt: prompt.trim(),
+      });
+      const trimmed = text.trim();
+      setTurns((current) =>
+        current.map((turn) =>
+          turn.id === thinkingId
+            ? trimmed
+              ? {
+                  id: thinkingId,
+                  role: "jargon" as const,
+                  kind: "proposal" as const,
+                  text: trimmed,
+                  targetId: picked.id,
+                  previous: picked.current,
+                  applied: false,
+                }
+              : {
+                  id: thinkingId,
+                  role: "jargon" as const,
+                  kind: "failed" as const,
+                  text: "Nothing came back. Try saying it a different way.",
+                }
+            : turn,
+        ),
+      );
+    } catch (error) {
+      setTurns((current) =>
+        current.map((turn) =>
+          turn.id === thinkingId
+            ? {
+                id: thinkingId,
+                role: "jargon" as const,
+                kind: "failed" as const,
+                text: (error as Error).message || "That did not work.",
+              }
+            : turn,
+        ),
+      );
     } finally {
-      setRunning(null);
+      setBusy(false);
     }
   };
 
   if (!open) {
-    // Invisible until wanted — but never undiscoverable. One quiet line, and the
-    // chord that opens it, instead of a control per capability.
     return (
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-pill border border-border bg-depth-card px-3.5 py-2 text-meta text-muted-foreground shadow-raised transition-colors hover:text-foreground"
+        aria-label="Ask Jargon"
+        className="group fixed bottom-5 right-5 z-[var(--z-header)] flex items-center gap-2 rounded-pill border border-border bg-depth-card py-2.5 pl-3.5 pr-3 text-meta text-muted-foreground shadow-raised transition-all duration-(--dur) hover:border-primary/40 hover:text-foreground hover:shadow-lg"
       >
-        <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
-        Ask Jargon
-        <kbd className="rounded border border-border px-1 font-mono text-[10px]">⌘K</kbd>
+        <Sparkles
+          className="h-4 w-4 text-primary transition-transform duration-(--dur) group-hover:scale-110"
+          strokeWidth={1.8}
+        />
+        <span className="font-medium">Ask Jargon</span>
+        <kbd className="rounded border border-border px-1 font-mono text-[10px] leading-[1.4] text-muted-foreground">
+          ⌘K
+        </kbd>
       </button>
     );
   }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-start justify-center bg-black/25 pt-[18vh]"
-      onMouseDown={() => setOpen(false)}
+    <aside
+      aria-label="Ask Jargon"
+      className="assist-panel fixed inset-y-0 right-0 z-[var(--z-header)] flex w-full max-w-[420px] flex-col border-l border-border bg-depth-card shadow-raised lg:static lg:z-auto lg:w-[400px] lg:shrink-0 lg:shadow-none"
     >
-      <div
-        role="dialog"
-        aria-label="Ask Jargon"
-        onMouseDown={(event) => event.stopPropagation()}
-        className="w-full max-w-[560px] overflow-hidden rounded-card border border-border bg-depth-card shadow-raised"
-      >
-        <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setActive(0);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                setActive((index) => Math.min(index + 1, matches.length - 1));
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                setActive((index) => Math.max(index - 1, 0));
-              } else if (event.key === "Enter" && matches[active]) {
-                event.preventDefault();
-                void invoke(matches[active]);
-              }
-            }}
-            placeholder="What would you like to do here?"
-            aria-label="Ask Jargon"
-            className="min-w-0 flex-1 bg-transparent text-body text-foreground outline-none placeholder:text-muted-foreground/70"
-          />
-        </div>
-        <div className="max-h-[320px] overflow-y-auto py-1">
-          {matches.length === 0 ? (
-            <p className="px-3.5 py-3 text-meta text-muted-foreground">
-              Nothing here matches that.
+      <header className="flex items-start gap-2 border-b border-border px-4 py-3">
+        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <Sparkles className="h-3.5 w-3.5 text-primary" strokeWidth={1.9} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-body font-medium text-foreground">Ask Jargon</span>
+          <span className="block truncate text-meta text-muted-foreground">
+            {context.kind} · {context.name}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Close Ask Jargon"
+          className="shrink-0 rounded-control p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <PanelRightClose className="hidden h-4 w-4 lg:block" strokeWidth={1.7} />
+          <X className="h-4 w-4 lg:hidden" strokeWidth={1.7} />
+        </button>
+      </header>
+
+      <div className="flex min-h-0 flex-1 flex-col justify-end overflow-y-auto px-4 py-4">
+        {turns.length === 0 ? (
+          <div className="mb-auto grid gap-3">
+            <p className="text-body leading-relaxed text-foreground">
+              What would you like to change about this {context.kind.toLowerCase()}?
             </p>
-          ) : (
-            matches.map((command, index) => (
+            <p className="text-meta leading-relaxed text-muted-foreground">
+              Say it in your own words, or start from one of these. Everything comes back as a
+              proposal — nothing changes until you accept it.
+            </p>
+            <div className="grid gap-1.5">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.id}
+                  type="button"
+                  onClick={() => void ask(suggestion.prompt, suggestion.targetId)}
+                  className="rounded-control border border-border bg-depth-sub px-3 py-2 text-left text-meta text-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+                >
+                  {suggestion.label}
+                </button>
+              ))}
+            </div>
+            {actions.length ? (
+              <div className="mt-1 border-t border-border/60 pt-3">
+                <div className="mb-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  Or open
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {actions.map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => {
+                        action.run();
+                        setOpen(false);
+                      }}
+                      className="rounded-pill border border-border px-3 py-1 text-meta text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {turns.map((turn) =>
+              turn.role === "you" ? (
+                <p
+                  key={turn.id}
+                  className="justify-self-end rounded-card rounded-br-sm bg-primary px-3 py-2 text-meta leading-relaxed text-primary-foreground"
+                >
+                  {turn.text}
+                </p>
+              ) : turn.kind === "thinking" ? (
+                <p
+                  key={turn.id}
+                  className="flex items-center gap-2 text-meta text-muted-foreground"
+                >
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+                  Working on it…
+                </p>
+              ) : turn.kind === "failed" ? (
+                <p key={turn.id} className="text-meta text-danger">
+                  {turn.text}
+                </p>
+              ) : (
+                <ProposalTurn
+                  key={turn.id}
+                  turn={turn}
+                  targetLabel={targetById.get(turn.targetId)?.label ?? "this field"}
+                  onUse={() => {
+                    targetById.get(turn.targetId)?.apply(turn.text);
+                    setTurns((current) =>
+                      current.map((entry) =>
+                        entry.id === turn.id && entry.role === "jargon"
+                          ? { ...entry, applied: true }
+                          : entry,
+                      ),
+                    );
+                  }}
+                  onUndo={() => {
+                    targetById.get(turn.targetId)?.apply(turn.previous);
+                    setTurns((current) =>
+                      current.map((entry) =>
+                        entry.id === turn.id && entry.role === "jargon"
+                          ? { ...entry, applied: false }
+                          : entry,
+                      ),
+                    );
+                  }}
+                />
+              ),
+            )}
+            <div ref={endRef} />
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-border px-3 py-3">
+        {targets.length > 1 ? (
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-meta text-muted-foreground">Change</span>
+            {targets.map((entry) => (
               <button
-                key={command.id}
+                key={entry.id}
                 type="button"
-                onMouseEnter={() => setActive(index)}
-                onClick={() => void invoke(command)}
-                disabled={Boolean(running)}
-                className={`flex w-full items-center gap-3 px-3.5 py-2 text-left transition-colors ${
-                  index === active ? "bg-muted/60" : ""
+                onClick={() => setTargetId(entry.id)}
+                className={`rounded-pill border px-2.5 py-0.5 text-meta transition-colors ${
+                  entry.id === targetId
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-body text-foreground">{command.label}</span>
-                  {command.detail ? (
-                    <span className="block text-meta text-muted-foreground">{command.detail}</span>
-                  ) : null}
-                </span>
-                {running === command.id ? (
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" strokeWidth={2} />
-                ) : index === active ? (
-                  <CornerDownLeft
-                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                    strokeWidth={1.8}
-                  />
-                ) : null}
+                {entry.label}
               </button>
-            ))
-          )}
+            ))}
+          </div>
+        ) : null}
+        <div className="flex items-end gap-2 rounded-card border border-border bg-depth-field px-2.5 py-2 transition-colors focus-within:border-primary">
+          <textarea
+            ref={inputRef}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void ask(draft);
+              }
+            }}
+            rows={1}
+            placeholder={target ? `Ask for a new ${target.label.toLowerCase()}…` : "Ask…"}
+            aria-label="Ask Jargon"
+            className="max-h-32 min-h-[24px] min-w-0 flex-1 resize-none bg-transparent text-meta leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
+          />
+          <button
+            type="button"
+            onClick={() => void ask(draft)}
+            disabled={busy || !draft.trim()}
+            aria-label="Send"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-35"
+          >
+            <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.2} />
+          </button>
         </div>
-        <p className="border-t border-border px-3.5 py-2 text-meta text-muted-foreground">
-          Everything here lands as a proposal you accept or dismiss. Nothing is saved until you
-          press Save.
+        <p className="mt-1.5 px-0.5 text-meta text-muted-foreground">
+          Proposals only — nothing is saved until you press Save.
         </p>
+      </div>
+    </aside>
+  );
+}
+
+function ProposalTurn({
+  turn,
+  targetLabel,
+  onUse,
+  onUndo,
+}: {
+  turn: Extract<Turn, { kind: "proposal" }>;
+  targetLabel: string;
+  onUse: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <div className="rounded-card border border-primary/30 bg-primary/[0.04] p-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        <Sparkles className="h-3 w-3 text-primary" strokeWidth={2} />
+        {targetLabel}
+      </div>
+      <p className="text-meta italic leading-relaxed text-foreground">{turn.text}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {turn.applied ? (
+          <>
+            <span className="text-meta text-success">In the field</span>
+            <button
+              type="button"
+              onClick={onUndo}
+              className="text-meta text-primary underline-offset-2 hover:underline"
+            >
+              Undo
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={onUse} className="btn btn-primary btn-sm">
+            Use this
+          </button>
+        )}
+        <span className="text-meta text-muted-foreground">
+          {turn.applied ? "Your Save still commits it." : "Nothing is saved yet."}
+        </span>
       </div>
     </div>
   );

@@ -29,6 +29,13 @@ export function useFieldProposal({
   const askedFor = useRef<string | null>(null);
   const [declined, setDeclined] = useState(false);
 
+  // The moment the field has something in it — the teacher typed, or took a proposal
+  // from the assistant panel — an arrival proposal for the same field is stale. Two
+  // offers for one field is the worst of both mechanisms.
+  useEffect(() => {
+    if (!wantsProposal(current) && state.status === "offered") setState({ status: "idle" });
+  }, [current, state.status]);
+
   useEffect(() => {
     if (!enabled || declined || !origin) return;
     if (!wantsProposal(current)) return;

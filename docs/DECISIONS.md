@@ -2875,3 +2875,48 @@ history of what this route was and why it went stays readable in the suite. R78'
 the other mega-file no longer exists.
 
 That closes the rebuild brief. Steps 0-9, R77 through R86.
+
+## R87 — Ask Jargon becomes a sidebar you talk to (2026-08-30)
+
+WHAT WAS WRONG WITH R85'S VERSION. Mechanism C shipped as a ⌘K palette: a list of
+commands in a box in the middle of the screen. It satisfied the brief's words —
+"one command surface, not N buttons" — and it felt like a menu, because it was one.
+The owner's correction was exact: an assistant "should open into a sidebar as all
+assistants do". A menu is something you pick from; an assistant is something you
+talk to, and it lives down the right-hand side.
+
+IT SHRINKS THE PAGE, WHICH IS THE WHOLE DIFFERENCE. The panel is a flex SIBLING of
+the stage inside TeacherShell, not an overlay on it, so opening it takes width from
+the page instead of covering it. Measured at 1440px: the lesson goes 1180px to
+780px and every control stays reachable. (Below lg there is no width to give, so it
+covers — the honest tradeoff on a phone.) R85's floating bar had the opposite
+property and the walk caught it sitting on the last card's controls; a panel that
+behaved like a dialog would have reintroduced that at four times the size.
+
+A CONVERSATION, BACKED BY WHAT EXISTS. A turn is: the teacher says what they want in
+their own words, and Jargon answers with a PROPOSAL card naming the field it is for.
+It runs on the draft_field path deployed since R76 — no new backend, which matters
+because the deploy is currently blocked on an expired token. The suggestions became
+the empty state's starters rather than the whole product, which is mechanism B
+applied to the assistant itself.
+
+THE SCREEN OWNS THE FIELDS. The lesson declares its TARGETS — which fields a proposal
+may land in, their current text, and how to apply one — and the panel owns the
+conversation. So the assistant can never write somewhere the screen did not offer,
+and another screen supplies its own targets without this file learning about it.
+Law 2 applied to the assistant: every proposal names its target, on its face.
+
+THE FOUR NON-NEGOTIABLES ARE RE-PINNED HERE because a conversation makes them easier
+to lose than a command list did. Never writes: a turn ends in a proposal and the
+teacher's Save still commits. Attributed: the card says which field and that nothing
+is saved. Reversible: Use this keeps the previous value and flips to "In the field ·
+Undo". Grounded: the field's current text goes with the request.
+
+WALKED, and it found three things, two of them mine from this same hour. The
+notification bell was fixed to the VIEWPORT, so the panel opened underneath it and
+the bell swallowed the panel's own close button — it is absolute to the stage now,
+which is where it always belonged. The conversation grew from the top with a field
+of empty space under it instead of sitting next to the composer. And the worst one:
+accepting the panel's proposal left R85's ARRIVAL proposal sitting under the same
+field, offering the same job twice — an arrival proposal now clears the moment its
+field stops being empty, whoever filled it.

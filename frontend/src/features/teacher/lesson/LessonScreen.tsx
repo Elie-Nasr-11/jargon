@@ -19,7 +19,11 @@ import { RouteLoader } from "@/components/RouteLoader";
 import { TeacherShell } from "@/features/teacher/shell/TeacherShell";
 import { KnowledgeCard } from "@/features/teacher/KnowledgeCard";
 import { AiStepsPanel } from "@/features/teacher/authoring/generatePanels";
-import { AskJargon, type AssistCommand } from "@/features/teacher/assist/AskJargon";
+import {
+  AskJargon,
+  type AssistSuggestion,
+  type AssistTarget,
+} from "@/features/teacher/assist/AskJargon";
 import { SelectInput } from "@/features/teacher/authoring/fields";
 import { bookSourceFor, bookSourceLabel } from "@/features/teacher/bookSource";
 import { AssessmentManager } from "@/features/teacher/console/AssessmentManager";
@@ -172,75 +176,56 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
     [dashboard, lessonId, steps, profilesById],
   );
 
-  // Mechanism C: one command surface for this screen. Every entry lands as a field
-  // value or a proposal the teacher accepts — none of them writes, which is why a
-  // command bar is safe to make this reachable. The list is the lesson's, not the
-  // bar's: another screen supplies its own.
-  const assistCommands = useMemo<AssistCommand[]>(() => {
-    const rewrite = async (
-      field: "lesson_title" | "lesson_objective",
-      key: "title" | "objective",
-      instruction: string,
-    ) => {
-      const session = await getSession();
-      if (!session) return;
-      const text = await draftTextField({
-        accessToken: session.access_token,
-        field,
-        lessonId,
-        current: meta.fields?.[key] || undefined,
-        prompt: instruction,
-      });
-      if (text.trim()) meta.set(key, text.trim());
-    };
-    return [
+  // Mechanism C, R87: the assistant's context for THIS screen. The lesson declares
+  // which fields it will let a proposal land in and what it is good at; the panel owns
+  // the conversation. Nothing here writes — `apply` fills a field, and the one Save at
+  // the top is still what commits it.
+  const assistTargets = useMemo<AssistTarget[]>(
+    () => [
       {
         id: "objective",
-        label: "Rewrite the objective",
-        detail: "Fills the field. Your Save still commits it.",
-        run: () =>
-          rewrite(
-            "lesson_objective",
-            "objective",
-            "Rewrite the objective so it names one thing a student can do afterwards, and can be checked.",
-          ),
+        label: "Objective",
+        field: "lesson_objective" as const,
+        current: meta.fields?.objective ?? "",
+        apply: (text: string) => meta.set("objective", text),
       },
       {
         id: "title",
-        label: "Rewrite the title",
-        detail: "Fills the field. Your Save still commits it.",
-        run: () =>
-          rewrite(
-            "lesson_title",
-            "title",
-            "Rewrite the title so it names what the lesson teaches.",
-          ),
+        label: "Title",
+        field: "lesson_title" as const,
+        current: meta.fields?.title ?? "",
+        apply: (text: string) => meta.set("title", text),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [meta.fields?.objective, meta.fields?.title],
+  );
+
+  const assistSuggestions = useMemo<AssistSuggestion[]>(
+    () => [
+      {
+        id: "objective",
+        label: "Write the objective",
+        targetId: "objective",
+        prompt:
+          "Write the objective so it names one thing a student can do afterwards, and can be checked.",
       },
       {
         id: "simplify",
         label: "Simplify the reading level",
-        detail: "Rewrites the objective in plainer language, keeping every fact.",
-        run: () =>
-          rewrite(
-            "lesson_objective",
-            "objective",
-            "Rewrite in plainer language a student of this age reads without help. Keep every fact.",
-          ),
+        targetId: "objective",
+        prompt:
+          "Rewrite in plainer language a student of this age reads without help. Keep every fact.",
       },
       {
-        id: "brief",
-        label: "Draft steps from a brief",
-        detail: "For when you already know what the lesson should teach.",
-        run: () => setBriefOpen(true),
+        id: "title",
+        label: "Rewrite the title",
+        targetId: "title",
+        prompt: "Rewrite the title so it names what the lesson teaches.",
       },
-      {
-        id: "preview",
-        label: "Preview as a student",
-        run: () => setPreviewOpen(true),
-      },
-    ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonId, meta.fields?.title, meta.fields?.objective]);
+    ],
+    [],
+  );
 
   const classSummaryRow = useMemo(
     () => dashboard?.classes.find((row) => row.id === classId) ?? null,
@@ -291,6 +276,17 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
 
   return (
     <TeacherShell
+      assistant={
+        <AskJargon
+          context={{ kind: "Lesson", name: lesson.title || "Untitled lesson" }}
+          targets={assistTargets}
+          suggestions={assistSuggestions}
+          actions={[
+            { id: "brief", label: "Draft steps from a brief", run: () => setBriefOpen(true) },
+            { id: "preview", label: "Preview as a student", run: () => setPreviewOpen(true) },
+          ]}
+        />
+      }
       email={authoring.email}
       classes={authoring.data?.classes ?? []}
       activeView="class"
@@ -650,7 +646,6 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
           />
         </>
       ) : null}
-      <AskJargon commands={assistCommands} />
     </TeacherShell>
   );
 }

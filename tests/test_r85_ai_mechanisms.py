@@ -122,19 +122,25 @@ class MechanismCTests(unittest.TestCase):
         self.assertIn('event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)', ASK)
         self.assertIn("Ask Jargon", ASK)
 
-    def test_the_screen_supplies_the_commands_not_the_bar(self):
+    def test_the_screen_supplies_the_context_not_the_bar(self):
         # So it scales to fifty capabilities without this file growing a switch over
-        # every screen in the product.
-        self.assertIn("commands: AssistCommand[]", ASK)
-        self.assertIn("<AskJargon commands={assistCommands} />", SCREEN)
+        # every screen in the product. R87 made the contract richer than a command
+        # list — the screen declares the FIELDS a proposal may land in — but the
+        # direction of the dependency is the point and is unchanged.
+        self.assertIn("targets: AssistTarget[]", ASK)
+        self.assertIn("suggestions: AssistSuggestion[]", ASK)
+        self.assertIn("<AskJargon", SCREEN)
+        self.assertIn("targets={assistTargets}", SCREEN)
 
     def test_the_lesson_offers_what_the_brief_names(self):
-        for label in ("Rewrite the objective", "Simplify the reading level"):
+        # "on a lesson it offers to rewrite the objective, add a check, simplify the
+        # reading level"
+        for label in ("Write the objective", "Simplify the reading level"):
             with self.subTest(label=label):
                 self.assertIn(label, SCREEN)
 
     def test_the_bar_says_that_nothing_is_saved(self):
-        self.assertIn("Nothing is saved until", ASK)
+        self.assertIn("nothing is saved until you press Save", ASK)
 
 
 class MechanismDTests(unittest.TestCase):
