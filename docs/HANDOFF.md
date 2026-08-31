@@ -6,6 +6,78 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-31 (R92: the scoring runs itself)
+
+Status: Finished
+Task: "schedule the scoring so profiles exist without a teacher pressing."
+
+Summary: R90 built the cognition ledger and R91 made it steer the mentor, but both
+depended on a teacher pressing Score — so for almost every student the profile did not
+exist and §19 had nothing to read. A pg_cron job now POSTs the scorer every 15 minutes
+and profiles appear on their own. Live: the job is installed (jobid 1, `*/15 * * * *`,
+owner postgres), and across the ticks run so far profiles went 1 -> 4 and the ledger
+12 -> 38 scored responses with nobody clicking anything.
+
+The design problem was the caller: a cron tick has no user, so it cannot pass
+assertCanViewStudent. Three things make that acceptable, all pinned:
+- Its own door. `cognition_sweep_auth` holds one random 32-byte key; RLS is on with NO
+  policy, so anon and authenticated can never read it, and the schedule reads it at
+  fire time so the plaintext is not sitting in `cron.job.command`. Compared in constant
+  time. Verified live: no key -> 403, a wrong 64-char key -> 403, the real key -> a
+  sweep that wrote a profile for a student nobody had opened.
+- Nothing to read out. The sweep returns and logs COUNTS only; no transcript, note or
+  narrative crosses that door, so a stolen key buys scoring work the system was going
+  to do anyway.
+- One scoring body. `runScoring` carries no authorization of its own and both callers
+  bring their own, so a swept profile and a pressed one can never be judged differently.
+
+What the scheduler immediately caught (the reason to run it before shipping it):
+two ticks in a row lost one pair of two to "the scoring model returned invalid JSON".
+The obvious reading was truncation. **It was wrong** — a smaller batch and a doubled
+output budget changed nothing, the failing student's longest response was 215
+characters, and the third tick scored that same pair cleanly from byte-identical input.
+The judge is intermittently not-JSON. So: one retry, only for an unparseable reply (a
+refusal, an overrun or an API error would fail identically); and the error now carries
+its own shape — `[stop= blocks= chars= json=]` plus the parser's complaint cut at the
+first comma, which is exactly where V8 begins quoting the document back, so no student
+text rides along. "Invalid JSON" alone bought a wrong diagnosis and a wasted deploy.
+
+Also: the run-log row is now opened before any scoring and patched at the end, so a
+tick the edge gateway kills mid-flight still leaves a row with a null `finished_at`
+instead of vanishing; and the tick only starts another pair if there is room for one as
+expensive as the priciest so far.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (sweep action, sweep-key
+door, shared runScoring, judgeWithRetry, judgeShape, open/close run log — deployed v7);
+supabase/migrations/20260831140000_r92_cognition_sweep.sql (new; auth table, queue
+view, run log, the cron schedule); tests/test_r92_cognition_sweep.py (new, 25 pins);
+tests/test_r90_cognition.py (one pin re-expressed, see concerns); docs/COGNITION.md.
+
+Tests run: 1409 python OK (4 skips); deno flow property suite 32/32; `deno check` on
+the scorer clean. Live: 403/403/200 on the auth door, a clean 8-response sweep at 44s,
+`cron.job` row confirmed active.
+
+Remaining concerns:
+- A pin broke for the FOURTH release running by being written as a shape instead of a
+  rule: R90's "the scorer never writes the transcript" was spelled `assertNotIn('method:
+  "PATCH"')`, which fired the moment the sweep patched its OWN run log. Re-expressed as
+  the rule — every mutating REST call targets one of the scorer's three tables. Worth
+  treating as a standing habit, not a recurring surprise.
+- `SUPABASE_ACCESS_TOKEN` is still expired, so R85 (provider switch), R89 (shared-book
+  legibility) and R91 (§19 steering) remain merged-but-undeployed. R90 and R92 shipped
+  only because the MCP channel deploys small functions; `chat` (417KB) and
+  `curriculum-admin` (181KB) are both over its per-call ceiling. This is now blocking
+  four releases and is the single highest-value owner action.
+- Rubric §10 (transfer) and §11 (retention) are still unbuilt; both need a task
+  generator, which is a new student-facing surface.
+
+Suggested next task: rotate the access token and re-run deploy-backend.yml, which lands
+§19 steering live on top of the profiles this scheduler is now producing. Failing that,
+class-level cognition views (aggregation over profiles that already exist) is the next
+thing that needs no deploy.
+
+
+
 ## Claude -> Codex / Human - 2026-08-16 (R41: student platform sweep — welcome, graph edges, empty state)
 
 Status: Finished

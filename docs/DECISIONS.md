@@ -2,6 +2,49 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-08-31: measurement runs on a schedule, and a user-less caller earns its door
+
+R90 built the cognition ledger and R91 made it steer the mentor — both gated on a
+teacher pressing Score, which means for almost every student the profile did not
+exist and §19 had nothing to read. Measurement that only happens when someone
+remembers to ask for it is not measurement. **pg_cron sweeps the backlog every 15
+minutes** (`cognition-sweep`, batch 2), so profiles accumulate on their own.
+
+- **A caller with no user gets a narrow door, not a wide one.** The scheduler cannot
+  pass the usual "resolve the JWT, then check the shared class" check, so it presents
+  a secret from a table with RLS on and NO policy (unreadable to anon and
+  authenticated; the schedule reads it at fire time so it never sits in the job
+  command), compared in constant time. What makes that acceptable is not the secret
+  but the *shape*: the sweep returns and logs COUNTS ONLY. A stolen key buys scoring
+  work the system was going to do anyway, never a student's words.
+- **One scoring body, two doors.** `runScoring` carries no authorization at all; the
+  button and the scheduler each bring their own. A check inside it would be a second,
+  divergent one — and a swept profile that disagreed with a pressed one would make the
+  rubric mean two different things.
+- **The queue is the cost knob and it agrees with the judge.** A pair is only worth a
+  model call once five NEW constructed responses are waiting, and "constructed" is
+  defined identically in SQL and TypeScript. A queue that disagreed with the judge
+  would either burn calls on turns it skips or hide turns it would have scored.
+- **Run the scheduler before shipping it.** It failed half its work on the first two
+  ticks, which is the whole argument for live-probing rather than reviewing. The
+  first diagnosis (truncation) was WRONG and cost a deploy to disprove; the actual
+  cause was an intermittently unparseable judge, proven by the same pair scoring
+  cleanly from byte-identical input. Fixed with one retry — for unparseable replies
+  only, since a refusal or an overrun would fail identically.
+- **An error that hides its own evidence is a bug.** "The scoring model returned
+  invalid JSON" was true and useless. It now carries `[stop= blocks= chars= json=]`
+  and the parser's own complaint cut at the first comma — enough to separate an empty
+  reply, a refusal, a prose preamble and a broken string, and structurally incapable
+  of carrying student text into a log a platform admin reads.
+- **Bookkeeping survives its own run.** The sweep's log row is opened before any
+  scoring and patched at the end, so a tick the gateway kills leaves a row with a null
+  `finished_at`. "Started and never came back" is a fact; silence is not.
+- **Pins state rules, not shapes** (fourth release running). R90's "the scorer never
+  writes the transcript" was written as `assertNotIn('method: "PATCH"')` and fired the
+  moment the sweep patched its own run log. Now: every mutating REST call targets one
+  of the scorer's own three tables.
+
+
 ## 2026-08-15: Flow is a first-class object — the five-pillar rebuild begins
 
 Owner asked how to make the flow logic bulletproof after live testing showed mode
