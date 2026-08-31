@@ -129,3 +129,76 @@ Three rules make it safe rather than merely clever:
 §18's separation is structural here too: weak expression beside strong reasoning asks
 for a reformulation, but weak expression beside weak *reasoning* steers the reasoning —
 language trouble is never mistaken for weak thinking.
+
+## R92 — the scoring runs itself
+
+A profile that only exists when a teacher presses a button is a profile that mostly
+does not exist, and §19's steering has nothing to read. So the backlog is swept on a
+schedule: **every 15 minutes, pg_cron POSTs `{"action":"sweep","limit":2}`** at the
+scorer, and profiles appear for students nobody clicked on.
+
+The awkward part is the caller. A cron job has no user behind it, so the usual door
+(resolve the JWT, then `assertCanViewStudent`) does not exist. Three things make a
+user-less caller acceptable:
+
+- **Its own secret, its own door.** `cognition_sweep_auth` holds one random 32-byte
+  key. RLS is on with *no policy at all*, so anon and authenticated can never read it;
+  the service role and postgres can. The schedule reads it at fire time, so the
+  plaintext never sits in `cron.job.command`. The function compares it in constant
+  time — an early-exit compare lets a caller walk a secret one character at a time.
+- **There is nothing to read out.** The sweep returns counts (`pairs_seen`,
+  `pairs_scored`, `responses_scored`, `errors`, `took_ms`) and writes counts. No
+  transcript, no narrative, no note ever crosses that door — so the worst a stolen key
+  buys is scoring work the system was going to do anyway.
+- **One scoring body.** The button and the scheduler both call `runScoring`, which
+  carries no authorization of its own; each caller brings its own. If they had
+  diverged, a swept profile and a pressed one could disagree about the same student.
+
+**What is worth a model call.** `cognition_sweep_queue` mirrors the judge's
+`isConstructedResponse` exactly — code counts, a bare MCQ tap does not, 25 trimmed
+characters is the floor — and only surfaces a (student, lesson) pair once **five** new
+responses are waiting, comfortably past the three §19 needs before it will steer. A
+scored turn leaves the queue by construction (`left join … where cts.id is null`), so
+the sweep is idempotent and a *failed* pair simply stays queued for the next tick.
+
+**Bounded on purpose.** A tick takes at most 2 pairs (10 by request, never more) and
+scores at most 8 responses per pair. It only starts another pair if there is room for
+one as expensive as the priciest so far — a fixed cut-off cannot know whether the last
+pair took forty seconds or needed a retry; measuring does.
+
+**`cognition_sweep_runs` is the answer to "is it alive?"** — one row per tick, readable
+by platform admins, holding counts and lesson ids and no student text. The row is
+opened *before* any scoring and patched at the end, so a tick the gateway kills
+mid-flight still leaves a row with a null `finished_at`: "started and never came back"
+is a fact worth having, and silence is not.
+
+### What the first scheduled runs found
+
+The scheduler paid for itself immediately by failing in public. Two ticks in a row
+reported `pairs_seen: 2, pairs_scored: 1, errors: 1`, and the error was "the scoring
+model returned invalid JSON" — on a lesson whose *other* student had scored fine
+minutes earlier.
+
+The obvious reading was truncation: a longer transcript, a reply cut off mid-object, a
+perfect JSON prefix that will not parse. That reading was **wrong**. Shrinking the
+batch from 12 to 8 and doubling the output budget changed nothing, and the failing
+student's longest response turned out to be 215 characters. Then the third tick scored
+that same pair cleanly, from byte-identical input.
+
+So the judge is simply not always the JSON it was asked for — intermittently, on
+inputs that work fine on the next attempt. Three things came out of that:
+
+- **One retry**, and only for an unparseable reply. A refusal, a budget overrun, a
+  timeout or an API error would come back identically, so retrying them costs a model
+  call and buys nothing. Without the retry, a pair like this one sits in the queue
+  failing the same way every fifteen minutes forever.
+- **The error names its own shape.** `[stop=… blocks=… chars=… json=…]` plus the
+  parser's own complaint, cut at the first comma — which is exactly where V8 starts
+  quoting the document back, so no student text can ride along. Those four facts
+  separate an empty reply from a refusal from a prose preamble from a broken string.
+  "Invalid JSON" alone bought a wrong diagnosis and a wasted deploy.
+- **The truncation check stays.** It was not the cause here, but a genuinely truncated
+  reply still looks exactly like a malformed one, and now it says so.
+
+The batch of 8 and the 16000-token budget stayed too — not because they fixed
+anything, but because they are the more comfortable numbers to have been wrong with.

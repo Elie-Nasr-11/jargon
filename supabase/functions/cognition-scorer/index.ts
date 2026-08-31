@@ -14,7 +14,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sweep-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -28,7 +28,23 @@ type Config = {
 };
 
 const RUBRIC_VERSION = 1;
-const MAX_SCORED_PER_CALL = 12;
+// R92: eight responses of dimensions + evidence quotes + signals + a note is a
+// comfortable call — smaller than the twelve R90 shipped, with a much larger output
+// budget behind it, so the JSON has room to finish.
+const MAX_SCORED_PER_CALL = 8;
+// R92 sweep: how many (student, lesson) pairs one scheduled tick may take, and the
+// wall clock the whole tick must fit inside. The edge gateway cuts a request around
+// 150s; 130s leaves room to write the log before it does.
+const SWEEP_BATCH_DEFAULT = 2;
+const SWEEP_BATCH_MAX = 10;
+const SWEEP_BUDGET_MS = 130_000;
+// One scoring call, and the shorter budget its retry gets. Two full-length attempts
+// on one pair would eat the tick.
+const JUDGE_TIMEOUT_MS = 80_000;
+const JUDGE_RETRY_TIMEOUT_MS = 45_000;
+// The one failure worth another attempt. Shared so the thrower and the catcher can
+// never drift apart.
+const UNPARSEABLE = "The scoring model returned invalid JSON.";
 const DIMENSIONS = [
   "retrieval",
   "organization",
@@ -186,6 +202,32 @@ async function assertCanViewStudent(
   throw new Error("Access to this student's work is required.");
 }
 
+// R92: the SCHEDULER's door. A cron tick has no user behind it, so it cannot pass
+// assertCanViewStudent — and it does not need to: a sweep returns COUNTS ONLY and
+// never student content, so there is no one to authorize a view for. It presents a
+// secret that lives in a table only the service role and postgres can read.
+//
+// The comparison is length-first then full-width XOR: no early exit on the first
+// differing byte, so a caller cannot walk the key one character at a time.
+function secretsMatch(presented: string, expected: string): boolean {
+  if (!presented || !expected || presented.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < presented.length; i++) {
+    diff |= presented.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+async function isSweepCaller(config: Config, req: Request): Promise<boolean> {
+  const presented = cleanText(req.headers.get("x-sweep-key"));
+  if (!presented) return false;
+  const row = await selectFirst(
+    config,
+    "cognition_sweep_auth?id=eq.true&select=sweep_key&limit=1",
+  ).catch(() => null);
+  return secretsMatch(presented, cleanText(row?.sweep_key));
+}
+
 // ---------------------------------------------------------------------------
 // What counts as a constructed response.
 //
@@ -260,11 +302,11 @@ function scorerModel(): string {
   );
 }
 
-async function callJudge(userPrompt: string): Promise<DbRow> {
+async function callJudge(userPrompt: string, timeoutMs: number): Promise<DbRow> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Scoring is not configured (ANTHROPIC_API_KEY missing).");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 110000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
     res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -277,7 +319,7 @@ async function callJudge(userPrompt: string): Promise<DbRow> {
       signal: controller.signal,
       body: JSON.stringify({
         model: scorerModel(),
-        max_tokens: 8000,
+        max_tokens: 16000,
         // No sampling params: current Claude models reject temperature (the live chat
         // function documents the same rule). Found by the R90 live probe, not review.
         system: `${JUDGE_SYSTEM}\n\nReply with a single JSON object and nothing else. No prose, no code fences.`,
@@ -301,6 +343,12 @@ async function callJudge(userPrompt: string): Promise<DbRow> {
         : "Scoring model request failed.";
     throw new Error(message);
   }
+  // Truncation is the one failure that LOOKS like a bad model: the JSON is perfect
+  // right up to where it stops. Name it, so a run log reads as a budget problem
+  // rather than a mystery.
+  if (cleanText(data?.stop_reason) === "max_tokens") {
+    throw new Error("Scoring ran past its output budget on this lesson. Try again.");
+  }
   const parts = Array.isArray(data?.content) ? data.content : [];
   const text = parts
     .filter((part: DbRow) => part && part.type === "text")
@@ -309,9 +357,45 @@ async function callJudge(userPrompt: string): Promise<DbRow> {
   try {
     const parsed = JSON.parse(extractJsonObject(text));
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as DbRow) : {};
-  } catch {
-    throw new Error("The scoring model returned invalid JSON. Try again.");
+  } catch (error) {
+    // "invalid JSON" on its own bought a wrong diagnosis and a wasted deploy. These
+    // four facts separate the real causes — an empty reply (blocks=0), a refusal
+    // (stop=refusal), a prose preamble (json=false), a broken string (the parser's
+    // own complaint) — and none of them is student text: the parser's message is cut
+    // at the first comma, which is exactly where V8 starts quoting the document back.
+    throw new Error(`${UNPARSEABLE} ${judgeShape(data, parts, text, error)} Try again.`);
   }
+}
+
+// R92: the judge is INTERMITTENTLY unparseable. One pair failed the first two
+// scheduled ticks and then scored cleanly on the third from byte-identical input —
+// so the cause was never transcript size (that was the first, wrong theory, and a
+// bigger output budget did not fix it); the reply is simply not always the JSON it
+// was asked for. Without a second attempt such a pair sits in the queue failing the
+// same way every fifteen minutes forever.
+//
+// Only an unparseable reply retries. A refusal, a budget overrun, a timeout or an
+// API error would come back identically and the retry would only cost money.
+async function judgeWithRetry(userPrompt: string): Promise<DbRow> {
+  try {
+    return await callJudge(userPrompt, JUDGE_TIMEOUT_MS);
+  } catch (error) {
+    if (!errorMessage(error).startsWith(UNPARSEABLE)) throw error;
+    return await callJudge(
+      `${userPrompt}\n\n---\n\nYour previous reply was not parseable JSON. Answer again with the single JSON object your instructions describe: the first character "{", the last character "}", and nothing before or after it.`,
+      JUDGE_RETRY_TIMEOUT_MS,
+    );
+  }
+}
+
+// Structural facts about a reply that would not parse. Deliberately carries no
+// content: counts, the stop reason, and the parser's complaint without its snippet.
+function judgeShape(data: DbRow, parts: DbRow[], text: string, error: unknown): string {
+  const why = String((error as Error)?.message || error).split(",")[0].slice(0, 90);
+  return (
+    `[stop=${cleanText(data?.stop_reason) || "?"} blocks=${parts.length} ` +
+    `chars=${text.length} json=${text.trimStart().startsWith("{") || text.includes("```")} ${why}]`
+  );
 }
 
 function cleanDim(value: unknown): number | null {
@@ -407,7 +491,24 @@ async function scoreLesson(config: Config, actorId: string, body: DbRow): Promis
   const lessonId = cleanText(body.lesson_id);
   if (!userId || !lessonId) throw new Error("user_id and lesson_id are required.");
   await assertCanViewStudent(config, actorId, userId);
+  const result = await runScoring(config, userId, lessonId);
+  return json({
+    status: "ok",
+    scored: result.scored,
+    remaining: result.remaining,
+    profile: await storedProfile(config, userId, lessonId),
+    turns: result.rows.slice(-50).reverse(),
+  });
+}
 
+// R92: the scoring itself, with NO authorization of its own — the two callers each
+// bring their own (a teacher's shared-class check, or the scheduler's key). One body
+// so a swept profile and a pressed one can never be judged differently.
+async function runScoring(
+  config: Config,
+  userId: string,
+  lessonId: string,
+): Promise<{ scored: number; remaining: number; rows: DbRow[] }> {
   const [turns, existing, framing] = await Promise.all([
     selectAll(
       config,
@@ -428,18 +529,8 @@ async function scoreLesson(config: Config, actorId: string, body: DbRow): Promis
 
   const batch = candidates.slice(0, MAX_SCORED_PER_CALL);
   const remaining = candidates.length - batch.length;
-  if (!batch.length) {
-    // Nothing new to judge — still refresh and return the profile so the console's
-    // one call always comes back with the current truth.
-    const profileRow = await storedProfile(config, userId, lessonId);
-    return json({
-      status: "ok",
-      scored: 0,
-      remaining: 0,
-      profile: profileRow,
-      turns: existing.slice(-50).reverse(),
-    });
-  }
+  // Nothing new to judge — the caller still gets the stored truth back.
+  if (!batch.length) return { scored: 0, remaining: 0, rows: existing };
 
   // The judge sees, per response: which tutor turns came immediately before it
   // (the §1 context), then the response itself. Plus the lesson framing and a
@@ -484,7 +575,7 @@ async function scoreLesson(config: Config, actorId: string, body: DbRow): Promis
     );
   }
 
-  const verdict = await callJudge(sections.join("\n\n---\n\n"));
+  const verdict = await judgeWithRetry(sections.join("\n\n---\n\n"));
   const judged = Array.isArray(verdict.turns) ? (verdict.turns as DbRow[]) : [];
   const byTurnId = new Map(judged.map((row) => [cleanText(row.turn_id), row]));
 
@@ -536,12 +627,94 @@ async function scoreLesson(config: Config, actorId: string, body: DbRow): Promis
     body: JSON.stringify(profile),
   });
 
+  return { scored: inserts.length, remaining, rows: allRows };
+}
+
+// R92: the run log, opened at the start and closed at the end (see sweep). Both
+// halves swallow their own failures — a scheduler that fell over because its own
+// bookkeeping failed would be worse than one that lost a row.
+async function openRunLog(config: Config, startedAt: number): Promise<string> {
+  const rows = await serviceFetch(config, "/rest/v1/cognition_sweep_runs?select=id", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ started_at: new Date(startedAt).toISOString() }),
+  }).catch(() => null);
+  const row = Array.isArray(rows) && rows[0] && typeof rows[0] === "object" ? (rows[0] as DbRow) : null;
+  return cleanText(row?.id);
+}
+
+async function closeRunLog(config: Config, runId: string, counts: DbRow): Promise<void> {
+  if (!runId) return;
+  await serviceFetch(config, `/rest/v1/cognition_sweep_runs?id=eq.${enc(runId)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ ...counts, finished_at: new Date().toISOString() }),
+  }).catch(() => {});
+}
+
+// R92: one scheduled tick. Takes the pairs with the most waiting work, scores them
+// through the SAME runScoring the teacher button uses, and logs counts. It returns
+// counts only — never a student's words — because the caller is a cron job, not a
+// person with a right to read them.
+async function sweep(config: Config, body: DbRow): Promise<Response> {
+  const startedAt = Date.now();
+  const requested = Number(body.limit);
+  const limit = Number.isFinite(requested)
+    ? Math.max(1, Math.min(SWEEP_BATCH_MAX, Math.round(requested)))
+    : SWEEP_BATCH_DEFAULT;
+
+  // The log row is opened BEFORE any scoring and patched when the run ends, so a
+  // tick the gateway kills mid-flight still leaves a row — one with no finished_at.
+  // "Started and never came back" is a fact worth having; silence is not.
+  const runId = await openRunLog(config, startedAt);
+
+  const queue = await selectAll(
+    config,
+    `cognition_sweep_queue?order=last_activity.desc&limit=${limit}&select=user_id,lesson_id,unscored`,
+  );
+
+  let pairsScored = 0;
+  let responsesScored = 0;
+  let errors = 0;
+  let slowestPairMs = 0;
+  const detail: DbRow[] = [];
+  for (const row of queue) {
+    // Only start another pair if there is room for one as expensive as the priciest
+    // so far. A fixed cut-off cannot know whether the last pair took forty seconds
+    // or needed a retry; this does.
+    if (Date.now() - startedAt + slowestPairMs > SWEEP_BUDGET_MS) break;
+    const userId = cleanText(row.user_id);
+    const lessonId = cleanText(row.lesson_id);
+    if (!userId || !lessonId) continue;
+    const pairStartedAt = Date.now();
+    try {
+      const result = await runScoring(config, userId, lessonId);
+      if (result.scored > 0) pairsScored += 1;
+      responsesScored += result.scored;
+      detail.push({ lesson_id: lessonId, scored: result.scored, remaining: result.remaining });
+    } catch (error) {
+      // One bad pair must never end the run — the rest of the queue is still work.
+      errors += 1;
+      detail.push({ lesson_id: lessonId, error: clampText(errorMessage(error), 200) });
+    }
+    slowestPairMs = Math.max(slowestPairMs, Date.now() - pairStartedAt);
+  }
+
+  await closeRunLog(config, runId, {
+    pairs_seen: queue.length,
+    pairs_scored: pairsScored,
+    responses_scored: responsesScored,
+    errors,
+    detail: { pairs: detail.slice(0, 20) },
+  });
+
   return json({
     status: "ok",
-    scored: inserts.length,
-    remaining,
-    profile: await storedProfile(config, userId, lessonId),
-    turns: allRows.slice(-50).reverse(),
+    pairs_seen: queue.length,
+    pairs_scored: pairsScored,
+    responses_scored: responsesScored,
+    errors,
+    took_ms: Date.now() - startedAt,
   });
 }
 
@@ -600,13 +773,23 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const actor = await fetchCurrentUser(config);
     const body = await req.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return errorResponse("Request body must be a JSON object.", 400);
     }
     const record = body as DbRow;
     const action = cleanText(record.action);
+
+    // R92: the scheduler is the ONLY caller with no user, and it may do exactly one
+    // thing — sweep. Every other action still resolves a real person first.
+    if (action === "sweep") {
+      if (!(await isSweepCaller(config, req))) {
+        return errorResponse("Access to this student's work is required.", 403);
+      }
+      return await sweep(config, record);
+    }
+
+    const actor = await fetchCurrentUser(config);
     const actorId = String(actor.id);
     if (action === "score_lesson") return await scoreLesson(config, actorId, record);
     if (action === "profile") return await readProfile(config, actorId, record);

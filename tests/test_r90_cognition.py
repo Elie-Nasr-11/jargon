@@ -8,6 +8,7 @@ These pins hold the scorer to the rubric rules that carry the design. They read 
 SURFACE (the judge prompt and the function's contract), not implementation shapes —
 the lesson of four releases of pins breaking on refactors.
 """
+import re
 import unittest
 from pathlib import Path
 
@@ -138,10 +139,21 @@ class WhatCountsAsAResponseTests(unittest.TestCase):
 
 
 class TheLedgerIsSafeTests(unittest.TestCase):
-    def test_the_scorer_never_writes_the_transcript(self):
-        # It reads learning_turns; it must never POST/PATCH them or speak to students.
-        self.assertNotIn('"/rest/v1/learning_turns", {', SCORER)
-        self.assertNotIn("method: \"PATCH\"", SCORER)
+    def test_the_scorer_writes_only_its_own_ledger(self):
+        # It reads the transcript; it must never write to it, or to anything else it
+        # does not own. Expressed as the rule and not as "the file contains no PATCH":
+        # that reading broke the moment the R92 sweep began patching its own run log,
+        # which is not the transcript by any reading.
+        writes = re.findall(
+            r"""serviceFetch\(\s*config,\s*[`"](/rest/v1/[^`"]+)[`"],\s*\{\s*\n\s*method:\s*"(POST|PATCH|PUT|DELETE)\"""",
+            SCORER,
+        )
+        self.assertTrue(writes, "no writes found — the regex has drifted from the code")
+        tables = {path.split("/rest/v1/")[1].split("?")[0] for path, _ in writes}
+        self.assertEqual(
+            tables,
+            {"cognition_turn_scores", "cognition_profiles", "cognition_sweep_runs"},
+        )
 
     def test_scoring_is_idempotent_per_rubric_version(self):
         self.assertIn("on_conflict=turn_id,rubric_version", SCORER)
