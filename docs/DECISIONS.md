@@ -3000,3 +3000,25 @@ the call's arguments. Routing every call through one `draftScopeArgs` funnel is
 strictly better code and it failed all six — failure mode 9 for the fourth release
 running. They are re-expressed as the rule: a call names a scope, or spreads the one
 funnel that provably does.
+
+### R89 correction — the scale, measured after the fact
+
+The R89 note above and PR #83 both said the refusal covered "the whole library". That
+overstates it, and the exact numbers matter for deciding what to do, so: in Demo Org
+(the organization in the owner's screenshot) **71 of 90 class-reachable lessons sit in
+shared courses and cannot be saved; 19 lessons across 4 owned courses save fine.**
+Those four — "Anatomy 1", "CS AI", "IT Frontiers Advanced Book A1" and "Book A2" — are
+org-owned, which is proof the fork path works and always has. What broke is narrower
+than "everything" and wider than "the assistant": it is every lesson that came from a
+shared book.
+
+Also verified against production rather than reasoned about: the account in the
+screenshot is an ACTIVE teacher of the class it was working in, and that class's
+organization is the one the frontend now sends. So `assertCanAuthor` takes its
+class-teacher branch and the assistant works against the deployed v42 — the R89
+frontend fix needs no deploy. Only the legibility fix (`courseScopeForLesson`) waits
+on the token.
+
+The three organizations all link the same shared courses (Demo Org, Pressure Test
+Academy, Pilot School), so no single organization can be given ownership of them
+without taking them from the other two. That is why R89 changed no data.
