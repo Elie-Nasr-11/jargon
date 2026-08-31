@@ -10,15 +10,20 @@
 import { useEffect, useRef, useState } from "react";
 import { draftTextField, getSession, type DraftableField } from "@/lib/api";
 import { wantsProposal, type ProposalState } from "@/features/teacher/assist/proposal";
+import { draftScopeArgs, type AssistScope } from "@/features/teacher/assist/scope";
 
 export function useFieldProposal({
   field,
+  scope,
   lessonId,
   current,
   origin,
   enabled,
 }: {
   field: DraftableField;
+  /** Authorization and grounding for the request. */
+  scope: AssistScope;
+  /** Identity only — the lesson this hook has already offered for, so it offers once. */
   lessonId: string;
   current: string;
   /** What it will be drafted from, in the teacher's words. Also the grounding gate. */
@@ -46,7 +51,11 @@ export function useFieldProposal({
       try {
         const session = await getSession();
         if (!session) throw new Error("Sign in to use the assistant.");
-        const text = await draftTextField({ accessToken: session.access_token, field, lessonId });
+        const text = await draftTextField({
+          accessToken: session.access_token,
+          field,
+          ...draftScopeArgs(scope),
+        });
         const trimmed = text.trim();
         setState(
           trimmed
@@ -59,6 +68,8 @@ export function useFieldProposal({
         setState({ status: "failed", message: (error as Error).message || "" });
       }
     })();
+    // scope is rebuilt each render; the askedFor guard above is what stops a repeat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, declined, origin, current, field, lessonId]);
 
   return {

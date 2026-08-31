@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { draftTextField, getSession, type DraftableField } from "@/lib/api";
+import { draftScopeArgs, type AssistScope } from "@/features/teacher/assist/scope";
 
 type Intent = { key: string; label: string; instruction: string };
 
@@ -44,7 +45,7 @@ const INTENTS: Intent[] = [
  */
 export function SelectionRefine({
   field,
-  lessonId,
+  scope,
   value,
   onChange,
   disabled,
@@ -52,7 +53,7 @@ export function SelectionRefine({
 }: {
   field: DraftableField;
   /** Required, not optional: an unscoped draft is one curriculum-admin refuses. */
-  lessonId: string;
+  scope: AssistScope;
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
@@ -109,7 +110,7 @@ export function SelectionRefine({
       const text = await draftTextField({
         accessToken: session.access_token,
         field,
-        lessonId,
+        ...draftScopeArgs(scope),
         // The selection IS the scope: the model is given the passage, not the field.
         current: selected,
         prompt: intent.instruction,

@@ -2957,3 +2957,46 @@ picker stayed where the starter left it. A sentence that names a field now goes 
 field — earliest label wins, which is how the sentences read ("rewrite the title so it
 matches the objective" is about the title). A starter still declares its own. Walked at
 1440 light, 1440 dark, and 390 phone; nothing hidden in any of them.
+
+## R89 — authorize on the class, not on the book
+
+THE SECOND SCREENSHOT WAS A DIFFERENT BUG WEARING THE SAME CLOTHES. R88 made the
+assistant send its scope; the server then refused the scope it was sent. Every
+lesson-scoped action in curriculum-admin resolves through `courseScopeForLesson`,
+which threw whenever the lesson's COURSE had no owning organization. In this database
+11 of 22 courses are org-less and EVERY course linked to a class is one of them, so
+the refusal was not an edge case — it was the whole library, and the whole editor:
+save, publish, archive and duplicate share that function. It also threw before
+`assertCanAuthor`, so the platform-admin escape hatch never ran either.
+
+THE QUESTION WAS WRONG. "Does this teacher own the book?" is not what a draft needs to
+know — a draft writes nothing. `duplicate_course` already asks the right one: does
+this actor teach this class, and does the class belong to this organization? The
+assistant now asks that, which has the pleasant property of working against the
+deployed function with no backend change at all — and the deploy is still blocked on
+an expired token, so that mattered.
+
+GROUNDING MOVED TO THE CLIENT AND GOT BETTER. The server built its lesson brief from
+saved rows. The screen has the same facts plus the ones that are not saved yet, so a
+title drafted against an objective the teacher typed thirty seconds ago now sees that
+objective. The server's version could not. This is not a workaround that costs
+quality; it is the better source that the workaround made us notice.
+
+THE SERVER STOPS PRE-EMPTING ITS OWN AUTHORIZATION. R50 designed the sentence for this
+exact state — "this is a shared book … make a copy for this class" — and a throw two
+functions earlier meant no teacher ever read it. An org-less course now returns an
+empty organizationId and lets the check speak. This does NOT make saving a shared book
+work, and it must not: editing in place would change other classes' content, which is
+what forking exists to prevent. It makes the refusal legible.
+
+AND THE WALL HAS A DOOR. The lesson screen never said any of this — R79 built an
+editor over content it cannot save. It now names the shared book and points at the
+Course screen, which already owns the working "Make a copy for this class". It points
+rather than forks because the copy replaces the lesson ids, so forking from the lesson
+would strand the teacher on an id their class no longer has.
+
+THE PINS BROKE, AND THEY WERE RIGHT TO. Six R88 pins keyed on `lessonId` appearing in
+the call's arguments. Routing every call through one `draftScopeArgs` funnel is
+strictly better code and it failed all six — failure mode 9 for the fourth release
+running. They are re-expressed as the rule: a call names a scope, or spreads the one
+funnel that provably does.

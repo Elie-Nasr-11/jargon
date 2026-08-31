@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Loader2, PanelRightClose, Sparkles, X } from "lucide-react";
 import { AutoTextarea } from "@/components/AutoTextarea";
 import { draftTextField, getSession, type DraftableField } from "@/lib/api";
+import { draftScopeArgs, type AssistScope } from "@/features/teacher/assist/scope";
 
 /**
  * What the assistant is looking at — both how to SAY it and what to scope requests to.
@@ -30,13 +31,10 @@ import { draftTextField, getSession, type DraftableField } from "@/lib/api";
  * draft that names neither a lesson nor an organization, so a context that describes a
  * screen without saying what it is scoped to is not a context this panel can use. R87
  * shipped with the scope as somebody else's problem and the panel simply dropped it —
- * every request came back "lesson_id or organization_id is required." The union below
- * is that server rule written as a type: a call site must supply one of the two.
+ * every request came back "lesson_id or organization_id is required." AssistScope is
+ * that server rule written as a type: a call site must supply one of the two.
  */
-export type AssistContext = { kind: string; name: string; classId?: string | null } & (
-  | { lessonId: string; organizationId?: string }
-  | { organizationId: string; lessonId?: string }
-);
+export type AssistContext = { kind: string; name: string } & AssistScope;
 
 /** A field the assistant may propose into. The screen owns it; this panel only asks. */
 export type AssistTarget = {
@@ -166,9 +164,7 @@ export function AskJargon({
       const text = await draftTextField({
         accessToken: session.access_token,
         field: picked.field,
-        lessonId: context.lessonId,
-        organizationId: context.organizationId,
-        classId: context.classId,
+        ...draftScopeArgs(context),
         current: picked.current.trim() || undefined,
         prompt: prompt.trim(),
       });
