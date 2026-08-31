@@ -27,7 +27,8 @@ export function functionUrl(
     | "resource-processing"
     | "google-classroom"
     | "canvas"
-    | "artifact-live",
+    | "artifact-live"
+    | "cognition-scorer",
 ) {
   return `${supabaseUrl}/functions/v1/${slug}`;
 }

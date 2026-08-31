@@ -12660,3 +12660,65 @@ Save and Publish are deliberately left enabled: platform admins can still author
 shared books once the deploy lands, and disabling them would take that away.
 Suggested next task: the owner's decision on shared-course ownership, then move the
 walk harness into the repo (still only in the session scratchpad).
+
+## Claude -> Codex / Human - 2026-08-31 13:05
+
+Status: Finished
+Task: R90 — the Independent Cognitive Production Rubric (owner's uploaded brief).
+Score constructed student responses along the rubric's dimensions, tag every mentor
+turn with a scaffold level (S0-S5), store it longitudinally, surface it to teachers as
+pedagogy ("confusing two related terms; three hints; ready after one more retrieval
+practice"), never as bare percentages, and feed it back into mentor behavior.
+Files I expect to touch: supabase/functions/chat/index.ts, a migration for the
+evidence tables, teacher console surfaces, docs/, tests.
+Notes: first, testing whether the Supabase MCP connector can deploy edge functions —
+the CI token is still expired, and if MCP deploy works the whole backend freeze lifts
+(R85's provider switch and R89's legibility fix are merged and waiting).
+
+Summary: R90 — the cognition ledger, LIVE end to end. The owner's rubric brief
+("never 'Ahmed scored 63%'") became: a NEW cognition-scorer edge function that reads
+the transcript chat already writes and judges each constructed response against the
+rubric IN THE CONTEXT of the assistance immediately before it (S0-S5); two tables
+(cognition_turn_scores, cognition_profiles) with teacher-scoped RLS; and a Thinking
+tab on StudentDetail rendering narrative + eight 0-4 dimension bars + the scaffold
+trend + response-by-response notes. No column, note or narrative may hold a single
+percentage — pinned.
+THE DEPLOY FREEZE PARTIALLY LIFTED. The Supabase MCP connector CAN deploy edge
+functions and apply migrations (CI's token is still dead). The ceiling is per-call
+message size: cognition-scorer (28KB) ships fine; curriculum-admin (181KB) and chat
+do NOT fit — those still wait on the token rotation. A deploy-probe-r90 function
+(inert) proved the channel; the migration + scorer v3 are live in production.
+VERIFIED AGAINST PRODUCTION, not just the mock: a throwaway teacher account (created
+and deleted in-database; its JWT never left postgres — pg_net did the calls) scored
+the owner's demo student on camp-cn-l2. 12 responses judged by claude-opus-5. The
+ledger behaves as the rubric demands: an S5 turn scored independence 1 ("essentially
+an echo of the terminology the tutor had supplied one sentence earlier"), navigation
+turns got NULLs not zeros, notes name precise gaps (nasal retinal fibres;
+anosmia/hyposmia). Those 12 rows are kept — open the demo student's Thinking tab on
+the cranial-nerves lesson 2 and the profile is already there.
+TWO LIVE API FINDS, both fixed and pinned: the Claude 5 family rejects (1) the
+temperature parameter and (2) assistant-message prefill. R85's curriculum-admin
+Anthropic path used BOTH — every authoring call would have failed the day it
+deployed. Fixed in the repo (chat's recipe: no sampling params, no prefill,
+fence-tolerant JSON extraction); ships with the token rotation.
+Files changed: supabase/functions/cognition-scorer/index.ts (new, deployed v3),
+supabase/migrations/20260831120000_r90_cognition_ledger.sql (new, applied),
+supabase/functions/curriculum-admin/index.ts (temperature + prefill fixes),
+docs/COGNITION.md (new — the rubric -> system map), frontend: lib/api.ts +
+lib/supabase.ts (cognition client), console/CognitionPanel.tsx (new),
+console/StudentDetail.tsx (Thinking tab), tests/test_r90_cognition.py (new, 21 pins).
+Tests run: python 1370 green / 4 skips; tsc clean; eslint 0 errors; vite build ok;
+deno check clean on both functions; live probe end to end; Thinking tab walked
+offline against the mock (narrative, 7 bars + one null dash, falling scaffold label,
+no % anywhere, 0 page errors).
+Remaining concerns: scoring is teacher-triggered only (no scheduled sweep — pg_cron
+is available but unwired); the scorer defaults to claude-opus-5 (ANTHROPIC_MODEL_SCORER
+env overrides; one batched call per press, but a whole class is ~30 calls — cost is a
+knob the owner may want cheaper); rubric §19 (the profile steering the MENTOR),
+§10 transfer tasks and §11 retention checks are designed-for but not built — §19 is a
+chat/index.ts change, blocked on the token. The walk harness still lives only in the
+session scratchpad.
+Suggested next task: wire §19 — the world brief reads cognition_profiles and the
+standing rules gain the rubric's responses (weak retrieval -> retrieval prompts
+first; low independence -> reduce assistance). It is a chat change: rotate the token
+first, or accept that it lands code-ready and dark.

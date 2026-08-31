@@ -3022,3 +3022,38 @@ on the token.
 The three organizations all link the same shared courses (Demo Org, Pressure Test
 Academy, Pilot School), so no single organization can be given ownership of them
 without taking them from the other two. That is why R89 changed no data.
+
+## R90 — the cognition ledger: measure the thinking, not the answers
+
+THE RUBRIC BECAME A JUDGE, NOT A FORMULA. The owner's brief is explicit that "Ahmed
+scored 63%" is the failure mode. So nothing computes a composite: a separate
+cognition-scorer edge function reads the transcript and judges each constructed
+response on the rubric's eight dimensions (0-4 or NULL — a navigation turn is not a
+zero), classifies the assistance immediately before it (S0-S5), and writes one
+teacher sentence per response plus a narrative per lesson with one concrete next
+move. The teacher UI renders dimensions, trend and sentences; no percentage exists
+to render.
+
+SEPARATE FROM CHAT, ON PURPOSE AND BY NECESSITY. The mentor teaches; the assessor
+judges. Scoring off the turn path costs no latency, re-runs idempotently
+(unique turn_id x rubric_version), and can re-version without touching the lesson
+loop. Necessity: the deploy channel that works today (the MCP connector) has a
+per-call size ceiling — a new 28KB function ships; 181KB curriculum-admin and chat
+do not. The freeze is now PARTIAL: migrations and small functions deploy live;
+the two big functions still wait on the token rotation.
+
+PROVEN IN PRODUCTION BEFORE SHIPPING THE UI. A disposable teacher account (created
+in-database, JWT never leaving postgres — pg_net made every call, then account,
+scratch and response rows were deleted) scored the demo student's cranial-nerves
+lesson: 12 responses through claude-opus-5. The rubric's core principle held on
+real data — a response following a worked answer (S5) scored independence 1 with
+"essentially an echo of the terminology the tutor had supplied one sentence
+earlier", which is exactly the distinction the whole document exists to make.
+
+THE PROBE PAID FOR ITSELF TWICE: the Claude 5 family rejects BOTH the temperature
+parameter and assistant-message prefill. R85's authoring path (merged, undeployed)
+used both — every teacher authoring call would have failed with a raw API error the
+day the token was rotated and v43 deployed. Fixed now, pinned past comments (the
+pin that matched its own explanatory comment is this session's third such lesson),
+using the live chat function's recipe: firm JSON instructions plus fence-tolerant
+extraction.
