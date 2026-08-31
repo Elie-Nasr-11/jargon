@@ -632,13 +632,20 @@ async function courseScopeForLesson(config: Config, lessonId: string): Promise<{
     config,
     `courses?id=eq.${encodeURIComponent(String(version.course_id))}&select=id,subject_id,organization_id&limit=1`,
   );
-  if (!course || !course.organization_id) throw new Error("Course organization scope was not found.");
+  if (!course) throw new Error("Lesson course was not found.");
+  // R89: a course with NO owning organization is a shared book, which is a state R50
+  // already designed for — assertCanAuthor turns an empty organizationId into the
+  // sentence that tells a teacher what to do ("make a copy for this class"). Throwing
+  // here pre-empted that with a raw internal string, and since every course linked to
+  // a class in this product is a shared book, "Course organization scope was not
+  // found." is what a teacher saw for every save, publish and draft. Let the
+  // authorization step speak.
   return {
     subjectId: String(course.subject_id),
     courseId: String(course.id),
     courseVersionId: String(version.id),
     unitId: String(unit.id),
-    organizationId: String(course.organization_id),
+    organizationId: course.organization_id ? String(course.organization_id) : "",
   };
 }
 

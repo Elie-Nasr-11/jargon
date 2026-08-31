@@ -9,6 +9,7 @@ import { BookOpen, Check, Loader2 } from "lucide-react";
 import { AutoTextarea } from "@/components/AutoTextarea";
 import { SelectionRefine } from "@/features/teacher/assist/SelectionRefine";
 import { useFieldProposal } from "@/features/teacher/assist/useFieldProposal";
+import type { AssistScope } from "@/features/teacher/assist/scope";
 import { OverflowMenu, type OverflowAction } from "@/components/OverflowMenu";
 import { bookSourceFor, bookSourceLabel } from "@/features/teacher/bookSource";
 import type { LessonMetaFields } from "@/features/teacher/lesson/lessonMeta";
@@ -16,6 +17,7 @@ import type { Lesson } from "@/lib/types";
 
 export function LessonHeader({
   lesson,
+  assistScope,
   fields,
   onField,
   bookPages,
@@ -27,6 +29,8 @@ export function LessonHeader({
   actions,
 }: {
   lesson: Lesson;
+  /** Shared by both assist mechanisms on this screen — see assist/scope.ts. */
+  assistScope: AssistScope;
   fields: LessonMetaFields;
   onField: <K extends keyof LessonMetaFields>(field: K, value: LessonMetaFields[K]) => void;
   bookPages: Map<string, { first: number; last: number }>;
@@ -52,6 +56,7 @@ export function LessonHeader({
     source || (fields.title.trim() ? `the title "${fields.title.trim()}"` : "");
   const objective = useFieldProposal({
     field: "lesson_objective",
+    scope: assistScope,
     lessonId: lesson.id,
     current: fields.objective,
     origin: objectiveOrigin,
@@ -98,7 +103,7 @@ export function LessonHeader({
         <div className="flex items-start gap-2">
           <SelectionRefine
             field="lesson_title"
-            lessonId={lesson.id}
+            scope={assistScope}
             value={fields.title}
             onChange={(next) => onField("title", next)}
             disabled={busy}
@@ -121,7 +126,7 @@ export function LessonHeader({
         <div className="flex items-start gap-2">
           <SelectionRefine
             field="lesson_objective"
-            lessonId={lesson.id}
+            scope={assistScope}
             value={fields.objective}
             onChange={(next) => onField("objective", next)}
             disabled={busy}

@@ -24,6 +24,7 @@ import {
   type AssistSuggestion,
   type AssistTarget,
 } from "@/features/teacher/assist/AskJargon";
+import type { AssistScope } from "@/features/teacher/assist/scope";
 import { SelectInput } from "@/features/teacher/authoring/fields";
 import { bookSourceFor, bookSourceLabel } from "@/features/teacher/bookSource";
 import { AssessmentManager } from "@/features/teacher/console/AssessmentManager";
@@ -33,6 +34,7 @@ import type { AssessmentFormValues } from "@/features/teacher/console/Assessment
 import type { AssignmentFormValues } from "@/features/teacher/console/AssignmentManager";
 import type { ResourceFormValues } from "@/features/teacher/console/ResourceManager";
 import { LessonHeader } from "@/features/teacher/lesson/LessonHeader";
+import { lessonBrief } from "@/features/teacher/lesson/lessonBrief";
 import { LessonMaterials } from "@/features/teacher/lesson/LessonMaterials";
 import { LessonPreview } from "@/features/teacher/lesson/LessonPreview";
 import { LessonSettings } from "@/features/teacher/lesson/LessonSettings";
@@ -201,6 +203,52 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
     [meta.fields?.objective, meta.fields?.title],
   );
 
+  // R89: the assistant asks "do you teach this class?", not "do you own this book?".
+  // Every course linked to a class here is a shared book with no owning organization,
+  // and a lesson-scoped draft is refused for all of them — so the request carries the
+  // CLASS and its organization, and the grounding comes from the screen. The lesson id
+  // is the fallback for the case the class summary has not loaded, so a scope is never
+  // absent (which is the R88 failure).
+  const assistScope = useMemo<AssistScope>(() => {
+    const brief = lessonBrief({
+      data: authoring.data,
+      lesson,
+      unit: authoring.unit,
+      steps,
+      live: {
+        title: meta.fields?.title ?? "",
+        objective: meta.fields?.objective ?? "",
+        tutorPrompt: meta.fields?.tutorPrompt,
+      },
+    });
+    const organizationId = authoring.classSummary?.organization_id ?? "";
+    return organizationId
+      ? { organizationId, classId, brief }
+      : { lessonId: lessonId, classId, brief };
+  }, [
+    authoring.data,
+    authoring.unit,
+    authoring.classSummary,
+    lesson,
+    steps,
+    meta.fields,
+    classId,
+    lessonId,
+  ]);
+
+  // R89: a lesson whose course has no owning organization is a SHARED book. Saving one
+  // is refused by curriculum-admin, and until now this screen said nothing — it looked
+  // like an editor and behaved like a wall. The Course screen already owns the working
+  // way out ("Make a copy for this class"), so this points there rather than growing a
+  // second fork button that would strand the teacher on a lesson id the copy replaces.
+  const sharedBook = useMemo(() => {
+    const version = (authoring.data?.courseVersions ?? []).find(
+      (row) => row.id === authoring.unit?.course_version_id,
+    );
+    const course = (authoring.data?.courses ?? []).find((row) => row.id === version?.course_id);
+    return course && !course.organization_id ? course.title : null;
+  }, [authoring.data, authoring.unit]);
+
   const assistSuggestions = useMemo<AssistSuggestion[]>(
     () => [
       {
@@ -278,12 +326,7 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
     <TeacherShell
       assistant={
         <AskJargon
-          context={{
-            kind: "Lesson",
-            name: lesson.title || "Untitled lesson",
-            lessonId: lesson.id,
-            classId,
-          }}
+          context={{ kind: "Lesson", name: lesson.title || "Untitled lesson", ...assistScope }}
           targets={assistTargets}
           suggestions={assistSuggestions}
           actions={[
@@ -313,11 +356,34 @@ export function LessonScreen({ classId, lessonId }: { classId: string; lessonId:
         backLabel={authoring.unit?.title || "Back to the course"}
       >
         <div className="grid gap-4 pb-20">
+          {sharedBook ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-card border border-border bg-depth-sub px-3.5 py-2.5 text-meta text-muted-foreground">
+              <BookOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
+              <span className="min-w-0 flex-1">
+                “{sharedBook}” is a shared book — edits here are refused until this class has its
+                own copy. Jargon can still draft for you; nothing it proposes is saved.
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  void navigate({
+                    to: "/teacher/class/$classId",
+                    params: { classId },
+                    search: { tab: "course" },
+                  })
+                }
+                className="btn btn-secondary btn-sm shrink-0"
+              >
+                Make a copy for this class
+              </button>
+            </div>
+          ) : null}
           {/* The header sticks, so the band behind it has to be opaque — otherwise the
               steps scroll through the gap between the header card and the next one. */}
           <div className="sticky top-0 z-20 -mt-2 bg-background pb-2 pt-2">
             <LessonHeader
               lesson={lesson}
+              assistScope={assistScope}
               fields={meta.fields}
               onField={meta.set}
               bookPages={authoring.bookPages}

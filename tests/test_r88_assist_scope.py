@@ -27,6 +27,7 @@ ASK = (SRC / "features" / "teacher" / "assist" / "AskJargon.tsx").read_text(enco
 SCREEN = (SRC / "features" / "teacher" / "lesson" / "LessonScreen.tsx").read_text(encoding="utf-8")
 HEADER = (SRC / "features" / "teacher" / "lesson" / "LessonHeader.tsx").read_text(encoding="utf-8")
 AUTO = (SRC / "components" / "AutoTextarea.tsx").read_text(encoding="utf-8")
+SCOPE = (SRC / "features" / "teacher" / "assist" / "scope.ts").read_text(encoding="utf-8")
 
 
 def call_arguments(source: str, callee: str) -> list[str]:
@@ -67,32 +68,50 @@ class EveryDraftIsScopedTests(unittest.TestCase):
         # curriculum-admin: `if (!organizationId) throw new Error("lesson_id or
         # organization_id is required.")`. This is that rule, on the client side of
         # the wire, checked at every call rather than at the one that broke.
+        #
+        # R89 routed every call through draftScopeArgs, so a call may satisfy this by
+        # naming the ids itself OR by spreading the one funnel — which the next test
+        # pins to name them. Keying only on the literal ids was this pin failing the
+        # same way it has failed three releases running: bound to a shape, not a rule.
         for path, arguments in draft_call_sites():
             with self.subTest(path=str(path.relative_to(ROOT))):
                 self.assertTrue(
-                    "lessonId" in arguments or "organizationId" in arguments,
+                    "lessonId" in arguments
+                    or "organizationId" in arguments
+                    or "draftScopeArgs(" in arguments,
                     f"draftTextField in {path.name} sends no scope — production "
                     f"refuses it:\n{arguments}",
                 )
 
-    def test_the_panel_takes_the_scope_as_a_type_not_a_convention(self):
+    def test_the_funnel_itself_sends_the_scope(self):
+        # The one place the ids reach the wire, so the test above can trust the spread.
+        args = call_arguments(SCOPE, "draftScopeArgs")
+        self.assertTrue(args, "draftScopeArgs is gone — the funnel the pin above trusts")
+        body = SCOPE[SCOPE.index("export function draftScopeArgs") :]
+        self.assertIn("lessonId: scope.lessonId", body)
+        self.assertIn("organizationId: scope.organizationId", body)
+        self.assertIn("classId: scope.classId", body)
+
+    def test_the_scope_is_a_type_not_a_convention(self):
         # The union is the server's rule expressed so a call site CANNOT omit it:
         # dropping the ids from LessonScreen is a compile error, not a red bubble.
-        self.assertIn("export type AssistContext", ASK)
-        self.assertIn("| { lessonId: string; organizationId?: string }", ASK)
-        self.assertIn("| { organizationId: string; lessonId?: string }", ASK)
-        self.assertIn("context: AssistContext;", ASK)
+        self.assertIn("export type AssistScope", SCOPE)
+        self.assertIn("| { organizationId: string; lessonId?: string }", SCOPE)
+        self.assertIn("| { lessonId: string; organizationId?: string }", SCOPE)
+        self.assertIn("export type AssistContext = { kind: string; name: string } & AssistScope;", ASK)
 
     def test_the_lesson_screen_supplies_it(self):
-        self.assertRegex(SCREEN, r"context=\{\{[^}]*lessonId: lesson\.id")
+        self.assertRegex(SCREEN, r"const assistScope = useMemo<AssistScope>")
+        self.assertIn("...assistScope }}", SCREEN)
 
-    def test_selection_refine_cannot_be_mounted_unscoped_either(self):
-        # It was `lessonId?: string | null` — the same hole, one call site away.
-        refine = (SRC / "features" / "teacher" / "assist" / "SelectionRefine.tsx").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("lessonId: string;", refine)
-        self.assertNotIn("lessonId?: string | null;", refine)
+    def test_no_assist_mechanism_can_be_mounted_unscoped(self):
+        # SelectionRefine once took `lessonId?: string | null` — the same hole, one
+        # call site away. Every mechanism now takes the union, so none can.
+        for name in ("SelectionRefine.tsx", "useFieldProposal.ts"):
+            with self.subTest(module=name):
+                text = (SRC / "features" / "teacher" / "assist" / name).read_text(encoding="utf-8")
+                self.assertIn("scope: AssistScope;", text)
+                self.assertNotIn("lessonId?: string | null;", text)
 
 
 class ATypedRequestGoesWhereItSaysTests(unittest.TestCase):

@@ -12611,3 +12611,52 @@ live at v42 on OpenAI until SUPABASE_ACCESS_TOKEN is rotated.
 Suggested next task: move the walk harness (mock backend + scripts) into the repo so
 the "does the harness agree with production?" question has an answer that survives a
 session, then declare assist targets on the Course and Today screens.
+
+## Claude -> Codex / Human - 2026-08-31 11:40
+
+Status: Finished
+Task: R89 — the owner's second screenshot. Ask Jargon now sends its scope (R88) and
+the server refuses it: "Course organization scope was not found."
+Summary: `courseScopeForLesson` throws for any lesson whose COURSE has no owning
+organization. Queried production: 11 of 22 courses are org-less, and every course
+linked to a class is one of them — so that refusal covers the whole library, and it
+covers every lesson-scoped action, not only the assistant. save_lesson_meta,
+publish, archive, duplicate_lesson and the artifact path all route through the same
+function, and it throws BEFORE assertCanAuthor, so even a platform admin is refused.
+The assistant is simply where the owner happened to press first.
+Two fixes. (1) The assistant asks the right question: not "does this teacher own the
+book?" but "does this teacher teach this class?" — organization_id + class_id, which
+is exactly how duplicate_course has always authorized, and which works against the
+DEPLOYED v42 with no backend change. The grounding moves to the client (lessonBrief),
+which is better than the server's: it reads the live fields, so a title drafted
+against an objective the teacher just typed sees that objective. (2) The backend stops
+pre-empting authorization — an org-less course returns an empty organizationId, and
+R50's designed sentence ("this is a shared book … make a copy for this class") is
+what a teacher reads. That one needs a deploy. The lesson screen now says the same
+thing itself and points at the Course screen, which already owns the working copy
+button, so the wall has a door today either way.
+Files changed: assist/scope.ts (new — AssistScope + draftScopeArgs, the one funnel),
+lesson/lessonBrief.ts (new), assist/AskJargon.tsx, assist/SelectionRefine.tsx,
+assist/useFieldProposal.ts (all three take the scope, none carries its own idea of
+one), lesson/LessonScreen.tsx (builds the scope, shows the shared-book notice),
+lesson/LessonHeader.tsx, curriculum-admin/index.ts (courseScopeForLesson),
+tests/test_r89_shared_book.py (new), tests/test_r88_assist_scope.py (six pins
+re-expressed as the rule rather than the call's shape — they broke on the funnel,
+which is failure mode 9 for the fourth release running).
+Tests run: python 1350 green / 4 skipped; tsc clean; eslint 0 errors; vite build
+succeeds; deno check on curriculum-admin clean (one pre-existing harness artifact).
+Walked at 1440: the panel, selection-refine and the arrival proposal all round-trip;
+the shared-book notice and its copy button render. The mock now models the refusal —
+putting the lesson-scoped call back reproduces "Course organization scope was not
+found." offline, so both of the owner's screenshots are now reproducible in the walk.
+Remaining concerns: SAVE IS STILL REFUSED on every shared book. Fix (2) only makes
+that refusal legible; it does not make saving work, and it cannot ship at all until
+SUPABASE_ACCESS_TOKEN is rotated (curriculum-admin is still v42 from R85). The
+owner has two ways out and it is their call: fork each class's courses (the designed
+path, already working via "Make a copy for this class"), or give the shared courses
+an owning organization — the second is one UPDATE but the courses are linked from
+classes in two different organizations, so it needs a decision about who owns them.
+Save and Publish are deliberately left enabled: platform admins can still author
+shared books once the deploy lands, and disabling them would take that away.
+Suggested next task: the owner's decision on shared-course ownership, then move the
+walk harness into the repo (still only in the session scratchpad).
