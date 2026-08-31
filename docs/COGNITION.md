@@ -202,3 +202,68 @@ inputs that work fine on the next attempt. Three things came out of that:
 
 The batch of 8 and the 16000-token budget stayed too — not because they fixed
 anything, but because they are the more comfortable numbers to have been wrong with.
+
+
+## R93 — the whole room
+
+R90 reads one student in one lesson. R92 makes those readings appear on their own. R93
+is the first surface that reads ACROSS a class, and the thing it exists to resist is the
+class average: **"this room is at 2.7 / 4" is §15's failure one level up**, and there is
+nothing a teacher can do with it on Monday.
+
+So the room is arranged by what to DO. One sentence saying what the room as a whole
+needs, then students grouped by the move §19 would make for each of them:
+
+| group | what it means | what the teacher is told |
+|---|---|---|
+| **Leaning on the tutor** | independence ≤ 2 while recent scaffolding ≥ S3 | they need less help, not more |
+| **needs: <dimension>** | the weakest dimension, rubric order breaking ties | the §19 move, said to a person |
+| **Ready for harder ground** | retrieval, reasoning and independence all ≥ 3 | give them something the lesson has not covered |
+| **Holding steady** | nothing weak, not yet independent | leave them be |
+| **Not read yet** | under three judged responses | named, never silently dropped |
+
+Alarm first, opportunity later: a teacher reading top to bottom meets what is going
+wrong before what is going well. The headline follows §19's own precedence too — a room
+being carried by the tutor is reported as *"an assistance problem before it is a content
+one"* even when some dimension is weaker.
+
+### The three rules that keep it honest
+
+- **The view and the mentor cannot disagree.** The grouping uses `learnerSteer`'s own
+  thresholds (3-response floor, weak ≤ 2, proficient ≥ 3) and its own priority order. A
+  room view saying "these four are leaning on the tutor" while the mentor treats them as
+  fine would be worse than no view. `chat` and `cognition-scorer` cannot import each
+  other, so `tests/test_r93_class_room.py` reads BOTH files and fails if they drift.
+- **The room is the roster, not the scored rows.** Everyone active in the class appears,
+  read or not. A view built from the profiles table would quietly shrink to whoever had
+  been scored — losing exactly the students who most need attention.
+- **Nothing is collapsed into one number.** A student keeps all eight dimensions; the
+  room summary holds no dimension VALUE at all, only counts of students. Neither
+  rendering file reads a dimension value: what a teacher sees is which group someone is
+  in and what to do about it, with the eight numbers one click away on the student,
+  where a lesson and evidence sit beside them.
+
+### Scope, and the bug the probe caught
+
+A class reports on ITS courses. Students here are commonly in several classes at once,
+so an unscoped room would blend a history lesson's reasoning into the biology teacher's
+reading of the same child.
+
+Getting from a course to its lessons is **three hops** — `courses → course_versions →
+units → lessons`; `lessons` carries no `course_id`. The first implementation guessed one
+hop, and the live probe answered `column "course_id" does not exist`. That would have
+400'd the entire class view for every class that links a course — which is nearly all of
+them — and no offline test would have noticed. The scope is then applied in memory
+rather than in the query string, so a course with a hundred lessons cannot fail the
+request on URL length.
+
+### Verification
+
+Deno-checked; 26 source pins; 12 executable property tests over the real `room.ts`
+(group order, needs-splitting, no-student-dropped, not-a-ranking, every headline
+branch, and that no headline can carry a score). Live against production, on a probe
+class built for the purpose and deleted afterwards: a teacher of the class got the room
+(dependent / mastered / needs:reasoning / unread, all correct), a teacher of another
+class in the same organization got **403**, an anon caller got **403**, and a profile
+belonging to a lesson outside the class's course was correctly excluded — the student's
+totals stayed at their in-course values instead of being dragged down by it.

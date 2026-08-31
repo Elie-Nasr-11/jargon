@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchClassCourseLinks } from "@/lib/api";
 import { relTime } from "@/features/teacher/console/derive";
 import { ClassDigestCard } from "@/features/teacher/ClassDigestCard";
+import { ClassRoomPanel } from "@/features/teacher/cognition/ClassRoomPanel";
 import { liveNowRows, toMarkRows } from "@/features/teacher/today/needsYou";
 import type { Lesson, Profile, TeacherDashboardData } from "@/lib/types";
 
@@ -67,6 +68,11 @@ export function TodayScreen({
       {/* What the class learned. The reporting-back half of the pitch, and the
           reason this screen is worth opening on a quiet day. */}
       <ClassDigestCard classId={classId} />
+
+      {/* R93: what the class LEARNED, one level below the digest's what-they-did.
+          It sits above the two live sections because it is the thing a teacher plans
+          tomorrow from, where those two are about the next ten minutes. */}
+      <ClassRoomPanel classId={classId} profilesById={profilesById} onOpenStudent={onOpenStudent} />
 
       <section>
         <h4 className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">

@@ -6,6 +6,86 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-31 (R93: the class-level cognition view)
+
+Status: Finished
+Task: "build the class-level view so a teacher sees the whole room." R90/R91/R92 give
+per-(student, lesson) profiles that now accumulate on their own; nothing yet reads the
+ROOM. A class view that says "class average 2.7" would be the "63%" failure one level
+up, so this groups students by the move §19 would make for them and names what the room
+as a whole is weak at.
+
+Files I expect to touch:
+- supabase/functions/cognition-scorer/index.ts (new class_view action + class-level
+  authorization; deployable, unlike chat/curriculum-admin)
+- frontend/src/lib/api.ts (fetchClassCognition + types)
+- frontend/src/features/teacher/today/{ClassCognitionPanel.tsx,roomCognition.ts} (new)
+- frontend/src/features/teacher/today/TodayScreen.tsx (wire it into the landing)
+- tests/test_r93_class_room.py (new), docs/COGNITION.md
+
+Summary: a "How the room is thinking" panel on the class landing (Today), fed by a new
+`class_view` action on cognition-scorer (deployed v9). One sentence saying what the ROOM
+needs, then students grouped by the move §19 would make for each of them — leaning on
+the tutor, needs <dimension>, ready for harder ground, holding steady, not read yet —
+each name clicking through to that student's Thinking tab. The obvious implementation
+(mean the dimensions across the roster) would have been the rubric's own §15 failure one
+level up, so nothing here averages anything: a student keeps eight dimensions, the room
+summary holds only counts of students, and neither rendering file reads a dimension
+value at all.
+
+Three things carry it:
+- The view and the mentor cannot disagree. The grouping uses learnerSteer's own floor
+  (3 responses), thresholds (weak <= 2, proficient >= 3) and priority order. chat and
+  cognition-scorer cannot import each other, so a pin reads BOTH files and fails on
+  drift — the invariant this release exists to protect.
+- A room question gets a room-level door. assertCanViewClass asks once, through the same
+  three doors as the per-student check; a teacher who could see 11 of 12 students would
+  otherwise get a view that quietly lied about the twelfth.
+- The room is the roster, not the scored rows. Everyone active appears, read or not —
+  building it from cognition_profiles would have shrunk the room to whoever had been
+  scored, losing exactly the students who most need attention.
+
+THE LIVE PROBE CAUGHT A REAL BUG the whole offline suite could not: `lessons` has no
+`course_id`. The hierarchy is courses -> course_versions -> units -> lessons, and the
+single-hop guess answered `column "course_id" does not exist` — which would have 400'd
+this view for every class that links a course, i.e. nearly all of them. Fixed as a
+three-hop walk, and the scope is applied in memory rather than in the query string so a
+course with a hundred lessons cannot fail the request on URL length.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (class_view, the §19 rule
+table, assertCanViewClass, lessonsOfCourses, rollUpStudent, summarizeRoom — deployed
+v9); frontend/src/features/teacher/cognition/{labels.ts,room.ts,ClassRoomPanel.tsx}
+(new); frontend/src/features/teacher/today/TodayScreen.tsx; frontend/src/lib/api.ts;
+frontend/src/features/teacher/console/CognitionPanel.tsx (its private copy of the
+dimension labels retired in favour of the shared one); tests/test_r93_class_room.py +
+tests/{room_view.test.ts,test_r93_room_view.py} (new); docs/COGNITION.md, DECISIONS.md.
+
+Tests run: 1436 python OK (4 skips), including 12 EXECUTABLE property tests over the
+real room.ts (group order, needs-splitting, nobody dropped, not-a-ranking, every
+headline branch, no headline can carry a score); tsc, eslint and vite build clean;
+`deno check` on the scorer clean. Live, on a probe class created and then deleted: the
+class's teacher got the room with every branch grouped correctly, a teacher of another
+class in the same org got 403, an anon caller got 403, and a profile from a lesson
+outside the class's course was correctly excluded (the student's totals stayed at their
+in-course values instead of being dragged down by it). Probe rig fully removed —
+verified 0 probe users, classes, profiles and tables remaining.
+
+Remaining concerns:
+- Fifth release running that a pin broke by describing a shape instead of a rule: "no
+  percentage anywhere" fired on the judge prompt's own "never a percentage" instruction.
+  Now structural. This is a habit worth naming, not a run of bad luck.
+- The room reads ONE class at a time. A teacher with five classes has no cross-class
+  view; that is deliberate for now (the pedagogy is per-room) but is the obvious next ask.
+- SUPABASE_ACCESS_TOKEN is still expired: R85, R89 and R91 remain merged-but-undeployed.
+  R90, R92 and R93 shipped only because the MCP channel deploys small functions.
+
+Suggested next task: rotate the access token — it now gates FOUR releases, and it is the
+one thing standing between these profiles and the mentor actually steering on them.
+Failing that: sections. The room ignores them, and a teacher who streams a class will
+want the groups within a section rather than across the whole roster.
+
+
+
 ## Claude -> Codex / Human - 2026-08-31 (R92: the scoring runs itself)
 
 Status: Finished

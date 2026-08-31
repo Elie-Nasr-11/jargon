@@ -202,6 +202,47 @@ async function assertCanViewStudent(
   throw new Error("Access to this student's work is required.");
 }
 
+// R93: the CLASS door. assertCanViewStudent asks "may this actor see this person?",
+// which is the wrong question for a room — a teacher who could see 11 of 12 students
+// would get a view that quietly lied about the twelfth. This asks the room question
+// once, and the roster it authorizes is the roster the view reports on.
+//
+// Same three doors as the per-student check, so the two can never disagree about who
+// a teacher is: platform admin, an active teacher membership in THIS class, or org
+// admin of the organization the class belongs to.
+async function assertCanViewClass(
+  config: Config,
+  actorId: string,
+  classId: string,
+): Promise<void> {
+  const platformAdmin = await selectFirst(
+    config,
+    `platform_admins?user_id=eq.${enc(actorId)}&select=user_id&limit=1`,
+  );
+  if (platformAdmin) return;
+
+  const teaches = await selectFirst(
+    config,
+    `class_memberships?class_id=eq.${enc(classId)}&user_id=eq.${enc(actorId)}&role=eq.teacher&status=eq.active&select=id&limit=1`,
+  );
+  if (teaches) return;
+
+  const room = await selectFirst(
+    config,
+    `classes?id=eq.${enc(classId)}&select=organization_id&limit=1`,
+  );
+  const orgId = cleanText(room?.organization_id);
+  if (orgId) {
+    const orgAdmin = await selectFirst(
+      config,
+      `organization_memberships?organization_id=eq.${enc(orgId)}&user_id=eq.${enc(actorId)}&role=eq.org_admin&status=eq.active&select=id&limit=1`,
+    );
+    if (orgAdmin) return;
+  }
+
+  throw new Error("Access to this class is required.");
+}
+
 // R92: the SCHEDULER's door. A cron tick has no user behind it, so it cannot pass
 // assertCanViewStudent — and it does not need to: a sweep returns COUNTS ONLY and
 // never student content, so there is no one to authorize a view for. It presents a
@@ -227,6 +268,36 @@ async function isSweepCaller(config: Config, req: Request): Promise<boolean> {
   ).catch(() => null);
   return secretsMatch(presented, cleanText(row?.sweep_key));
 }
+
+// ---------------------------------------------------------------------------
+// R93: the §19 rule table, and why it lives here.
+//
+// The class view groups students by the move the mentor would MAKE for them — not by
+// rank, and not by an average. That only means anything if the grouping agrees with
+// what chat's learnerSteer actually does: a room view saying "these four are leaning
+// on the tutor" while the mentor treats them as fine would be worse than no view.
+//
+// So these are learnerSteer's own numbers and its own priority order, and
+// tests/test_r93_class_room.py reads BOTH files and fails if they drift apart.
+// ---------------------------------------------------------------------------
+
+// Three judged responses is the floor: below it a single navigation turn or one bad
+// answer would swing the whole reading.
+const STEER_FLOOR = 3;
+// A dimension at or below 2 is weak; at or above 3 is proficient.
+const WEAK_AT_OR_BELOW = 2;
+const PROFICIENT_AT_OR_ABOVE = 3;
+// Weakest first, ties broken in the rubric's own order — retrieval leads because
+// everything else is built on it.
+const STEER_PRIORITY = [
+  "retrieval",
+  "reasoning",
+  "elaboration",
+  "vocabulary",
+  "organization",
+  "expression",
+  "metacognition",
+] as const;
 
 // ---------------------------------------------------------------------------
 // What counts as a constructed response.
@@ -630,6 +701,235 @@ async function runScoring(
   return { scored: inserts.length, remaining, rows: allRows };
 }
 
+// ---------------------------------------------------------------------------
+// R93: the whole room.
+//
+// A class view that reported "class average 2.7 / 4" would be exactly the failure the
+// rubric exists to prevent (§15), one level up. So this reports the only two things a
+// teacher can act on: what the ROOM is weak at (a teaching decision — you reteach nine
+// students, you do not tutor them), and which students need which move (a grouping,
+// never a ranking). Students with nothing read yet are reported as such: a room view
+// that silently omitted them would lie about the size of the room.
+// ---------------------------------------------------------------------------
+
+type RoomStudent = {
+  user_id: string;
+  group: "dependent" | "mastered" | "needs" | "steady" | "unread";
+  focus: string | null;
+  dims: DbRow;
+  turns_scored: number;
+  lessons_read: number;
+  scaffold_recent: number | null;
+  scaffold_trend: string | null;
+  latest_lesson_id: string;
+  updated_at: string;
+};
+
+function numOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+// One student, across every lesson of this class they have been read in. Each stored
+// profile is already a median over that lesson's responses, so this is a median of
+// medians — the same statistic R90 chose, applied one level out, and for the common
+// case of a single lesson it is simply that lesson's value.
+function rollUpStudent(userId: string, profiles: DbRow[]): RoomStudent {
+  const freshest = [...profiles].sort((a, b) =>
+    String(b.updated_at || "").localeCompare(String(a.updated_at || "")),
+  )[0];
+
+  const dims: DbRow = {};
+  for (const dim of DIMENSIONS) {
+    const values = profiles
+      .map((row) => numOrNull(row[dim]))
+      .filter((value): value is number => value !== null);
+    dims[dim] = median(values);
+  }
+
+  const turnsScored = profiles.reduce((sum, row) => sum + (Number(row.turns_scored) || 0), 0);
+  // How much help they are getting LATELY: the freshest lesson's recent half, not an
+  // average over lessons they finished weeks ago.
+  const recent = numOrNull(freshest?.scaffold_recent);
+  const earlier = numOrNull(freshest?.scaffold_earlier);
+  const trend =
+    earlier !== null && recent !== null
+      ? recent < earlier
+        ? "falling"
+        : recent > earlier
+          ? "rising"
+          : "steady"
+      : null;
+
+  const dim = (key: string) => numOrNull(dims[key]);
+  const independence = dim("independence");
+  const retrieval = dim("retrieval");
+  const reasoning = dim("reasoning");
+
+  let group: RoomStudent["group"] = "steady";
+  let focus: string | null = null;
+
+  if (turnsScored < STEER_FLOOR) {
+    group = "unread";
+  } else if (
+    // §19's first rule, and the one that outranks the rest: little of the thinking is
+    // theirs AND the tutor has been carrying the turns.
+    independence !== null &&
+    independence <= WEAK_AT_OR_BELOW &&
+    recent !== null &&
+    recent >= PROFICIENT_AT_OR_ABOVE
+  ) {
+    group = "dependent";
+  } else if (
+    // §19's last rule: they own the material on the three dimensions that mean it.
+    retrieval !== null &&
+    retrieval >= PROFICIENT_AT_OR_ABOVE &&
+    reasoning !== null &&
+    reasoning >= PROFICIENT_AT_OR_ABOVE &&
+    independence !== null &&
+    independence >= PROFICIENT_AT_OR_ABOVE
+  ) {
+    group = "mastered";
+  } else {
+    // Weakest first, ties broken in the rubric's own order.
+    const weakest = STEER_PRIORITY.find((key) => {
+      const value = dim(key);
+      return value !== null && value <= WEAK_AT_OR_BELOW;
+    });
+    if (weakest) {
+      group = "needs";
+      focus = weakest;
+    }
+  }
+
+  return {
+    user_id: userId,
+    group,
+    focus,
+    dims,
+    turns_scored: turnsScored,
+    lessons_read: profiles.length,
+    scaffold_recent: recent,
+    scaffold_trend: trend,
+    latest_lesson_id: cleanText(freshest?.lesson_id),
+    updated_at: cleanText(freshest?.updated_at),
+  };
+}
+
+// A lesson does NOT carry its course: the hierarchy is courses -> course_versions ->
+// units -> lessons, so getting from one to the other is three hops. (Written from the
+// schema after a live probe answered `column "course_id" does not exist` — a
+// single-hop guess would have 400'd this view for every class that links a course,
+// which is nearly all of them, and no offline test would have noticed.)
+//
+// EVERY version of a course counts: a student may have worked a lesson that a later
+// version replaced, and their thinking about it is still this class's business.
+async function lessonsOfCourses(config: Config, courseIds: string[]): Promise<Set<string>> {
+  const versions = await selectAll(
+    config,
+    `course_versions?course_id=in.(${courseIds.map(enc).join(",")})&select=id&limit=500`,
+  );
+  const versionIds = versions.map((row) => cleanText(row.id)).filter(Boolean);
+  if (!versionIds.length) return new Set();
+
+  const units = await selectAll(
+    config,
+    `units?course_version_id=in.(${versionIds.map(enc).join(",")})&select=id&limit=2000`,
+  );
+  const unitIds = units.map((row) => cleanText(row.id)).filter(Boolean);
+  if (!unitIds.length) return new Set();
+
+  const lessons = await selectAll(
+    config,
+    `lessons?unit_id=in.(${unitIds.map(enc).join(",")})&select=id&limit=4000`,
+  );
+  return new Set(lessons.map((row) => cleanText(row.id)).filter(Boolean));
+}
+
+async function classView(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const classId = cleanText(body.class_id);
+  if (!classId) throw new Error("class_id is required.");
+  await assertCanViewClass(config, actorId, classId);
+
+  // The roster is the room. Everyone active in it appears in the answer, read or not.
+  const roster = await selectAll(
+    config,
+    `class_memberships?class_id=eq.${enc(classId)}&role=eq.student&status=eq.active&select=user_id`,
+  );
+  const studentIds = Array.from(
+    new Set(roster.map((row) => cleanText(row.user_id)).filter(Boolean)),
+  );
+  if (!studentIds.length) {
+    return json({ status: "ok", class_id: classId, students: [], room: summarizeRoom([]) });
+  }
+
+  // Which lessons count as this class's. An empty link set means NO scoping — the
+  // platform-wide rule (docs/PLATFORM.md class-scoping) — so the room reports every
+  // lesson its students have been read in rather than an empty view.
+  const links = await selectAll(
+    config,
+    `class_courses?class_id=eq.${enc(classId)}&select=course_id`,
+  );
+  const courseIds = links.map((row) => cleanText(row.course_id)).filter(Boolean);
+  const classLessons = courseIds.length ? await lessonsOfCourses(config, courseIds) : null;
+
+  // Profiles are fetched by ROSTER, not by lesson, and the lesson scope is applied
+  // below in memory. A course with a hundred lessons would otherwise put a hundred
+  // ids into a query string, and a request that fails on URL length would fail for
+  // exactly the biggest, most valuable classes.
+  const profiles = await selectAll(
+    config,
+    `cognition_profiles?user_id=in.(${studentIds.map(enc).join(",")})` +
+      `&select=user_id,lesson_id,${DIMENSIONS.join(",")},scaffold_earlier,scaffold_recent,turns_scored,updated_at&limit=2000`,
+  );
+
+  const byStudent = new Map<string, DbRow[]>();
+  for (const row of profiles) {
+    const userId = cleanText(row.user_id);
+    if (!userId) continue;
+    // A class linked to courses reports on THOSE courses. An empty link set means no
+    // scoping — the platform-wide rule — so the room reports every lesson instead.
+    if (classLessons && !classLessons.has(cleanText(row.lesson_id))) continue;
+    const list = byStudent.get(userId) ?? [];
+    list.push(row);
+    byStudent.set(userId, list);
+  }
+
+  const students = studentIds.map((id) => rollUpStudent(id, byStudent.get(id) ?? []));
+  return json({ status: "ok", class_id: classId, students, room: summarizeRoom(students) });
+}
+
+// What the ROOM needs, which is a different question from what any student needs: a
+// dimension weak in nine of twelve is a lesson to reteach, not nine tutorials.
+function summarizeRoom(students: RoomStudent[]): DbRow {
+  const groups: DbRow = { dependent: 0, mastered: 0, needs: 0, steady: 0, unread: 0 };
+  for (const student of students) {
+    groups[student.group] = (Number(groups[student.group]) || 0) + 1;
+  }
+
+  const read = students.filter((student) => student.group !== "unread");
+  const weakest = STEER_PRIORITY.map((dimension) => ({
+    dimension,
+    students: read.filter((student) => {
+      const value = numOrNull(student.dims[dimension]);
+      return value !== null && value <= WEAK_AT_OR_BELOW;
+    }).length,
+  }))
+    // Most-affected first; the rubric's own order breaks ties, because that is the
+    // order in which fixing one helps the next.
+    .filter((row) => row.students > 0)
+    .sort((a, b) => b.students - a.students);
+
+  return {
+    students: students.length,
+    read: read.length,
+    unread: students.length - read.length,
+    weakest,
+    groups,
+  };
+}
+
 // R92: the run log, opened at the start and closed at the end (see sweep). Both
 // halves swallow their own failures — a scheduler that fell over because its own
 // bookkeeping failed would be worse than one that lost a row.
@@ -794,6 +1094,7 @@ Deno.serve(async (req: Request) => {
     if (action === "score_lesson") return await scoreLesson(config, actorId, record);
     if (action === "profile") return await readProfile(config, actorId, record);
     if (action === "list_lessons") return await listLessons(config, actorId, record);
+    if (action === "class_view") return await classView(config, actorId, record);
     return errorResponse("Unsupported cognition-scorer action.", 400);
   } catch (error) {
     const message = errorMessage(error);

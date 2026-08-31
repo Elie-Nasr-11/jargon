@@ -11,6 +11,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Brain, Loader2, RefreshCw } from "lucide-react";
+// R93: one home for the dimension vocabulary — this panel and the class room view
+// render the same eight names, and two copies of a label list drift.
+import { DIMENSION_LABELS } from "@/features/teacher/cognition/labels";
 import { EmptyInline, Panel } from "@/features/teacher/console/chrome";
 import { formatDateTime, lessonName } from "@/features/teacher/classShared";
 import {
@@ -21,18 +24,6 @@ import {
   type CognitionResponse,
 } from "@/lib/api";
 import type { LearningSession, Lesson } from "@/lib/types";
-
-// The rubric's dimension keys, said the way a teacher would say them.
-const DIMENSION_LABELS: Array<{ key: keyof CognitionDims; label: string }> = [
-  { key: "retrieval", label: "Recalls the knowledge" },
-  { key: "organization", label: "Connects ideas" },
-  { key: "reasoning", label: "Reasons with it" },
-  { key: "elaboration", label: "Develops ideas" },
-  { key: "vocabulary", label: "Uses the terms" },
-  { key: "expression", label: "Expresses clearly" },
-  { key: "independence", label: "Thinks independently" },
-  { key: "metacognition", label: "Checks own thinking" },
-];
 
 function DimensionRow({ label, value }: { label: string; value: number | null }) {
   return (
