@@ -83,11 +83,7 @@ not a default to fall into).
 
 ## What is deliberately NOT in R90
 
-- **§19 (the rubric steering the mentor).** That is a `chat/index.ts` change — the
-  world brief gains the student's cognition profile and the standing rules gain the
-  §19 responses (weak retrieval → retrieval prompts before information; low
-  independence → reduce assistance; …). Blocked until SUPABASE_ACCESS_TOKEN is
-  rotated; the ledger this release ships is exactly the input that slice will read.
+- ~~§19 (the rubric steering the mentor)~~ — **built in R91, see below.**
 - **§10 transfer and §11 retention as scheduled tasks.** Both need a task generator
   (a delayed retrieval prompt is a new student-facing surface). The schema already
   distinguishes them: they arrive as new dimension columns/rows later, not a redesign.
@@ -100,3 +96,36 @@ scorer deployed via MCP and smoke-tested live (unauthenticated → 401; a probe 
 account scored a synthetic Pressure-Test student end to end, rows inspected, probe
 removed); the Thinking tab walked offline against the mock backend, which implements
 the same contract.
+
+## §19 — the ledger steers the mentor (R91)
+
+The rubric is explicit that measurement is not the point: *"It should influence how
+Jargon Mentor responds."* So `chat` reads the student's profile for the lesson each
+turn and derives — through the exported, property-tested `learnerSteer` — **at most two
+imperative moves**, which ride the payload's cacheable prefix as `learner` and which the
+system prompt's HOW THIS STUDENT THINKS rules place ABOVE the default help level.
+
+The rubric's own conditionals, in priority order:
+
+| when | the move |
+|---|---|
+| low independence **and** heavy recent scaffolding | REDUCE ASSISTANCE — drop a full rung below normal |
+| retrieval / reasoning / elaboration / vocabulary / organization / metacognition weak | the matching §19 ask, weakest dimension first |
+| expression weak **while reasoning is strong** (§18) | ask them to reformulate — never rewrite it for them |
+| retrieval, reasoning **and** independence all proficient | FADE AND TRANSFER — apply it somewhere new |
+
+Three rules make it safe rather than merely clever:
+
+- **At most two moves.** EXACTLY ONE ASK is a hard rule of this prompt; a mentor handed
+  five weaknesses would ask five things or ignore the list. Weakest first, ties broken
+  in the rubric's own order (retrieval leads — everything else is built on it).
+- **Never a score, never a word of it to the student.** The moves carry no digits and
+  never name the measurement, and the prompt forbids quoting one back ("your
+  elaboration is weak"). A learner experiences only the CHANGE: a question where there
+  would have been a hint.
+- **Additive, never a gate.** Fewer than three judged responses, an absent profile, or a
+  failed read all mean no steering, and the mentor behaves exactly as before.
+
+§18's separation is structural here too: weak expression beside strong reasoning asks
+for a reformulation, but weak expression beside weak *reasoning* steers the reasoning —
+language trouble is never mistaken for weak thinking.
