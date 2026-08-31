@@ -16,7 +16,7 @@ Pins the structural contract of slice 1, updated through R47:
 """
 from pathlib import Path
 import unittest
-from tests.teacher_sources import AUTHORING_ROUTE, authoring_source, console_source, people_source, settings_source
+from tests.teacher_sources import authoring_source, console_source, people_source, settings_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -151,7 +151,14 @@ class StudioTests(unittest.TestCase):
         # Scoped to the studio's own module: it is mounted INSIDE the console, so it
         # must not draw shell chrome. (The lesson screen is a route of its own and does
         # render a shell — that is why this reads the studio rather than the surface.)
-        studio_module = AUTHORING_ROUTE.read_text(encoding="utf-8")
+        # R86: the studio has no route of its own. The claim — the outline is mounted
+        # INSIDE the console and must not draw shell chrome — reads the course modules
+        # that replaced it. (The lesson screen IS a route and does render a shell,
+        # which is why this cannot read the whole authoring surface.)
+        studio_module = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((FRONTEND / "features" / "teacher" / "course").glob("*.ts*"))
+        )
         self.assertNotIn("fetchPrimaryRole", studio_module)
         self.assertNotIn('from "@/features/teacher/shell/TeacherShell"', studio_module)
         self.assertNotIn('from "@/components/PageShell"', studio_module)
@@ -166,14 +173,16 @@ class StudioTests(unittest.TestCase):
         self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
         self.assertIn("params: { classId, lessonId }", STUDIO)
 
-    def test_legacy_route_redirects_into_the_first_class(self):
-        self.assertIn('createFileRoute("/teacher/curriculum")', STUDIO)
-        self.assertIn("fetchTeacherClasses(session.user.id)", STUDIO)
-        # R79/R80: a lesson link forwards to the lesson's own address; anything else
-        # lands on the class's Course screen.
-        self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
-        self.assertIn('search: { tab: "content" }', STUDIO)
-        self.assertIn("replace: true", STUDIO)
+    def test_the_legacy_route_is_deleted_not_redirected(self):
+        # R42 gave the studio a redirect into the first class; R80 shrank it to 72
+        # lines; R86 deleted it. Step 9 of the brief: "Delete the old routes. Not
+        # deprecate. Delete." An old link reaches the 404, which sends a signed-in
+        # teacher to their role's home — pinned in R86's file.
+        self.assertFalse((FRONTEND / "routes" / "teacher.curriculum.tsx").exists())
+        self.assertNotIn(
+            "/teacher/curriculum",
+            (FRONTEND / "routeTree.gen.ts").read_text(encoding="utf-8"),
+        )
 
     def test_class_route_carries_the_studio_selection_params(self):
         for param in ("subject", "course", "unit", "lesson"):

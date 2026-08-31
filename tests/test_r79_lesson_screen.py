@@ -24,7 +24,7 @@ from pathlib import Path
 import re
 import unittest
 
-from tests.teacher_sources import AUTHORING_ROUTE, authoring_source
+from tests.teacher_sources import authoring_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,7 +42,7 @@ ROUTE_FILE = (SRC / "routes" / "teacher.class.$classId.lesson.$lessonId.tsx").re
     encoding="utf-8"
 )
 ROUTE_TREE = (SRC / "routeTree.gen.ts").read_text(encoding="utf-8")
-STUDIO = AUTHORING_ROUTE.read_text(encoding="utf-8")
+STUDIO = authoring_source()
 SURFACE = authoring_source()
 LEXICON = ROOT / "docs" / "LEXICON.md"
 
@@ -97,10 +97,11 @@ class OwnAddressTests(unittest.TestCase):
         )
         self.assertIn("/teacher/class/$classId/lesson/$lessonId", ROUTE_TREE)
 
-    def test_the_outline_links_to_it_and_old_links_forward(self):
+    def test_the_outline_links_to_it(self):
+        # The "old links forward" half of this pin was the studio route's redirect.
+        # R86 deleted it ("Not deprecate. Delete."); an old link now reaches the 404,
+        # which sends a signed-in teacher to their own home. Pinned in R86's file.
         self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
-        self.assertIn("params: { classId: first.id, lessonId: search.lesson }", STUDIO)
-        self.assertIn("replace: true", STUDIO)
 
     def test_the_lesson_owns_its_data_and_its_writes(self):
         # Law 1, one home per object: the screen loads the lesson itself rather than

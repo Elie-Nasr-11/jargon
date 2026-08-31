@@ -18,6 +18,7 @@ from tests.teacher_sources import authoring_source
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND = ROOT / "frontend" / "src"
+SRC = ROOT / "frontend" / "src"
 STUDIO = authoring_source()
 API = (FRONTEND / "lib" / "api.ts").read_text(encoding="utf-8")
 
@@ -28,19 +29,18 @@ class OldBuilderIsGoneTests(unittest.TestCase):
         self.assertNotIn("Lifecycle", STUDIO)
 
     def test_only_lessons_open_an_editor(self):
-        # R79: and an editor is no longer a pane — a lesson has its own address, so the
-        # old ?lesson= link forwards there rather than swapping the outline out.
+        # R79: an editor is no longer a pane — a lesson has its own address.
         self.assertIn('to: "/teacher/class/$classId/lesson/$lessonId"', STUDIO)
-        self.assertIn("params: { classId: first.id, lessonId: search.lesson }", STUDIO)
         self.assertNotIn("const selection: Selection", STUDIO)
 
-    def test_stale_pane_urls_normalize_to_the_outline(self):
-        # Old bookmarks carrying ?unit/?course/?subject replace-navigate to plain
-        # Content instead of resurrecting a pane.
-        # R80: the studio page is gone entirely — the old URL forwards into the class.
-        self.assertIn('to: "/teacher/class/$classId"', STUDIO)
-        self.assertIn('search: { tab: "content" }', STUDIO)
-        self.assertIn("replace: true", STUDIO)
+    def test_stale_pane_urls_have_no_pane_to_return_to(self):
+        # These two pins asserted the studio route's forwarding of ?lesson / ?unit /
+        # ?course. R80 reduced that route to a redirect and R86 deleted it — step 9 is
+        # "Delete the old routes. Not deprecate. Delete." An old URL now reaches the
+        # 404, which sends a signed-in teacher to their own home (pinned in R86's file).
+        self.assertFalse((SRC / "routes" / "teacher.curriculum.tsx").exists())
+        # And nothing resurrected a pane on the way out.
+        self.assertNotIn("<DetailPane", STUDIO)
 
     def test_duplicate_lands_on_the_outline_not_a_pane(self):
         # R44's fork no longer auto-selects the course node (the "builder appears
