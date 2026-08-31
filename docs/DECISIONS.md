@@ -2,6 +2,38 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-08-31 (later): the class view is a grouping, never an average
+
+"Build the class-level view so a teacher sees the whole room." The obvious
+implementation — mean the dimensions across the roster — would have reproduced the exact
+failure the rubric was written to prevent, one level up. A class average is not a
+teaching instruction.
+
+- **Arrange the room by what to do, not by how well people did.** Students are grouped
+  by the move §19 would make for them; the groups are ordered alarm-first so a teacher
+  meets the problem before the opportunity; and "needs" splits per dimension, because
+  "four students need reasoning" is a lesson and "four students need something" is not.
+- **The teacher's view and the mentor's behaviour must agree.** The grouping uses
+  learnerSteer's own floor, thresholds and priority order. `chat` and `cognition-scorer`
+  are separate edge functions that cannot import each other, so a pin reads both files
+  and fails on drift. This is the invariant the release exists to protect.
+- **A room question needs a room-level door.** `assertCanViewStudent` answers "may this
+  actor see this person?"; a teacher who could see 11 of 12 would get a view that quietly
+  lied about the twelfth. `assertCanViewClass` asks once, through the same three doors,
+  and the roster it authorizes is the roster the view reports on.
+- **The room is the roster.** Everyone active appears, read or not. Building the view
+  from scored rows would have shrunk it to whoever had been scored, losing exactly the
+  students who most need attention.
+- **Live probes keep finding what review cannot.** `lessons` has no `course_id` — the
+  path is courses → course_versions → units → lessons — and the single-hop guess would
+  have 400'd this view for nearly every class. Found by the first probe, not by the
+  1436-test suite.
+- **Pins state rules, not shapes** (fifth release running). "No percentage anywhere"
+  fired on the judge prompt's own *"never a percentage"* instruction. It now asserts the
+  structure: a student keeps eight dimensions, the room summary holds none, and neither
+  rendering file reads a dimension value.
+
+
 ## 2026-08-31: measurement runs on a schedule, and a user-less caller earns its door
 
 R90 built the cognition ledger and R91 made it steer the mentor — both gated on a

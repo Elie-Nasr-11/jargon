@@ -4297,3 +4297,61 @@ export function fetchCognitionProfile(input: {
     lesson_id: input.lessonId,
   });
 }
+
+// --- R93: the whole room -----------------------------------------------------------
+
+/**
+ * How one student reads across every lesson of this class. `group` is the move §19
+ * would make for them, not a rank — the server derives it from the same thresholds the
+ * mentor actually steers on.
+ */
+export type RoomStudent = CognitionDims & {
+  user_id: string;
+  group: "dependent" | "mastered" | "needs" | "steady" | "unread";
+  focus: keyof CognitionDims | null;
+  dims: CognitionDims;
+  turns_scored: number;
+  lessons_read: number;
+  scaffold_recent: number | null;
+  scaffold_trend: "falling" | "rising" | "steady" | null;
+  latest_lesson_id: string;
+  updated_at: string;
+};
+
+export type RoomSummary = {
+  students: number;
+  read: number;
+  unread: number;
+  /** Dimensions weak in at least one read student, most-affected first. */
+  weakest: Array<{ dimension: keyof CognitionDims; students: number }>;
+  groups: Record<RoomStudent["group"], number>;
+};
+
+export type ClassCognitionResponse = {
+  status?: string;
+  error?: string;
+  class_id?: string;
+  students?: RoomStudent[];
+  room?: RoomSummary;
+};
+
+/** The class's whole roster, read or not. Reads stored profiles only — never judges. */
+export async function fetchClassCognition(input: {
+  accessToken: string;
+  classId: string;
+}): Promise<ClassCognitionResponse> {
+  const response = await fetchWithTimeout(
+    functionUrl("cognition-scorer"),
+    {
+      method: "POST",
+      headers: authHeaders(input.accessToken),
+      body: JSON.stringify({ action: "class_view", class_id: input.classId }),
+    },
+    30000,
+  );
+  const data = (await response.json()) as ClassCognitionResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Could not read this class.");
+  }
+  return data;
+}
