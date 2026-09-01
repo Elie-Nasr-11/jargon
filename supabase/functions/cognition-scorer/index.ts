@@ -55,7 +55,6 @@ const DIMENSIONS = [
   "independence",
   "metacognition",
 ] as const;
-type Dimension = (typeof DIMENSIONS)[number];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -857,10 +856,17 @@ async function classView(config: Config, actorId: string, body: DbRow): Promise<
   await assertCanViewClass(config, actorId, classId);
 
   // The roster is the room. Everyone active in it appears in the answer, read or not.
-  const roster = await selectAll(
-    config,
-    `class_memberships?class_id=eq.${enc(classId)}&role=eq.student&status=eq.active&select=user_id,section`,
-  );
+  //
+  // This and the course links do not depend on each other, and this view loads on the
+  // class landing screen every time a teacher opens one — so the independent reads go
+  // together rather than one after another.
+  const [roster, links] = await Promise.all([
+    selectAll(
+      config,
+      `class_memberships?class_id=eq.${enc(classId)}&role=eq.student&status=eq.active&select=user_id,section`,
+    ),
+    selectAll(config, `class_courses?class_id=eq.${enc(classId)}&select=course_id`),
+  ]);
   // A section is a text label on the membership, not a row anywhere — so the roster IS
   // the section map, and a student with two memberships in one class (which the schema
   // permits) keeps the first non-empty label rather than appearing twice.
@@ -887,22 +893,20 @@ async function classView(config: Config, actorId: string, body: DbRow): Promise<
   // Which lessons count as this class's. An empty link set means NO scoping — the
   // platform-wide rule (docs/PLATFORM.md class-scoping) — so the room reports every
   // lesson its students have been read in rather than an empty view.
-  const links = await selectAll(
-    config,
-    `class_courses?class_id=eq.${enc(classId)}&select=course_id`,
-  );
+  //
+  // The profiles are fetched by ROSTER, not by lesson, so this walk and that read are
+  // independent too and run together. The scope is applied in memory below: a course
+  // with a hundred lessons would otherwise put a hundred ids into a query string, and
+  // a request that failed on URL length would fail for exactly the biggest classes.
   const courseIds = links.map((row) => cleanText(row.course_id)).filter(Boolean);
-  const classLessons = courseIds.length ? await lessonsOfCourses(config, courseIds) : null;
-
-  // Profiles are fetched by ROSTER, not by lesson, and the lesson scope is applied
-  // below in memory. A course with a hundred lessons would otherwise put a hundred
-  // ids into a query string, and a request that fails on URL length would fail for
-  // exactly the biggest, most valuable classes.
-  const profiles = await selectAll(
-    config,
-    `cognition_profiles?user_id=in.(${studentIds.map(enc).join(",")})` +
-      `&select=user_id,lesson_id,${DIMENSIONS.join(",")},scaffold_earlier,scaffold_recent,turns_scored,updated_at&limit=2000`,
-  );
+  const [classLessons, profiles] = await Promise.all([
+    courseIds.length ? lessonsOfCourses(config, courseIds) : Promise.resolve(null),
+    selectAll(
+      config,
+      `cognition_profiles?user_id=in.(${studentIds.map(enc).join(",")})` +
+        `&select=user_id,lesson_id,${DIMENSIONS.join(",")},scaffold_earlier,scaffold_recent,turns_scored,updated_at&limit=2000`,
+    ),
+  ]);
 
   const byStudent = new Map<string, DbRow[]>();
   for (const row of profiles) {

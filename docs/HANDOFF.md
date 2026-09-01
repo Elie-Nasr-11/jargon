@@ -6,6 +6,70 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-31 (R95: review-ready polish, and where this stands)
+
+Status: Finished
+Task: "finalize what we're doing... move towards a review-ready polish."
+
+This closes the R90-R94 cognition arc. No new capability — a self-review pass over what
+those five releases shipped, three real fixes, and the docs rewritten so a reviewer meets
+a SYSTEM rather than a stack of release notes.
+
+What the review found and fixed:
+- `RoomStudent` was typed `CognitionDims & {...}`, which was a LIE about the wire: the
+  dimensions arrive nested under `dims`. `student.reasoning` compiled and would have been
+  undefined forever. Worse, the intersection quietly invited exactly the reading the room
+  view forbids. Dropping it makes R93's "no dimension value in the browser" rule a
+  COMPILE ERROR rather than a convention held up by a grep-shaped pin.
+- `classView` made six sequential round trips on a screen that loads every time a teacher
+  opens a class. The roster and the course links are independent, and so are the lesson
+  walk and the profile read; both pairs now run together. Four trips instead of six.
+- A dead `Dimension` type in the scorer.
+
+docs/COGNITION.md was 310 lines of accreted release notes (R90 -> §19 -> R92 -> R93 ->
+R94). It is now 261 lines describing the system as it stands: the refusal that holds at
+all three levels, the shape, the tables, what the judge is told, §19, the scheduler, the
+two teacher views, what is deliberately NOT built, and an operational-state table saying
+plainly what is live and what waits on the token. The wrong diagnoses are kept in one
+section at the bottom, because they are the best evidence for how the thing behaves.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (parallel reads, dead type);
+frontend/src/lib/api.ts (the honest wire type); tests/test_r93_class_room.py (+2 pins);
+docs/COGNITION.md (rewritten).
+
+Tests run: 1454 python OK (4 skips), 22 room-view properties + 32 flow properties, deno
+check / tsc / eslint / build all clean.
+
+PRODUCTION STATE at hand-off (measured, not assumed):
+- `cognition-sweep` cron ACTIVE: 41 runs, 0 failed, 0 ticks that started and never
+  returned, and ZERO scoring errors in the last three hours — the R92 retry is holding.
+- The backlog is DRAINED: the queue went 11 pairs / 106 responses -> 0. 12 profiles and
+  112 scored responses now exist, none of them teacher-initiated.
+- No probe artifact of any kind remains: 0 probe tables, users or classes.
+
+STILL BLOCKED ON THE OWNER, and it is now the only thing in the way:
+`SUPABASE_ACCESS_TOKEN` is expired. `chat` (417KB) and `curriculum-admin` (181KB) both
+exceed the MCP deploy channel's per-call ceiling, so three merged releases wait on it:
+- R85 (provider switch), R89 (shared-book legibility), R91 (§19 steering).
+Rotate the token, update the repo secret, re-run deploy-backend.yml, confirm
+curriculum-admin reaches v43 and chat redeploys. Until then the profiles accumulate but
+the mentor does not steer on them — the half that changes what a STUDENT experiences
+rather than only what a teacher reads.
+
+Remaining concerns (none blocking):
+- Six releases running, a pin broke by describing a SHAPE instead of a RULE. Now written
+  into DECISIONS as something to get right when writing the pin, not when it breaks.
+- Sections are unvalidated text labels: "A" and "a " are two sections.
+- The room reads ONE class at a time; a teacher with five has no way to see where to
+  spend their morning.
+- Rubric §10 (transfer) and §11 (retention) are unbuilt; both need a task generator,
+  which is a new student-facing surface.
+- The offline walk harness still lives only in the session scratchpad.
+
+Suggested next task: rotate the token. Everything else is smaller than that.
+
+
+
 ## Claude -> Codex / Human - 2026-08-31 (R94: the room, by section)
 
 Status: Finished

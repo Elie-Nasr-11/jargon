@@ -4305,7 +4305,13 @@ export function fetchCognitionProfile(input: {
  * would make for them, not a rank — the server derives it from the same thresholds the
  * mentor actually steers on.
  */
-export type RoomStudent = CognitionDims & {
+/**
+ * NOT `CognitionDims & {...}`: the dimensions arrive NESTED under `dims`, and spreading
+ * them into the type as well would have let `student.reasoning` compile and be undefined
+ * forever. Keeping them nested also makes R93's rule a compile error rather than a
+ * convention — a rendering file cannot reach a dimension value by accident.
+ */
+export type RoomStudent = {
   user_id: string;
   /** Which stream of the class, or null for the people not in one. */
   section: string | null;
