@@ -168,7 +168,18 @@ jobs:
           # (the smoke step below proves that on every deploy). Revert the flags
           # when Supabase confirms the gateway validates ES256 reliably.
           supabase functions deploy curriculum-admin --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy chat --project-ref "$PROJECT_REF" --no-verify-jwt
+          # chat bundles SERVER-SIDE (--use-api), unlike every other function here.
+          #
+          # 2026-09-01, run #163: the first deploy after the access token was rotated got
+          # through curriculum-admin (181KB source, 80kB bundled) and then died on chat
+          # with `failed to bundle function: exit 135` — 128+7, a SIGBUS out of the local
+          # edge-runtime Docker bundler. chat is 426KB, five times the next largest
+          # function, and it crossed 416KB -> 426KB in R91; nothing else in this list is
+          # anywhere near that. --use-api hands the bundling to Supabase instead of doing
+          # it in a container on the runner, which is the one part of the path that
+          # failed. The rest stay on the Docker bundler: it worked for them in the same
+          # run, and changing what is not broken here costs a deploy to find out.
+          supabase functions deploy chat --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
           supabase functions deploy assessment-admin --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy voice-session --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy run --project-ref "$PROJECT_REF" --no-verify-jwt
