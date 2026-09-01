@@ -14,7 +14,7 @@ import {
   DIMENSION_MOVE,
   type DimensionKey,
 } from "@/features/teacher/cognition/labels";
-import type { RoomStudent, RoomSummary } from "@/lib/api";
+import type { RoomStudent, RoomSummary, SectionSummary } from "@/lib/api";
 
 export type RoomGroup = {
   /** Stable key: the server group, or "needs:<dimension>" split out by focus. */
@@ -126,7 +126,7 @@ export function roomHeadline(room: RoomSummary | null | undefined): string {
   // Dependency outranks a weak dimension the way it does in §19: a room being carried
   // by the tutor is a different, worse problem than a room that finds one thing hard.
   if (dependent > 0 && dependent >= room.read / 2) {
-    return `${countOf(dependent, "student")} of the ${room.read} read are leaning on the tutor for most of their thinking. That is an assistance problem before it is a content one.`;
+    return `${countOf(dependent, "student")} of the ${room.read} read ${isAre(dependent)} leaning on the tutor for most of their thinking. That is an assistance problem before it is a content one.`;
   }
 
   if (!top) {
@@ -137,9 +137,87 @@ export function roomHeadline(room: RoomSummary | null | undefined): string {
   if (top.students >= room.read / 2) {
     return `${top.students} of the ${room.read} students read are weak on the same thing — ${label}. That is a lesson to reteach, not ${countOf(top.students, "tutorial")}.`;
   }
-  return `${countOf(top.students, "student")} of the ${room.read} read are weak on ${label}, and no single thing is holding the whole room back.`;
+  return `${countOf(top.students, "student")} of the ${room.read} read ${isAre(top.students)} weak on ${label}, and no single thing is holding the whole room back.`;
 }
 
 function countOf(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+// "1 student ... are weak" reads as a bug in the product, not a bug in a sentence.
+// Caught by the live probe: a five-student room with one weak reader hit it first try.
+function isAre(n: number): string {
+  return n === 1 ? "is" : "are";
+}
+
+// ---------------------------------------------------------------------------
+// R94: the room has streams.
+//
+// A teacher who splits a class into sections teaches them at different hours and to
+// different plans, so one blended reading hides the thing they most need: that one
+// section is leaning on the tutor and the other is not. The server summarizes each
+// section (the arithmetic reads dimension values, which stay on the server); this
+// picks which summary the teacher is looking at.
+// ---------------------------------------------------------------------------
+
+/** What the section control offers. Empty when the class has never used sections. */
+export type SectionChoice = { key: string; label: string; students: number };
+
+/** The key the whole-class view is stored under. Not a section — a section named
+ *  "all" must still be selectable, so the choice keys are prefixed. */
+export const ALL_SECTIONS = "all";
+const UNSECTIONED = "section:";
+
+export function sectionKey(label: string | null): string {
+  return label === null ? UNSECTIONED : `section:${label}`;
+}
+
+export function sectionChoices(
+  sections: SectionSummary[] | null | undefined,
+  room: RoomSummary | null | undefined,
+): SectionChoice[] {
+  // One section is not a choice — it is the whole class under another name.
+  if (!sections || sections.length < 2) return [];
+  return [
+    { key: ALL_SECTIONS, label: "Whole class", students: room?.students ?? 0 },
+    ...sections.map((section) => ({
+      key: sectionKey(section.label),
+      // The people not in a section are named, never labelled "null" or dropped.
+      label: section.label ?? "No section",
+      students: section.students,
+    })),
+  ];
+}
+
+/** The students the chosen view is about. */
+export function studentsInSection(students: RoomStudent[], choice: string): RoomStudent[] {
+  if (choice === ALL_SECTIONS) return students;
+  return students.filter((student) => sectionKey(student.section) === choice);
+}
+
+/** The summary the chosen view is about — the class's own when nothing is chosen. */
+export function summaryForChoice(
+  choice: string,
+  room: RoomSummary | null | undefined,
+  sections: SectionSummary[] | null | undefined,
+): RoomSummary | null {
+  if (choice === ALL_SECTIONS) return room ?? null;
+  return (sections ?? []).find((section) => sectionKey(section.label) === choice) ?? null;
+}
+
+/**
+ * One line per section, for when the teacher is looking at the whole class. This is
+ * the comparison, and it deliberately reuses roomHeadline rather than inventing a
+ * second way of saying what a room needs: two sentences side by side show a divergence
+ * a threshold rule would have had to guess at.
+ */
+export function sectionHeadlines(
+  sections: SectionSummary[] | null | undefined,
+): Array<{ key: string; label: string; line: string }> {
+  if (!sections || sections.length < 2) return [];
+  return sections.map((section) => ({
+    key: sectionKey(section.label),
+    label: section.label ?? "No section",
+    line: roomHeadline(section),
+  }));
 }

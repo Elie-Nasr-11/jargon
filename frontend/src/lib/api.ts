@@ -4307,6 +4307,8 @@ export function fetchCognitionProfile(input: {
  */
 export type RoomStudent = CognitionDims & {
   user_id: string;
+  /** Which stream of the class, or null for the people not in one. */
+  section: string | null;
   group: "dependent" | "mastered" | "needs" | "steady" | "unread";
   focus: keyof CognitionDims | null;
   dims: CognitionDims;
@@ -4327,12 +4329,16 @@ export type RoomSummary = {
   groups: Record<RoomStudent["group"], number>;
 };
 
+/** A section's own summary. Empty for a class that has never used sections. */
+export type SectionSummary = RoomSummary & { label: string | null };
+
 export type ClassCognitionResponse = {
   status?: string;
   error?: string;
   class_id?: string;
   students?: RoomStudent[];
   room?: RoomSummary;
+  sections?: SectionSummary[];
 };
 
 /** The class's whole roster, read or not. Reads stored profiles only — never judges. */

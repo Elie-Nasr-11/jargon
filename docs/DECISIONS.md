@@ -2,6 +2,30 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-08-31 (later still): a section is a second room, not a filter
+
+"Now do sections." The cheap reading is a dropdown that hides rows. The real one is that
+a streamed class is two rooms a teacher plans separately, and the class-level reading
+can hide a section entirely: in the probe, a class whose section A was 2-of-2 leaning on
+the tutor read, blended, as *"no single thing is holding the whole room back."*
+
+- **Show the comparison, do not compute it.** Each section gets the SAME sentence
+  `roomHeadline` gives it when selected. No new threshold decides when sections "differ"
+  — two sentences side by side show a divergence a rule would have had to guess at, and
+  selecting a section can never contradict the line that sent you there.
+- **A control that cannot change anything must not exist.** No sections, or exactly one,
+  means no picker. One named section is the whole class under another name.
+- **The unsectioned are a group, not a remainder.** Named "No section" and summarized
+  like any other — the live shape is one named section plus the people not in it.
+- **The arithmetic stays where the dimension values are.** Sections are summarized
+  server-side by the same summarizer the class uses, because a client that built its own
+  summaries would have to read the numbers the room view exists to keep out of sight.
+- **Pins state rules, not shapes** (sixth release). R93's "the roster is the room" pin
+  was written as a call shape and broke one release later when the roll-up gained a
+  section argument. It now asserts what it meant: the answer is built by walking the
+  roster's ids, and a student with no profiles still produces a row.
+
+
 ## 2026-08-31 (later): the class view is a grouping, never an average
 
 "Build the class-level view so a teacher sees the whole room." The obvious

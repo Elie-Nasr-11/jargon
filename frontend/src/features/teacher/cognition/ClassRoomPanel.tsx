@@ -17,7 +17,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Brain, Loader2, RefreshCw } from "lucide-react";
 import { displayName } from "@/features/teacher/classShared";
-import { roomGroups, roomHeadline, type RoomGroup } from "@/features/teacher/cognition/room";
+import {
+  ALL_SECTIONS,
+  roomGroups,
+  roomHeadline,
+  sectionChoices,
+  sectionHeadlines,
+  studentsInSection,
+  summaryForChoice,
+  type RoomGroup,
+} from "@/features/teacher/cognition/room";
 import { fetchClassCognition, getSession, type ClassCognitionResponse } from "@/lib/api";
 import type { Profile } from "@/lib/types";
 
@@ -40,6 +49,10 @@ export function ClassRoomPanel({
   const [data, setData] = useState<ClassCognitionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // R94: which stream the teacher is looking at. Resets with the class, because a
+  // section label is only meaningful inside the class that defines it.
+  const [choice, setChoice] = useState<string>(ALL_SECTIONS);
+  useEffect(() => setChoice(ALL_SECTIONS), [classId]);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -67,9 +80,17 @@ export function ClassRoomPanel({
 
   useEffect(() => load(), [load]);
 
-  const students = data?.students ?? [];
-  const room = data?.room ?? null;
+  const allStudents = data?.students ?? [];
+  const choices = sectionChoices(data?.sections, data?.room);
+  // A section that has gone away between loads must not leave the panel showing an
+  // empty room with no way back.
+  const active = choices.some((option) => option.key === choice) ? choice : ALL_SECTIONS;
+  const students = studentsInSection(allStudents, active);
+  const room = summaryForChoice(active, data?.room, data?.sections);
   const groups = roomGroups(students);
+  // The comparison, and only when there is something to compare and the teacher is
+  // looking at the whole class.
+  const perSection = active === ALL_SECTIONS ? sectionHeadlines(data?.sections) : [];
 
   return (
     <section className="rounded-card border border-border bg-depth-sub p-4">
@@ -101,9 +122,50 @@ export function ClassRoomPanel({
         <>
           {/* The whole reason a class-level view earns its space: what does this room
               need from me, as one sentence, before any list of names. */}
-          <p className="mt-2 font-serif text-body leading-relaxed text-foreground">
+          {choices.length ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {choices.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setChoice(option.key)}
+                  aria-pressed={option.key === active}
+                  className={`rounded-full border px-2.5 py-1 text-meta transition-colors ${
+                    option.key === active
+                      ? "border-primary/40 bg-primary/10 text-foreground"
+                      : "border-border bg-depth-field text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {option.label}
+                  <span className="ml-1.5 text-muted-foreground">{option.students}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <p className="mt-3 font-serif text-body leading-relaxed text-foreground">
             {roomHeadline(room)}
           </p>
+
+          {perSection.length ? (
+            // Two sentences side by side show a divergence a threshold rule would have
+            // had to guess at — and each is the SAME sentence the section gets when a
+            // teacher selects it, so nothing here is a second opinion.
+            <div className="mt-2.5 grid gap-1.5 border-l-2 border-border pl-3">
+              {perSection.map((section) => (
+                <button
+                  key={section.key}
+                  type="button"
+                  onClick={() => setChoice(section.key)}
+                  className="text-left text-meta leading-relaxed text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <span className="font-medium text-foreground">{section.label}</span>
+                  {" — "}
+                  {section.line}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {groups.length ? (
             <div className="mt-4 grid gap-2.5">
@@ -153,7 +215,11 @@ export function ClassRoomPanel({
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-meta text-muted-foreground">No students in this class yet.</p>
+            <p className="mt-2 text-meta text-muted-foreground">
+              {active === ALL_SECTIONS
+                ? "No students in this class yet."
+                : "Nobody is in this section."}
+            </p>
           )}
         </>
       )}

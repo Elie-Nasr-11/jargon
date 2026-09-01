@@ -6,6 +6,77 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-08-31 (R94: the room, by section)
+
+Status: Finished
+Task: "now do sections." R93 reads a class as one room; a teacher who streams a class
+teaches its sections at different times and to different plans, so a single blended
+reading hides the thing they most need to see — that one section is leaning on the tutor
+while the other is not.
+
+Files I expect to touch:
+- supabase/functions/cognition-scorer/index.ts (carry each student's section; summarize
+  PER section as well as for the whole class, so no dimension arithmetic moves to the
+  browser)
+- frontend/src/features/teacher/cognition/{room.ts,ClassRoomPanel.tsx}, lib/api.ts
+- tests/test_r94_sections.py + tests/room_view.test.ts, docs/COGNITION.md
+
+Summary: the room panel gained a section control and a per-section comparison. Each
+student now carries their section; the server summarizes each section with the SAME
+summarizer the class uses (the arithmetic reads dimension values, which must not move to
+the browser); the client picks a summary and never builds one.
+
+The probe made the case concrete rather than theoretical. A five-student class where
+section A was 2-of-2 leaning on the tutor read, BLENDED, as "1 student of the 5 read is
+weak on reasons with it, and no single thing is holding the whole room back." Section A
+on its own reads "2 students of the 2 read are leaning on the tutor... an assistance
+problem before it is a content one," and section B reads "ready for harder work." The
+class view was hiding a whole stream.
+
+Design points worth keeping:
+- The comparison IS the sentence each section gets when selected (sectionHeadlines calls
+  roomHeadline per section), so no new threshold decides when sections "differ" and
+  selecting one can never contradict the line that sent you there.
+- No sections, or exactly ONE, means no control at all — one named section is the whole
+  class under another name.
+- The unsectioned are a group named "No section", not a remainder. That is the live
+  shape: both classes using sections today have one named section plus one student
+  outside it.
+- Choice keys are prefixed, so a section actually named "all" stays selectable.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (section on RoomStudent, the
+roster as the section map, summarizeSections — deployed v10);
+frontend/src/features/teacher/cognition/{room.ts,ClassRoomPanel.tsx};
+frontend/src/lib/api.ts; tests/test_r94_sections.py (new), tests/room_view.test.ts
+(+11 property tests, 22 total), tests/test_r93_class_room.py (one pin re-expressed);
+docs/COGNITION.md, DECISIONS.md.
+
+Tests run: 1452 python OK (4 skips), including 22 EXECUTABLE property tests over the
+real room.ts; tsc, eslint and build clean; deno check on the scorer clean. Live, on
+three probe classes created and then deleted: two named streams + unsectioned returned
+three correctly divergent summaries, the production shape (one named + unsectioned)
+returned two, and a class with no sections returned none. Rig fully removed — 0 probe
+users, classes, profiles or tables remaining.
+
+Remaining concerns:
+- Sixth release running that a pin broke by describing a shape instead of a rule (R93's
+  "the roster is the room", written as a call shape, broke when the roll-up gained a
+  section argument). Re-expressed. This is a habit to correct at the point of writing,
+  not a run of bad luck.
+- The live probe caught "1 student ... are weak" — subject-verb agreement in a
+  user-facing sentence. Fixed and pinned, but it is a reminder that the generated
+  sentences deserve the same scrutiny as the logic behind them.
+- Sections are a label on a membership with no validation: "A" and "a " are two
+  sections. Nothing in this release makes that worse, but a teacher WILL eventually
+  create a duplicate stream by typo.
+- SUPABASE_ACCESS_TOKEN still expired: R85, R89 and R91 remain merged-but-undeployed.
+
+Suggested next task: rotate the access token (it now gates four releases). Failing that,
+the room reads ONE class at a time — a teacher with five classes still has no way to see
+where to spend their morning.
+
+
+
 ## Claude -> Codex / Human - 2026-08-31 (R93: the class-level cognition view)
 
 Status: Finished

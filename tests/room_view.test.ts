@@ -5,7 +5,16 @@
 // first, whether dependency beats a weak dimension in the headline, whether the room
 // admits how much it has not read — lives here, and is worth running rather than
 // grepping. Driven by tests/test_r93_room_view.py, which rewrites the "@/" aliases.
-import { roomGroups, roomHeadline } from "./room.ts";
+import {
+  ALL_SECTIONS,
+  roomGroups,
+  roomHeadline,
+  sectionChoices,
+  sectionHeadlines,
+  sectionKey,
+  studentsInSection,
+  summaryForChoice,
+} from "./room.ts";
 
 // Zero-dependency helpers (the repo's flow suite uses the same pair — no jsr import,
 // so the harness runs fully offline).
@@ -22,6 +31,7 @@ type AnyStudent = Parameters<typeof roomGroups>[0][number];
 
 function student(over: Partial<AnyStudent> & { user_id: string }): AnyStudent {
   return {
+    section: null,
     group: "steady",
     focus: null,
     dims: {
@@ -170,4 +180,139 @@ Deno.test("the headline never carries a score", () => {
     ok(!/\d+\s*(%|\/\s*4)/.test(line), `a room headline is never a score: ${line}`);
     ok(!/average|mean\b/i.test(line), `a room headline is never an average: ${line}`);
   }
+});
+
+
+// ---------------------------------------------------------------------------
+// R94: the room has streams.
+// ---------------------------------------------------------------------------
+
+function summary(over: Record<string, unknown> = {}) {
+  return {
+    students: 4, read: 4, unread: 0, weakest: [],
+    groups: { dependent: 0, mastered: 0, needs: 0, steady: 4, unread: 0 },
+    ...over,
+  } as any;
+}
+function section(label: string | null, over: Record<string, unknown> = {}) {
+  return { label, ...summary(over) } as any;
+}
+
+Deno.test("a class that has never used sections gets no control", () => {
+  eq(sectionChoices([], summary()), [], "one flat room needs no picker");
+  eq(sectionChoices(undefined, summary()), [], "an old response shape must not crash it");
+});
+
+Deno.test("one section is not a choice", () => {
+  // It is the whole class under another name, and a control that does nothing is worse
+  // than no control.
+  eq(sectionChoices([section("A")], summary()), [], "a single stream is the class");
+  eq(sectionHeadlines([section("A")]), [], "and there is nothing to compare it with");
+});
+
+Deno.test("the whole class leads, then the sections, and nobody is nameless", () => {
+  const choices = sectionChoices(
+    [section("B", { students: 2 }), section(null, { students: 1 })],
+    summary({ students: 3 }),
+  );
+  eq(
+    choices.map((c) => `${c.key}|${c.label}|${c.students}`),
+    ["all|Whole class|3", "section:B|B|2", "section:|No section|1"],
+    "the people not in a section are named, never dropped or shown as null",
+  );
+});
+
+Deno.test("a section actually called 'all' is still selectable", () => {
+  // The keys are prefixed for exactly this reason: a label must never collide with the
+  // whole-class view and make a real section unreachable.
+  const choices = sectionChoices([section("all"), section("B")], summary());
+  const keys = choices.map((c) => c.key);
+  ok(new Set(keys).size === keys.length, `keys collided: ${keys.join(",")}`);
+  ok(keys.includes(sectionKey("all")), "a section named 'all' has its own key");
+});
+
+Deno.test("choosing a section narrows the room to exactly that section", () => {
+  const roster = [
+    student({ user_id: "a", section: "A" }),
+    student({ user_id: "b", section: "B" }),
+    student({ user_id: "c", section: null }),
+    student({ user_id: "d", section: "A" }),
+  ];
+  eq(studentsInSection(roster, ALL_SECTIONS).map((s) => s.user_id), ["a", "b", "c", "d"], "all");
+  eq(studentsInSection(roster, sectionKey("A")).map((s) => s.user_id), ["a", "d"], "one stream");
+  eq(studentsInSection(roster, sectionKey(null)).map((s) => s.user_id), ["c"], "the unsectioned");
+});
+
+Deno.test("every student is reachable through exactly one section choice", () => {
+  const roster = [
+    student({ user_id: "a", section: "A" }),
+    student({ user_id: "b", section: "B" }),
+    student({ user_id: "c", section: null }),
+  ];
+  const sections = [section("A"), section("B"), section(null)];
+  const seen = sections.flatMap((s) => studentsInSection(roster, sectionKey(s.label)).map((x) => x.user_id));
+  eq(seen.sort(), ["a", "b", "c"], "the sections partition the room");
+  eq(new Set(seen).size, 3, "and never double-count anyone");
+});
+
+Deno.test("the summary follows the choice", () => {
+  const room = summary({ students: 9 });
+  const sections = [section("A", { students: 5 }), section("B", { students: 4 })];
+  eq(summaryForChoice(ALL_SECTIONS, room, sections).students, 9, "the class");
+  eq(summaryForChoice(sectionKey("B"), room, sections).students, 4, "the section");
+  eq(summaryForChoice(sectionKey("Z"), room, sections), null, "a section that is gone");
+});
+
+Deno.test("the comparison is the same sentence each section gets on its own", () => {
+  // Not a second opinion: selecting a section must not tell a teacher something
+  // different from what the comparison line just told them.
+  const sections = [
+    section("A", { read: 6, groups: { dependent: 4, mastered: 0, needs: 2, steady: 0, unread: 0 } }),
+    section("B", { read: 6, weakest: [{ dimension: "reasoning", students: 5 }] }),
+  ];
+  const lines = sectionHeadlines(sections);
+  eq(lines.length, 2, "one line per section");
+  for (let i = 0; i < sections.length; i++) {
+    eq(lines[i].line, roomHeadline(sections[i]), `${lines[i].label} disagrees with itself`);
+  }
+  ok(lines[0].line.includes("assistance problem"), `A is the dependent one: ${lines[0].line}`);
+  ok(lines[1].line.includes("reteach"), `B has a shared weakness: ${lines[1].line}`);
+});
+
+Deno.test("a divergence between sections is visible rather than averaged away", () => {
+  // The whole reason sections exist here: blended, these two rooms look unremarkable.
+  const sections = [
+    section("A", { read: 6, groups: { dependent: 6, mastered: 0, needs: 0, steady: 0, unread: 0 } }),
+    section("B", { read: 6, groups: { dependent: 0, mastered: 6, needs: 0, steady: 0, unread: 0 } }),
+  ];
+  const [a, b] = sectionHeadlines(sections).map((s) => s.line);
+  ok(a !== b, "two very different rooms must not read identically");
+  ok(a.includes("assistance problem"), a);
+  ok(!b.includes("assistance problem"), b);
+});
+
+Deno.test("a section headline never carries a score either", () => {
+  const lines = sectionHeadlines([
+    section("A", { read: 6, weakest: [{ dimension: "reasoning", students: 5 }] }),
+    section(null, { students: 3, read: 0, unread: 3 }),
+  ]);
+  for (const { line } of lines) {
+    ok(!/\d+\s*(%|\/\s*4)/.test(line), `a section headline is never a score: ${line}`);
+    ok(!/average|mean\b/i.test(line), `nor an average: ${line}`);
+  }
+});
+
+
+Deno.test("one student does not read as many", () => {
+  // "1 student ... are weak" reads as a bug in the product, not a bug in a sentence.
+  // The live probe hit it on its first five-student room.
+  const one = roomHeadline(room({ read: 5, weakest: [{ dimension: "reasoning", students: 1 }] }));
+  ok(one.includes("1 student of the 5 read is weak"), one);
+  const many = roomHeadline(room({ read: 5, weakest: [{ dimension: "reasoning", students: 2 }] }));
+  ok(many.includes("2 students of the 5 read are weak"), many);
+
+  const oneDep = roomHeadline(
+    room({ read: 2, groups: { dependent: 1, mastered: 1, needs: 0, steady: 0, unread: 0 } }),
+  );
+  ok(oneDep.includes("1 student of the 2 read is leaning"), oneDep);
 });
