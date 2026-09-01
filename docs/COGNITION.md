@@ -267,3 +267,44 @@ class built for the purpose and deleted afterwards: a teacher of the class got t
 class in the same organization got **403**, an anon caller got **403**, and a profile
 belonging to a lesson outside the class's course was correctly excluded — the student's
 totals stayed at their in-course values instead of being dragged down by it.
+
+
+## R94 — the room has streams
+
+A teacher who splits a class into sections teaches them at different hours and to
+different plans, so one blended reading hides the thing they most need to see. The
+probe made this concrete rather than theoretical. A five-student class:
+
+| view | what it says |
+|---|---|
+| whole class | *"1 student of the 5 read is weak on reasons with it, and no single thing is holding the whole room back."* |
+| section A | *"2 students of the 2 read are leaning on the tutor for most of their thinking. That is an assistance problem before it is a content one."* |
+| section B | *"Nothing is weak across the 2 students read. This room is ready for harder work."* |
+
+Blended, the class reads as unremarkable. Section A is **entirely** dependent. That
+divergence is the whole feature.
+
+- **The section control appears only when there is a choice to make.** A class that has
+  never used sections gets `sections: []` and no control — and a class with ONE named
+  section gets none either, because that is the whole class under another name and a
+  control that does nothing is worse than no control.
+- **The people not in a section are a group, named "No section".** That is the live
+  shape, not the tidy two-stream one: the classes using sections today each have one
+  named section plus an unsectioned student.
+- **The comparison is the same sentence each section gets on its own.** `sectionHeadlines`
+  calls `roomHeadline` per section rather than inventing a second way of saying what a
+  room needs — so selecting a section can never tell a teacher something different from
+  what the comparison line just told them, and no threshold rule had to be invented to
+  decide when two sections "differ".
+- **The arithmetic stays on the server.** Each section is summarized by the SAME
+  `summarizeRoom` the class uses. A client that summarized sections itself would have to
+  read dimension values, which is precisely what the room view is not allowed to put in
+  front of a teacher. The client picks a summary; it never builds one.
+- **A section named "all" is still selectable.** Choice keys are prefixed (`section:A`),
+  so a label can never collide with the whole-class view and make a real section
+  unreachable.
+
+Two smaller things the probe caught: a stale choice (a section that disappears between
+loads) falls back to the whole class rather than stranding the teacher in an empty room,
+and the headline said *"1 student … are weak"* — which reads as a bug in the product,
+not in a sentence. Both are pinned.

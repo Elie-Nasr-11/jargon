@@ -714,6 +714,9 @@ async function runScoring(
 
 type RoomStudent = {
   user_id: string;
+  // R94: which stream of the class this student is in, or null for the people not in
+  // one. A class that has never used sections is one flat room and says so.
+  section: string | null;
   group: "dependent" | "mastered" | "needs" | "steady" | "unread";
   focus: string | null;
   dims: DbRow;
@@ -735,7 +738,7 @@ function numOrNull(value: unknown): number | null {
 // profile is already a median over that lesson's responses, so this is a median of
 // medians — the same statistic R90 chose, applied one level out, and for the common
 // case of a single lesson it is simply that lesson's value.
-function rollUpStudent(userId: string, profiles: DbRow[]): RoomStudent {
+function rollUpStudent(userId: string, section: string | null, profiles: DbRow[]): RoomStudent {
   const freshest = [...profiles].sort((a, b) =>
     String(b.updated_at || "").localeCompare(String(a.updated_at || "")),
   )[0];
@@ -805,6 +808,7 @@ function rollUpStudent(userId: string, profiles: DbRow[]): RoomStudent {
 
   return {
     user_id: userId,
+    section,
     group,
     focus,
     dims,
@@ -855,13 +859,29 @@ async function classView(config: Config, actorId: string, body: DbRow): Promise<
   // The roster is the room. Everyone active in it appears in the answer, read or not.
   const roster = await selectAll(
     config,
-    `class_memberships?class_id=eq.${enc(classId)}&role=eq.student&status=eq.active&select=user_id`,
+    `class_memberships?class_id=eq.${enc(classId)}&role=eq.student&status=eq.active&select=user_id,section`,
   );
-  const studentIds = Array.from(
-    new Set(roster.map((row) => cleanText(row.user_id)).filter(Boolean)),
-  );
+  // A section is a text label on the membership, not a row anywhere — so the roster IS
+  // the section map, and a student with two memberships in one class (which the schema
+  // permits) keeps the first non-empty label rather than appearing twice.
+  const sectionOf = new Map<string, string | null>();
+  for (const row of roster) {
+    const userId = cleanText(row.user_id);
+    if (!userId) continue;
+    const label = cleanText(row.section) || null;
+    if (!sectionOf.has(userId) || (label && sectionOf.get(userId) === null)) {
+      sectionOf.set(userId, label);
+    }
+  }
+  const studentIds = Array.from(sectionOf.keys());
   if (!studentIds.length) {
-    return json({ status: "ok", class_id: classId, students: [], room: summarizeRoom([]) });
+    return json({
+      status: "ok",
+      class_id: classId,
+      students: [],
+      room: summarizeRoom([]),
+      sections: [],
+    });
   }
 
   // Which lessons count as this class's. An empty link set means NO scoping — the
@@ -896,8 +916,16 @@ async function classView(config: Config, actorId: string, body: DbRow): Promise<
     byStudent.set(userId, list);
   }
 
-  const students = studentIds.map((id) => rollUpStudent(id, byStudent.get(id) ?? []));
-  return json({ status: "ok", class_id: classId, students, room: summarizeRoom(students) });
+  const students = studentIds.map((id) =>
+    rollUpStudent(id, sectionOf.get(id) ?? null, byStudent.get(id) ?? []),
+  );
+  return json({
+    status: "ok",
+    class_id: classId,
+    students,
+    room: summarizeRoom(students),
+    sections: summarizeSections(students),
+  });
 }
 
 // What the ROOM needs, which is a different question from what any student needs: a
@@ -928,6 +956,33 @@ function summarizeRoom(students: RoomStudent[]): DbRow {
     weakest,
     groups,
   };
+}
+
+// R94: the same summary, once per section.
+//
+// Computed HERE rather than in the browser for the reason the whole-class one is: the
+// arithmetic reads dimension values, and dimension values are exactly what the room
+// view is not allowed to put in front of a teacher. The client picks a summary; it
+// never builds one.
+//
+// Named sections come first in alphabetical order, then the people who are not in one
+// — which is the live case, not the tidy two-stream one: the classes using sections
+// today each have ONE named section plus an unsectioned student.
+function summarizeSections(students: RoomStudent[]): DbRow[] {
+  const named = Array.from(
+    new Set(students.map((student) => student.section).filter((label): label is string => !!label)),
+  ).sort((a, b) => a.localeCompare(b));
+  // A class that has never used sections is one flat room; saying "Section: everyone"
+  // would be a control that does nothing.
+  if (!named.length) return [];
+
+  const labels: Array<string | null> = [...named];
+  if (students.some((student) => student.section === null)) labels.push(null);
+
+  return labels.map((label) => ({
+    label,
+    ...summarizeRoom(students.filter((student) => student.section === label)),
+  }));
 }
 
 // R92: the run log, opened at the start and closed at the end (see sweep). Both

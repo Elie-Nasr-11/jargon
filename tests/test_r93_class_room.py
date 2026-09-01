@@ -99,7 +99,15 @@ class TheRoomIsAskedAsARoomTests(unittest.TestCase):
         roster_at = view.index("class_memberships?class_id=eq.")
         profiles_at = view.index("cognition_profiles?user_id=in.")
         self.assertLess(roster_at, profiles_at)
-        self.assertIn("studentIds.map((id) => rollUpStudent(id, byStudent.get(id) ?? []))", view)
+        # The rule, not the call shape — this assertion was written as the latter and
+        # broke one release later when the roll-up gained a section argument. What
+        # matters is that the answer is built by walking the ROSTER's ids, and that a
+        # student with no profiles still produces a row rather than being skipped.
+        built = view[view.index("const students = studentIds.map(") :]
+        built = built[: built.index("return json({")]
+        self.assertIn("rollUpStudent(", built)
+        self.assertIn("?? []", built)
+        self.assertNotIn("profiles.map(", view)
 
     def test_unread_students_are_reported_not_hidden(self):
         self.assertIn('group = "unread"', SCORER)
