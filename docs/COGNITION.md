@@ -246,16 +246,40 @@ Live probing found things review and 1454 offline pins did not.
 
 ## Operational state
 
+Everything in this document is live as of 2026-09-01.
+
 | piece | status |
 |---|---|
-| `cognition-scorer` | **live** (v10) — deploys through the MCP channel |
-| the ledger + sweep tables, `cognition-sweep` cron | **live**, firing every 15 minutes |
-| the teacher console (Thinking tab, room panel) | **live** — the frontend deploys from main |
-| `chat` — §19 steering (R91) | **merged, NOT deployed** |
-| `curriculum-admin` — R85 provider switch, R89 shared-book fix | **merged, NOT deployed** |
+| `cognition-scorer` | live (v11) |
+| the ledger + sweep tables, `cognition-sweep` cron | live, firing every 15 minutes |
+| the teacher console (Thinking tab, room panel) | live |
+| `chat` — §19 steering | **live (v116)** |
+| `curriculum-admin` — R85 provider switch, R89 shared-book fix | **live (v43)** |
 
-`SUPABASE_ACCESS_TOKEN` is expired. The MCP deploy channel has a per-call size ceiling
-that `chat` (417KB) and `curriculum-admin` (181KB) both exceed, so those two wait on the
-token being rotated and `deploy-backend.yml` re-run. Until then the profiles accumulate
-but the mentor does not yet steer on them — which is the half that makes the rubric change
-what a student experiences rather than only what a teacher reads.
+The expired `SUPABASE_ACCESS_TOKEN` that held the last three of those for two days was
+rotated on 2026-09-01. Two things are worth keeping from how that went:
+
+- **The token was the real blocker, and it was also hiding a second one.** Run #158's log
+  is a flat `unexpected list functions status 401`. Once the token was valid, run #163 got
+  all the way to `curriculum-admin` (deployed, v43) and then died on the next function:
+  `failed to bundle function: exit 135` — 128+7, a SIGBUS out of the local edge-runtime
+  Docker bundler. It was invisible until then because `chat` had not been *attempted*
+  since it grew.
+- **`chat` bundles server-side now.** It is 426KB, five times the next largest function,
+  and it crossed 416KB → 426KB when R91 landed; `curriculum-admin` bundled cleanly seconds
+  earlier in the same run. `--use-api` hands bundling to Supabase instead of a container on
+  the runner. Only `chat` carries the flag — everything else bundled fine in that same run.
+
+§19 was then checked against production rather than assumed: a probe student with a profile
+built to trip the dependency rule (weak reasoning, low independence, heavy recent
+scaffolding) got two real lesson turns, both HTTP 200 with coherent replies and no errors,
+and the rig — including the transcript rows `chat` wrote for it — was deleted afterwards.
+That proves the wiring does not break a lesson. It does not prove the steer changed the
+mentor's wording; one turn cannot show that, and the derivation is covered by the property
+tests instead.
+
+**Housekeeping:** three edge functions in the project have no source in this repo —
+`key-probe-oneoff`, `ops-probe-r49` and `deploy-probe-r90` (the last from testing the MCP
+deploy channel during R90). They are inert, and they are exactly the set `--prune` would
+remove, but the safer removal is one-off:
+`supabase functions delete <name> --project-ref qztpieiizmiayzjhezwh`.
