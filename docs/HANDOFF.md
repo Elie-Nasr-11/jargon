@@ -6,6 +6,63 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-01 (the token, and the blocker behind it)
+
+Status: Finished
+Task: owner rotated SUPABASE_ACCESS_TOKEN and shared the failing run.
+
+THE ARC IS FULLY DEPLOYED. R85, R89 and R91 are live; nothing is merged-but-waiting.
+
+What happened, in order:
+1. The rotation worked. Run #158's log is a flat `unexpected list functions status 401` —
+   the expired-token diagnosis recorded on 2026-08-30 was correct. Run #163 got past it,
+   applied the migrations, and deployed curriculum-admin to v43, landing R85 (provider
+   switch) and R89 (shared-book legibility).
+2. It then died on the NEXT function: `failed to bundle function: exit 135`. That is
+   128+7, a SIGBUS out of the local edge-runtime Docker bundler — not auth, not code.
+   Three facts pin it to chat: curriculum-admin bundled cleanly seconds earlier in the
+   same run; chat/index.ts is 426KB, five times the next largest; and it crossed 416,789
+   -> 426,149 bytes when R91 landed, which was the first change to chat since its last
+   good deploy (v115, 2026-08-27). It was invisible until now because chat had not been
+   ATTEMPTED since it grew.
+3. Fixed with `--use-api` on the chat deploy only ("Bundle functions server-side without
+   using Docker" — verified present in the pinned CLI 2.109.0 rather than assumed). Run
+   #164 green; chat at v116, and its entrypoint_path changed to the server-side bundling
+   shape, which is independent confirmation the flag took effect.
+
+§19 was then checked LIVE rather than assumed, because R91 changes every mentor turn for
+a student who has a profile and there are 12 of those in production. A probe student with
+a profile built to trip the dependency rule took two real lesson turns: both HTTP 200,
+both coherent, no errors. The rig — including the learning_turns and learning_sessions
+rows chat wrote for it — was deleted; verified 0 probe users, classes, profiles or tables,
+with the real system at 12 profiles / 953 turns / 28 classes.
+
+What that proves and what it does not: the wiring does not break a lesson. It does NOT
+prove the steer changed the mentor's wording — one turn cannot show that, and the
+derivation is covered by the property tests instead. Worth saying plainly rather than
+claiming the stronger result.
+
+Files changed: .github/workflows/deploy-backend.yml (--use-api on chat, with the incident
+written into the comment); docs/COGNITION.md (operational state corrected — it said these
+were undeployed, which was true for about an hour).
+
+Remaining concerns:
+- Three edge functions have no source in this repo: key-probe-oneoff, ops-probe-r49 and
+  deploy-probe-r90 (mine, from testing the MCP deploy channel in R90). Inert, and exactly
+  the set `--prune` would remove, but the safe removal is one-off:
+  `supabase functions delete <name> --project-ref qztpieiizmiayzjhezwh`. I cannot do it —
+  the MCP connector has no delete.
+- chat at 426KB is now a known deploy hazard, not just an aesthetic one. It survives on a
+  server-side bundler; splitting it is the real fix.
+- Everything from the R95 polish entry below still stands (section label hygiene, the
+  one-class-at-a-time room, §10/§11 unbuilt).
+
+Suggested next task: watch the first day of §19 in the wild — the profiles are real now,
+so the sweep and the steer are in a live loop for the first time. After that, splitting
+chat/index.ts is the highest-value structural work.
+
+
+
 ## Claude -> Codex / Human - 2026-08-31 (R95: review-ready polish, and where this stands)
 
 Status: Finished
