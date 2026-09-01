@@ -1,310 +1,261 @@
-# The Cognition Ledger (R90)
+# Cognition: measuring the thinking, and acting on it
 
-How the Independent Cognitive Production Rubric (owner brief, 2026-08-31) becomes
-running code. The rubric's own text is the authority on WHAT is measured; this file is
-the authority on WHERE each part lives and why.
+How the Independent Cognitive Production Rubric (owner brief, 2026-08-31) became running
+code. The rubric's own text is the authority on WHAT is measured; this file is the
+authority on where each part lives, why it is shaped that way, and what it refuses to do.
+
+Built across R90–R94. This describes the system as it stands; the release-by-release
+story is in `docs/HANDOFF.md`, and the decisions in `docs/DECISIONS.md`. The one part of
+the history worth keeping here — the diagnoses that turned out to be wrong — is at the
+bottom, because it is the best evidence for how the thing actually behaves.
 
 ## The point
 
-The system must not say "Ahmed scored 63%." It must say: *Ahmed understands the
-concept but is confusing two related terms; he needed three hints; he is ready to
-progress after one more retrieval-practice session.* That sentence is a claim about
-the student's own thinking, judged **in the context of the assistance given
-immediately before it** (rubric §1) — a polished answer that echoes the mentor is not
-the same as a polished answer the student produced.
+The system must not say "Ahmed scored 63%." It must say: *Ahmed understands the concept
+but is confusing two related terms; he needed three hints; he is ready to progress after
+one more retrieval-practice session.* That is a claim about the student's own thinking,
+judged **in the context of the assistance given immediately before it** (§1) — a polished
+answer that echoes the mentor is not the same as a polished answer the student produced.
 
-## Where it lives
+That refusal is structural, not stylistic, and it holds at all three levels:
+
+| level | what it says | what it must never say |
+|---|---|---|
+| a response | one sentence about what the thinking showed | a mark |
+| a student | eight dimensions + scaffold trend + a narrative | a composite |
+| a room | who needs which move, and what to reteach | a class average |
+
+## The shape
 
 ```
-learning_turns  ──read──▶  cognition-scorer (edge fn)  ──write──▶  cognition_turn_scores
-(the transcript              one model call per                     cognition_profiles
- the chat fn                 scoring run, rubric                        │ RLS read
- already writes)             encoded in its prompt                     ▼
-                                                            teacher console
-                                                            (StudentDetail ▸ Thinking)
+learning_turns ──read──▶ cognition-scorer ──write──▶ cognition_turn_scores
+(the transcript          ▲   (edge fn)               cognition_profiles
+ chat already writes)    │                                 │
+                    ┌────┴────┐                            ├──▶ chat  (§19 steers the mentor)
+                 a teacher   pg_cron                       └──▶ teacher console
+                 presses     every 15m                          · student ▸ Thinking
+                                                                · class ▸ How the room is thinking
 ```
 
-- **The mentor teaches; the assessor scores.** Scoring is a NEW, separate edge
-  function (`cognition-scorer`), not more weight in `chat`. Chat latency is untouched,
-  the scorer can re-run and re-version without touching the lesson loop, and the
-  rubric's delayed measures (retention §11, trajectories §16) never fit a live turn
-  anyway. (It is also the only shape that can DEPLOY today: functions ship through a
-  channel with a per-call size ceiling, `chat` and `curriculum-admin` are both far
-  over it, and a fresh small function is far under it.)
+- **The mentor teaches; the assessor scores.** Scoring is a separate edge function, not
+  more weight in `chat`: chat latency is untouched, the scorer can re-version without
+  touching the lesson loop, and the rubric's delayed measures never fit a live turn.
+  (It is also the only shape that can DEPLOY today — see *Operational state*.)
 - **The transcript is already sufficient.** `learning_turns` persists every student
-  response (`text`/`code`/`choice_id`, input modality) and every mentor turn's full
-  reply. The scorer reads a window per response: the objective, the student's
-  constructed text, and the mentor turns immediately before it — which is exactly the
-  §1 contract.
+  response and every mentor reply. The scorer reads a window per response: the objective,
+  the student's constructed text, and the mentor turns immediately before it — which is
+  exactly the §1 contract.
 - **Scaffold levels are judged from the mentor's words, not from stored tags.**
-  `learning_evidence.hint_rung` exists but is ~97% null (measured 2026-08-31), so the
-  scorer assigns S0–S5 (§13) by reading what the mentor actually said before the
-  response. One judge, one context, no reliance on sparse telemetry.
+  `learning_evidence.hint_rung` is ~97% null (measured 2026-08-31), so the scorer assigns
+  S0–S5 (§13) by reading what the mentor actually said. One judge, one context.
 
 ## Tables
 
-**`cognition_turn_scores`** — one row per scored constructed response (the ledger).
-`turn_id` is UNIQUE: scoring is idempotent, a turn is judged once per rubric version.
-Eight dimension columns (`retrieval, organization, reasoning, elaboration, vocabulary,
-expression, independence, metacognition`), each 0–4 or NULL (= not assessable on this
-turn — a two-word answer has no assessable organization; NULL is not a zero).
-`scaffold_level` 0–5 is the assistance level immediately before the response.
-`evidence` jsonb carries short verbatim quotes per dimension plus what was AI-supplied
-vs student-originated (§8's comparison, made inspectable). `signals` jsonb carries the
-§12 quantitative underlay (word count, propositions, self-corrections, hints_before…)
-— stored, never presented as the score. `note` is one teacher-readable sentence about
-this response.
+**`cognition_turn_scores`** — one row per scored constructed response. `turn_id` is
+UNIQUE per rubric version, so scoring is idempotent. Eight dimension columns, each 0–4 or
+NULL (*not assessable on this turn* — a two-word answer has no assessable organization;
+NULL is not a zero). `scaffold_level` 0–5 is the assistance immediately before the
+response. `evidence` carries short verbatim quotes plus what was AI-supplied vs
+student-originated (§8, made inspectable); `signals` carries the §12 quantitative underlay
+(stored, never presented as the score); `note` is one teacher-readable sentence.
 
-**`cognition_profiles`** — one row per (user, lesson): latest-weighted dimension
-medians, scaffold trend (first-half vs second-half mean), `narrative` (the teacher
-paragraph: what they understand, what they confuse, what to do next), `turns_scored`,
-`rubric_version`. Upserted after every scoring run; the console's list views read this
-without invoking anything.
+**`cognition_profiles`** — one row per (user, lesson): latest-weighted dimension medians,
+scaffold trend (first-half vs second-half mean), `narrative`, `turns_scored`,
+`rubric_version`. Upserted after every run; every reader downstream reads this.
 
-RLS: teachers read rows for students who share an active class with them; org admins
-read their org's students; platform admins read all. Nobody but the service role
-writes. Students do not see raw scores (a product decision to revisit deliberately,
-not a default to fall into).
+**`cognition_sweep_auth` / `cognition_sweep_queue` / `cognition_sweep_runs`** — the
+scheduler's secret, its work queue, and its run log. See *The scoring runs itself*.
 
-## The scorer's judgment rules (encoded in its prompt, pinned by tests)
+RLS: teachers read rows for students who share an active class; org admins read their
+org; platform admins read all. Nobody but the service role writes. Students do not see
+raw scores — a product decision to revisit deliberately, not a default to fall into.
+
+## What the judge is told
 
 - Score the contribution, not the transcript's polish: judge **against the assistance
-  visible immediately before** (§1); echoing the mentor's reasoning caps independence.
-- NULL over guessing: a dimension with no evidence in this response stays null.
+  visible immediately before** (§1). Echoing the mentor caps independence.
+- NULL over guessing.
 - Word count is not elaboration (§5); precision beats sophistication (§6); grammar,
-  spelling and accent do not lower cognitive dimensions when the reasoning is clear
-  (§7, §18 — expression is its OWN dimension, so the separation is structural).
-- Normalize to the student's grade band, the subject, and the response modality (§17)
-  — the lesson's `grade_band`/`level` and the profile's grade ride into the prompt.
-- MCQ clicks and bare "yes/ok/next" turns are not constructed responses; they are
-  skipped, not zero-scored.
-- The composite is never one number (§15). The profile stores dimensions + scaffold +
-  narrative; no column holds a percentage.
+  spelling and accent never lower a cognitive dimension (§7, §18 — expression is its OWN
+  dimension, so the separation is structural).
+- Normalize to grade band, subject and modality (§17).
+- MCQ clicks and bare "ok" are not constructed responses: skipped, not zero-scored.
+- The composite is never one number (§15).
 
-## What is deliberately NOT in R90
-
-- ~~§19 (the rubric steering the mentor)~~ — **built in R91, see below.**
-- **§10 transfer and §11 retention as scheduled tasks.** Both need a task generator
-  (a delayed retrieval prompt is a new student-facing surface). The schema already
-  distinguishes them: they arrive as new dimension columns/rows later, not a redesign.
-- **Class-level dashboards.** R90 lands the per-student truth; aggregation is a read.
-
-## Verification
-
-Deno-checked; python pins on the prompt's judgment rules and the API contract; the
-scorer deployed via MCP and smoke-tested live (unauthenticated → 401; a probe teacher
-account scored a synthetic Pressure-Test student end to end, rows inspected, probe
-removed); the Thinking tab walked offline against the mock backend, which implements
-the same contract.
-
-## §19 — the ledger steers the mentor (R91)
+## §19 — the ledger steers the mentor
 
 The rubric is explicit that measurement is not the point: *"It should influence how
-Jargon Mentor responds."* So `chat` reads the student's profile for the lesson each
-turn and derives — through the exported, property-tested `learnerSteer` — **at most two
-imperative moves**, which ride the payload's cacheable prefix as `learner` and which the
-system prompt's HOW THIS STUDENT THINKS rules place ABOVE the default help level.
-
-The rubric's own conditionals, in priority order:
+Jargon Mentor responds."* So `chat` reads the student's profile each turn and derives —
+through the exported, property-tested `learnerSteer` — **at most two imperative moves**,
+which ride the payload's cacheable prefix as `learner` and which the prompt's HOW THIS
+STUDENT THINKS rules place ABOVE the default help level.
 
 | when | the move |
 |---|---|
-| low independence **and** heavy recent scaffolding | REDUCE ASSISTANCE — drop a full rung below normal |
-| retrieval / reasoning / elaboration / vocabulary / organization / metacognition weak | the matching §19 ask, weakest dimension first |
-| expression weak **while reasoning is strong** (§18) | ask them to reformulate — never rewrite it for them |
-| retrieval, reasoning **and** independence all proficient | FADE AND TRANSFER — apply it somewhere new |
+| low independence **and** heavy recent scaffolding | REDUCE ASSISTANCE — a rung below normal |
+| a dimension weak, weakest first | the matching §19 ask |
+| expression weak **while reasoning is strong** (§18) | ask them to reformulate — never rewrite it |
+| retrieval, reasoning **and** independence all proficient | FADE AND TRANSFER |
 
 Three rules make it safe rather than merely clever:
 
-- **At most two moves.** EXACTLY ONE ASK is a hard rule of this prompt; a mentor handed
-  five weaknesses would ask five things or ignore the list. Weakest first, ties broken
-  in the rubric's own order (retrieval leads — everything else is built on it).
-- **Never a score, never a word of it to the student.** The moves carry no digits and
-  never name the measurement, and the prompt forbids quoting one back ("your
-  elaboration is weak"). A learner experiences only the CHANGE: a question where there
-  would have been a hint.
+- **At most two moves.** A mentor handed five weaknesses would ask five things or ignore
+  the list. Weakest first, ties broken in the rubric's own order.
+- **Never a score, never a word of it to the student.** A learner experiences only the
+  CHANGE: a question where there would have been a hint.
 - **Additive, never a gate.** Fewer than three judged responses, an absent profile, or a
   failed read all mean no steering, and the mentor behaves exactly as before.
 
-§18's separation is structural here too: weak expression beside strong reasoning asks
-for a reformulation, but weak expression beside weak *reasoning* steers the reasoning —
-language trouble is never mistaken for weak thinking.
+## The scoring runs itself
 
-## R92 — the scoring runs itself
+A profile that only exists when a teacher presses a button is a profile that mostly does
+not exist, and §19 has nothing to read. **pg_cron POSTs the scorer every 15 minutes**
+(`cognition-sweep`, batch 2).
 
-A profile that only exists when a teacher presses a button is a profile that mostly
-does not exist, and §19's steering has nothing to read. So the backlog is swept on a
-schedule: **every 15 minutes, pg_cron POSTs `{"action":"sweep","limit":2}`** at the
-scorer, and profiles appear for students nobody clicked on.
+The awkward part is the caller: a cron tick has no user, so it cannot pass
+`assertCanViewStudent`. Three things make that acceptable:
 
-The awkward part is the caller. A cron job has no user behind it, so the usual door
-(resolve the JWT, then `assertCanViewStudent`) does not exist. Three things make a
-user-less caller acceptable:
+- **Its own secret.** `cognition_sweep_auth` holds one random 32-byte key with RLS on and
+  *no policy at all*; the schedule reads it at fire time so the plaintext never sits in
+  `cron.job.command`; the function compares it in constant time.
+- **Nothing to read out.** The sweep returns and logs COUNTS ONLY, so the worst a stolen
+  key buys is scoring work the system was going to do anyway.
+- **One scoring body.** `runScoring` carries no authorization of its own; each caller
+  brings its own. Otherwise a swept profile and a pressed one could disagree.
 
-- **Its own secret, its own door.** `cognition_sweep_auth` holds one random 32-byte
-  key. RLS is on with *no policy at all*, so anon and authenticated can never read it;
-  the service role and postgres can. The schedule reads it at fire time, so the
-  plaintext never sits in `cron.job.command`. The function compares it in constant
-  time — an early-exit compare lets a caller walk a secret one character at a time.
-- **There is nothing to read out.** The sweep returns counts (`pairs_seen`,
-  `pairs_scored`, `responses_scored`, `errors`, `took_ms`) and writes counts. No
-  transcript, no narrative, no note ever crosses that door — so the worst a stolen key
-  buys is scoring work the system was going to do anyway.
-- **One scoring body.** The button and the scheduler both call `runScoring`, which
-  carries no authorization of its own; each caller brings its own. If they had
-  diverged, a swept profile and a pressed one could disagree about the same student.
+`cognition_sweep_queue` mirrors the judge's constructed-response test exactly and only
+surfaces a pair once **five** new responses are waiting. A scored turn leaves the queue by
+construction, so the sweep is idempotent and a failed pair simply waits for the next tick.
 
-**What is worth a model call.** `cognition_sweep_queue` mirrors the judge's
-`isConstructedResponse` exactly — code counts, a bare MCQ tap does not, 25 trimmed
-characters is the floor — and only surfaces a (student, lesson) pair once **five** new
-responses are waiting, comfortably past the three §19 needs before it will steer. A
-scored turn leaves the queue by construction (`left join … where cts.id is null`), so
-the sweep is idempotent and a *failed* pair simply stays queued for the next tick.
-
-**Bounded on purpose.** A tick takes at most 2 pairs (10 by request, never more) and
-scores at most 8 responses per pair. It only starts another pair if there is room for
-one as expensive as the priciest so far — a fixed cut-off cannot know whether the last
-pair took forty seconds or needed a retry; measuring does.
-
-**`cognition_sweep_runs` is the answer to "is it alive?"** — one row per tick, readable
-by platform admins, holding counts and lesson ids and no student text. The row is
-opened *before* any scoring and patched at the end, so a tick the gateway kills
-mid-flight still leaves a row with a null `finished_at`: "started and never came back"
+**Bounded, and honest about it.** A tick takes at most 2 pairs and 8 responses per pair,
+and only starts another pair if there is room for one as expensive as the priciest so far.
+The run-log row is opened *before* any scoring and patched at the end, so a tick the
+gateway kills still leaves a row with a null `finished_at` — "started and never came back"
 is a fact worth having, and silence is not.
 
-### What the first scheduled runs found
+## The teacher's two views
 
-The scheduler paid for itself immediately by failing in public. Two ticks in a row
-reported `pairs_seen: 2, pairs_scored: 1, errors: 1`, and the error was "the scoring
-model returned invalid JSON" — on a lesson whose *other* student had scored fine
-minutes earlier.
+**A student ▸ Thinking** — eight dimensions, the S-level under each response, the scaffold
+trajectory, and the narrative. This is where the numbers live, beside a lesson and the
+evidence that grounds them.
 
-The obvious reading was truncation: a longer transcript, a reply cut off mid-object, a
-perfect JSON prefix that will not parse. That reading was **wrong**. Shrinking the
-batch from 12 to 8 and doubling the output budget changed nothing, and the failing
-student's longest response turned out to be 215 characters. Then the third tick scored
-that same pair cleanly, from byte-identical input.
-
-So the judge is simply not always the JSON it was asked for — intermittently, on
-inputs that work fine on the next attempt. Three things came out of that:
-
-- **One retry**, and only for an unparseable reply. A refusal, a budget overrun, a
-  timeout or an API error would come back identically, so retrying them costs a model
-  call and buys nothing. Without the retry, a pair like this one sits in the queue
-  failing the same way every fifteen minutes forever.
-- **The error names its own shape.** `[stop=… blocks=… chars=… json=…]` plus the
-  parser's own complaint, cut at the first comma — which is exactly where V8 starts
-  quoting the document back, so no student text can ride along. Those four facts
-  separate an empty reply from a refusal from a prose preamble from a broken string.
-  "Invalid JSON" alone bought a wrong diagnosis and a wasted deploy.
-- **The truncation check stays.** It was not the cause here, but a genuinely truncated
-  reply still looks exactly like a malformed one, and now it says so.
-
-The batch of 8 and the 16000-token budget stayed too — not because they fixed
-anything, but because they are the more comfortable numbers to have been wrong with.
-
-
-## R93 — the whole room
-
-R90 reads one student in one lesson. R92 makes those readings appear on their own. R93
-is the first surface that reads ACROSS a class, and the thing it exists to resist is the
-class average: **"this room is at 2.7 / 4" is §15's failure one level up**, and there is
-nothing a teacher can do with it on Monday.
-
-So the room is arranged by what to DO. One sentence saying what the room as a whole
-needs, then students grouped by the move §19 would make for each of them:
+**A class ▸ How the room is thinking** — the first surface that reads ACROSS a class, and
+the one that had to resist the class average hardest. It is arranged by what to DO: one
+sentence saying what the room as a whole needs, then students grouped by the move §19
+would make for each of them.
 
 | group | what it means | what the teacher is told |
 |---|---|---|
-| **Leaning on the tutor** | independence ≤ 2 while recent scaffolding ≥ S3 | they need less help, not more |
-| **needs: <dimension>** | the weakest dimension, rubric order breaking ties | the §19 move, said to a person |
-| **Ready for harder ground** | retrieval, reasoning and independence all ≥ 3 | give them something the lesson has not covered |
+| **Leaning on the tutor** | independence ≤ 2, recent scaffolding ≥ S3 | they need less help, not more |
+| **needs: \<dimension\>** | weakest dimension, rubric order breaking ties | the §19 move, said to a person |
+| **Ready for harder ground** | retrieval, reasoning, independence all ≥ 3 | give them something uncovered |
 | **Holding steady** | nothing weak, not yet independent | leave them be |
 | **Not read yet** | under three judged responses | named, never silently dropped |
 
-Alarm first, opportunity later: a teacher reading top to bottom meets what is going
-wrong before what is going well. The headline follows §19's own precedence too — a room
-being carried by the tutor is reported as *"an assistance problem before it is a content
-one"* even when some dimension is weaker.
+Alarm first: a teacher reading top to bottom meets what is going wrong before what is
+going well. The headline follows §19's own precedence — a room being carried by the tutor
+reads as *"an assistance problem before it is a content one"* even when some dimension is
+weaker.
 
-### The three rules that keep it honest
+Four rules keep it honest:
 
 - **The view and the mentor cannot disagree.** The grouping uses `learnerSteer`'s own
-  thresholds (3-response floor, weak ≤ 2, proficient ≥ 3) and its own priority order. A
-  room view saying "these four are leaning on the tutor" while the mentor treats them as
-  fine would be worse than no view. `chat` and `cognition-scorer` cannot import each
-  other, so `tests/test_r93_class_room.py` reads BOTH files and fails if they drift.
-- **The room is the roster, not the scored rows.** Everyone active in the class appears,
-  read or not. A view built from the profiles table would quietly shrink to whoever had
-  been scored — losing exactly the students who most need attention.
-- **Nothing is collapsed into one number.** A student keeps all eight dimensions; the
-  room summary holds no dimension VALUE at all, only counts of students. Neither
-  rendering file reads a dimension value: what a teacher sees is which group someone is
-  in and what to do about it, with the eight numbers one click away on the student,
-  where a lesson and evidence sit beside them.
+  floor, thresholds and priority order. `chat` and `cognition-scorer` cannot import each
+  other, so `tests/test_r93_class_room.py` reads BOTH files and fails on drift.
+- **The room is the roster, not the scored rows.** Everyone active appears, read or not. A
+  view built from the profiles table would shrink to whoever had been scored — losing
+  exactly the students who most need attention.
+- **Nothing is collapsed into one number.** A student keeps all eight dimensions; the room
+  summary holds no dimension VALUE at all, only counts of students; neither rendering file
+  can reach a dimension value (the wire type keeps them nested, so it is a compile error,
+  not a convention).
+- **A class reports on ITS courses.** Students are commonly in several classes at once, so
+  an unscoped room would blend a history lesson's reasoning into the biology teacher's
+  reading of the same child. Getting from a course to its lessons is three hops —
+  `courses → course_versions → units → lessons`; `lessons` carries no `course_id`.
 
-### Scope, and the bug the probe caught
+### Sections
 
-A class reports on ITS courses. Students here are commonly in several classes at once,
-so an unscoped room would blend a history lesson's reasoning into the biology teacher's
-reading of the same child.
-
-Getting from a course to its lessons is **three hops** — `courses → course_versions →
-units → lessons`; `lessons` carries no `course_id`. The first implementation guessed one
-hop, and the live probe answered `column "course_id" does not exist`. That would have
-400'd the entire class view for every class that links a course — which is nearly all of
-them — and no offline test would have noticed. The scope is then applied in memory
-rather than in the query string, so a course with a hundred lessons cannot fail the
-request on URL length.
-
-### Verification
-
-Deno-checked; 26 source pins; 12 executable property tests over the real `room.ts`
-(group order, needs-splitting, no-student-dropped, not-a-ranking, every headline
-branch, and that no headline can carry a score). Live against production, on a probe
-class built for the purpose and deleted afterwards: a teacher of the class got the room
-(dependent / mastered / needs:reasoning / unread, all correct), a teacher of another
-class in the same organization got **403**, an anon caller got **403**, and a profile
-belonging to a lesson outside the class's course was correctly excluded — the student's
-totals stayed at their in-course values instead of being dragged down by it.
-
-
-## R94 — the room has streams
-
-A teacher who splits a class into sections teaches them at different hours and to
-different plans, so one blended reading hides the thing they most need to see. The
-probe made this concrete rather than theoretical. A five-student class:
+A teacher who streams a class teaches its sections at different hours and to different
+plans, so one blended reading can hide a whole stream. Measured, on a five-student class:
 
 | view | what it says |
 |---|---|
 | whole class | *"1 student of the 5 read is weak on reasons with it, and no single thing is holding the whole room back."* |
-| section A | *"2 students of the 2 read are leaning on the tutor for most of their thinking. That is an assistance problem before it is a content one."* |
-| section B | *"Nothing is weak across the 2 students read. This room is ready for harder work."* |
+| **section A** | *"2 students of the 2 read are leaning on the tutor… an assistance problem before it is a content one."* |
+| **section B** | *"Nothing is weak across the 2 students read. This room is ready for harder work."* |
 
-Blended, the class reads as unremarkable. Section A is **entirely** dependent. That
-divergence is the whole feature.
+- The comparison **is** the sentence each section gets on its own (`sectionHeadlines`
+  calls `roomHeadline` per section), so no threshold decides when sections "differ" and
+  selecting one can never contradict the line that sent you there.
+- No sections, or exactly ONE, means no control — a single named section is the whole
+  class under another name.
+- The people not in a section are a group named "No section", not a remainder. That is the
+  live shape: the classes using sections today each have one named section plus a student
+  outside it.
+- Sections are summarized server-side by the same summarizer the class uses, because a
+  client that built its own summaries would have to read the dimension values the room
+  view exists to keep out of sight.
 
-- **The section control appears only when there is a choice to make.** A class that has
-  never used sections gets `sections: []` and no control — and a class with ONE named
-  section gets none either, because that is the whole class under another name and a
-  control that does nothing is worse than no control.
-- **The people not in a section are a group, named "No section".** That is the live
-  shape, not the tidy two-stream one: the classes using sections today each have one
-  named section plus an unsectioned student.
-- **The comparison is the same sentence each section gets on its own.** `sectionHeadlines`
-  calls `roomHeadline` per section rather than inventing a second way of saying what a
-  room needs — so selecting a section can never tell a teacher something different from
-  what the comparison line just told them, and no threshold rule had to be invented to
-  decide when two sections "differ".
-- **The arithmetic stays on the server.** Each section is summarized by the SAME
-  `summarizeRoom` the class uses. A client that summarized sections itself would have to
-  read dimension values, which is precisely what the room view is not allowed to put in
-  front of a teacher. The client picks a summary; it never builds one.
-- **A section named "all" is still selectable.** Choice keys are prefixed (`section:A`),
-  so a label can never collide with the whole-class view and make a real section
-  unreachable.
+## What is deliberately NOT built
 
-Two smaller things the probe caught: a stale choice (a section that disappears between
-loads) falls back to the whole class rather than stranding the teacher in an empty room,
-and the headline said *"1 student … are weak"* — which reads as a bug in the product,
-not in a sentence. Both are pinned.
+- **§10 transfer and §11 retention as scheduled tasks.** Both need a task generator — a
+  delayed retrieval prompt is a new student-facing surface. The schema already
+  distinguishes them: they arrive as new columns later, not a redesign.
+- **A cross-class view.** The room reads one class at a time; a teacher with five classes
+  still has no way to see where to spend their morning.
+- **Section hygiene.** A section is an unvalidated text label on a membership, so `"A"`
+  and `"a "` are two sections. A teacher will eventually create a duplicate stream by typo.
+
+## The wrong diagnoses (kept, because they are the evidence)
+
+Live probing found things review and 1454 offline pins did not.
+
+- **"The scoring model returned invalid JSON" was read as truncation. It was not.** A
+  smaller batch and a doubled output budget changed nothing; the failing student's longest
+  response was 215 characters; the third tick scored the same pair cleanly from
+  byte-identical input. The judge is *intermittently* unparseable. Fix: one retry, for
+  unparseable replies only — and an error that now carries `[stop= blocks= chars= json=]`
+  plus the parser's complaint cut at the first comma (exactly where V8 starts quoting the
+  document back, so no student text can ride into a log). The truncation check stays: it
+  was not the cause here but remains a real failure mode.
+- **`lessons` has no `course_id`.** The single-hop guess would have 400'd the class view
+  for every class that links a course — nearly all of them. Caught by the first probe.
+- **Claude 5 rejects `temperature`, and rejects assistant prefill.** Both found by live
+  calls, not by reading docs.
+- **`Number(null)` is 0 and 0 is finite**, so a profile with no scaffold trend reported
+  "steady" and fed the dependency rule a comparison that never happened. Caught by a
+  property test on its first run.
+- **`app.settings.anon_key` was never set**, so the scheduled call would have sent
+  `Bearer ` and 401'd silently every fifteen minutes. Caught by checking before scheduling.
+- **"1 student … are weak."** Subject-verb agreement in a sentence a teacher reads. It
+  looks like a broken product, not a broken sentence.
+
+## Verification
+
+- **1454 python pins** over the prompt's judgment rules, the API contracts, the schedule's
+  contract and the room's rules — including two that read `chat` and `cognition-scorer`
+  together and fail if the §19 thresholds drift apart.
+- **22 executable property tests** over the real room derivations (`tests/room_view.test.ts`
+  via `tests/test_r93_room_view.py`), plus the 32 flow-core properties.
+- `deno check` clean on the scorer; `tsc`, `eslint` and `vite build` clean.
+- **Live, against production**, on probe rigs created and deleted each time: the sweep's
+  auth door (403 / 403 / ran), the class door (403 for a teacher of another class in the
+  same org), lesson scoping (a profile outside the class's courses correctly excluded),
+  every grouping branch, and all three section shapes.
+
+## Operational state
+
+| piece | status |
+|---|---|
+| `cognition-scorer` | **live** (v10) — deploys through the MCP channel |
+| the ledger + sweep tables, `cognition-sweep` cron | **live**, firing every 15 minutes |
+| the teacher console (Thinking tab, room panel) | **live** — the frontend deploys from main |
+| `chat` — §19 steering (R91) | **merged, NOT deployed** |
+| `curriculum-admin` — R85 provider switch, R89 shared-book fix | **merged, NOT deployed** |
+
+`SUPABASE_ACCESS_TOKEN` is expired. The MCP deploy channel has a per-call size ceiling
+that `chat` (417KB) and `curriculum-admin` (181KB) both exceed, so those two wait on the
+token being rotated and `deploy-backend.yml` re-run. Until then the profiles accumulate
+but the mentor does not yet steer on them — which is the half that makes the rubric change
+what a student experiences rather than only what a teacher reads.

@@ -64,6 +64,17 @@ class TheRoomIsAskedAsARoomTests(unittest.TestCase):
             body.index('action === "class_view"'), body.index("await fetchCurrentUser(config)")
         )
 
+    def test_independent_reads_do_not_serialize(self):
+        # This view loads on the class landing screen every time a teacher opens one.
+        # The roster and the course links do not depend on each other, and neither do
+        # the lesson walk and the profile read — six sequential round trips for a shape
+        # that needs four is latency a teacher pays on every visit.
+        view = SCORER[SCORER.index("async function classView(") :]
+        view = view[: view.index("\nfunction summarizeSections(")]
+        self.assertEqual(view.count("await Promise.all(["), 2)
+        self.assertIn("const [roster, links] = await Promise.all([", view)
+        self.assertIn("const [classLessons, profiles] = await Promise.all([", view)
+
     def test_a_lesson_is_reached_through_the_real_hierarchy(self):
         # lessons has NO course_id. The path is courses -> course_versions -> units ->
         # lessons, and the single-hop guess 400'd on the first live probe — which would
@@ -151,6 +162,17 @@ class TheRoomSaysNothingAboutStudentWorkTests(unittest.TestCase):
                 self.assertNotIn(dimension, returned)
         # "weakest" counts students per dimension; it never carries a value.
         self.assertIn("students: read.filter((student) => {", summary)
+
+    def test_the_wire_type_does_not_promise_top_level_dimensions(self):
+        # The dimensions arrive NESTED under `dims`. Declaring RoomStudent as
+        # `CognitionDims & {...}` let `student.reasoning` compile and be undefined
+        # forever — and quietly invited the exact reading this view forbids. Keeping
+        # them nested makes the rule a compile error rather than a convention.
+        api = (FRONTEND / "lib" / "api.ts").read_text(encoding="utf-8")
+        block = api[api.index("export type RoomStudent = ") :]
+        block = block[: block.index("\n};")]
+        self.assertNotIn("CognitionDims &", block)
+        self.assertIn("dims: CognitionDims;", block)
 
     def test_the_rendered_room_shows_no_dimension_value(self):
         # The strongest form of §15 for this surface, and structural rather than a word
