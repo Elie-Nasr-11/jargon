@@ -6,6 +6,38 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-01 (R96: pre-launch polish audit)
+
+Status: Finished
+Task: the polishing-round audit, written up as `docs/LAUNCH_BRIEF.md` — one document,
+every gap, each with where it is, how sure I am (looked at / measured / inferred) and what
+it costs. No fixes were made; the brief is for choosing from.
+
+Summary:
+- 75 rows across twelve sections: two true blockers (the sign-in placeholder and the demo
+  disclosure on the production sign-in), three phone blockers-if-phones (menu button over the
+  greeting, the class card 514 px wide at a 390 px viewport and clipped rather than
+  scrollable, names shrinking to one letter), 25 lexicon hits, the button/state/label
+  redundancies with counts, a three-way conflict between the standing design preferences,
+  the repo's boards and the app as measured, and the robustness leads.
+- Method: 15 desktop screens dark + the same 15 light + 5 phone + 14 click-throughs against
+  the offline mock harness; greps, scans and toolchain runs over `frontend/src` at 19b1de4.
+  The harness's two artifacts (no realtime socket; admin-ops 403) are excluded and named.
+- Baseline today: tsc 0 errors; eslint src 0 errors / 36 warnings; build green with the
+  chunk warning; pins 1454 OK / 4 skipped; console clean in 39 captures.
+
+Files changed: docs/LAUNCH_BRIEF.md (new), docs/HANDOFF.md.
+Tests run: python3 -m unittest discover -s tests -p 'test_*.py' → 1454 OK, 4 skipped.
+  tsc --noEmit → 0 errors. eslint src → 0 errors, 36 warnings. vite build → green.
+Remaining concerns:
+- `npm run lint` (`eslint .`) did not finish in fifteen minutes; `eslint src` does. I did not
+  establish what it was walking (K1 in the brief).
+- Not looked at: the quiz/assignment surfaces from the student side, the lesson editor's
+  dialogs, the grading screens, the live Watch transcript, notifications, the course build
+  flow, roster import, class settings dialogs. The brief says so; gaps there are gaps in it.
+Suggested next task: the owner picks rows from the brief. Whatever is picked, one PR per
+screen, each with its pin; the lexicon rows (§B) want the B8 decision first.
+
 ## Claude -> Codex / Human - 2026-09-01 (the token, and the blocker behind it)
 
 Status: Finished
