@@ -3101,6 +3101,14 @@ export function heuristicKind(text: string): RouterVerdict {
 // never to zero. buildBrainContext ranks it into the compact `brain` payload key the
 // mentor (and Phase C's deterministic hooks) consume.
 const MASTERY_EMA_ALPHA = 0.3;
+// The EMA needs a SEED, and it must not be zero. Seeding a first observation from 0 made
+// "never seen" and "got it wrong" the same starting point, so a student who answered
+// correctly on their first try scored 0.3 and read as "to refresh" — the same
+// Number(null) === 0 family as the scaffold-trend bug in docs/COGNITION.md. A neutral
+// prior says what is true before any evidence: nothing is known either way. One correct
+// answer then reads as growing (0.65), two as solid (0.755), one wrong as needing a
+// refresh (0.35).
+const MASTERY_PRIOR = 0.5;
 const MASTERY_DECAY_DAYS = 45;
 const MASTERY_DECAY_FLOOR = 0.4;
 const BRAIN_WEAK_MAX = 5;
@@ -3239,7 +3247,9 @@ async function recordIdeaEvidence(
     const nowIso = new Date().toISOString();
     const rows = keys.map((key) => {
       const row = byKey.get(key);
-      const prev = Math.max(0, Math.min(1, Number(row?.score) || 0));
+      const prev = row
+        ? Math.max(0, Math.min(1, Number(row.score) || 0))
+        : MASTERY_PRIOR;
       const target = result === "pass" ? 1 : 0;
       const score =
         result === "neutral" ? prev : prev + MASTERY_EMA_ALPHA * (target - prev);
@@ -3253,9 +3263,13 @@ async function recordIdeaEvidence(
         updated_at: nowIso,
       };
     });
-    await upsertRows(config, "student_idea_mastery", rows);
-  } catch {
-    // Mastery is enrichment — a write failure never costs the turn.
+    await upsertRows(config, "student_idea_mastery", rows, "user_id,idea_key");
+  } catch (err) {
+    // Mastery is enrichment — a write failure never costs the turn. But it must not be
+    // SILENT: this call spent its whole life dropping a required argument, PostgREST
+    // rejected every request, and the empty catch meant nobody found out until the table
+    // was queried and held zero rows. Cheap to log, expensive not to.
+    console.error("idea_mastery_write_failed", errorMessage(err));
   }
 }
 
