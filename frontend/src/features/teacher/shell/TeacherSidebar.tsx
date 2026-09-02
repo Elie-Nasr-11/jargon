@@ -255,7 +255,7 @@ function SidebarContent({ props, inDrawer }: { props: TeacherSidebarProps; inDra
           <div className="my-1.5 h-px bg-border" />
           <MenuRow
             icon={LogOut}
-            label="Log out"
+            label="Sign out"
             onClick={async () => {
               try {
                 setLogoutError(false);

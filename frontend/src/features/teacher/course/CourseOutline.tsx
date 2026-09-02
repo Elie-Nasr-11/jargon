@@ -173,7 +173,7 @@ function UnitBlock({
 }) {
   return (
     <div className={`rounded-card px-1.5 py-2 ${dragging ? "opacity-60" : ""}`}>
-      <div className="flex items-center gap-2 px-1.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1.5">
         <GripVertical
           className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground"
           strokeWidth={1.7}
@@ -181,7 +181,7 @@ function UnitBlock({
         {renaming ? (
           <UnitNameInput initial={unit.title} onCommit={onRename} />
         ) : (
-          <h3 className="min-w-0 flex-1 truncate text-title font-medium text-foreground">
+          <h3 className="min-w-0 flex-1 basis-full truncate text-title font-medium text-foreground sm:basis-auto">
             {unit.title}
           </h3>
         )}

@@ -15,6 +15,7 @@ import {
   type DimensionKey,
 } from "@/features/teacher/cognition/labels";
 import type { RoomStudent, RoomSummary, SectionSummary } from "@/lib/api";
+import { countOf } from "@/lib/format";
 
 export type RoomGroup = {
   /** Stable key: the server group, or "needs:<dimension>" split out by focus. */
@@ -138,10 +139,6 @@ export function roomHeadline(room: RoomSummary | null | undefined): string {
     return `${top.students} of the ${room.read} students read are weak on the same thing — ${label}. That is a lesson to reteach, not ${countOf(top.students, "tutorial")}.`;
   }
   return `${countOf(top.students, "student")} of the ${room.read} read ${isAre(top.students)} weak on ${label}, and no single thing is holding the whole room back.`;
-}
-
-function countOf(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }
 
 // "1 student ... are weak" reads as a bug in the product, not a bug in a sentence.

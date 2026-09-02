@@ -322,8 +322,8 @@ export function PeoplePanel({
                           </button>
                         </div>
                         <p className="mt-1.5 text-meta text-muted-foreground">
-                          Share it with them directly — it is sent to Supabase Auth and never stored
-                          in Jargon tables.
+                          Share it with them directly — it goes straight to the sign-in service and
+                          Jargon never stores it.
                         </p>
                       </div>
 

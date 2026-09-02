@@ -3,6 +3,7 @@ import { prefetchLesson } from "@/lib/api";
 import { Collapsible } from "@/components/Collapsible";
 import { groupByUnit } from "@/features/student/lessonGroups";
 import type { Lesson } from "@/lib/types";
+import { countOf } from "@/lib/format";
 
 // The class → unit → lesson tree in the sidebar.
 //
@@ -141,7 +142,7 @@ export function LessonTree({
             meta={
               <span
                 className="shrink-0 pl-1 font-mono text-overline tracking-[0.14em] text-muted-foreground"
-                aria-label={`${done} of ${total} lessons complete`}
+                aria-label={`${done} of ${countOf(total, "lesson")} complete`}
               >
                 {done}/{total}
               </span>

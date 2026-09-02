@@ -837,7 +837,11 @@ export function StudentApp({
           <Menu className="h-[18px] w-[18px]" strokeWidth={1.6} />
         </button>
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* The menu button is `fixed left-3 top-3` and only exists below lg, so the
+            stage has to leave room for it there — the teacher side gets the same
+            clearance from PageShell's max-lg:pt-14. Without it the button sits on
+            top of the greeting and the newest bubble. */}
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col max-lg:pt-12">
           {destinationSpec ? (
             <section className="flex min-h-0 flex-1 flex-col px-6 py-6">
               <header className="mb-4 flex items-baseline gap-3">

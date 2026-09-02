@@ -36,6 +36,7 @@ import {
   enrollStudents,
   removeFromClass,
   fetchEnrollableStudents,
+  fetchClassCourseLinks,
   fetchTeacherDashboard,
   gradeAssignmentSubmission,
   getSession,
@@ -65,6 +66,7 @@ import type {
   TeacherDashboardData,
   TeacherNote,
 } from "@/lib/types";
+import { teachesLessonFor } from "@/features/teacher/today/needsYou";
 
 export function TeacherConsole() {
   const navigate = useNavigate();
@@ -143,6 +145,18 @@ export function TeacherConsole() {
     refetchInterval: 30 * 1000,
   });
   const dashboard = dashboardQuery.data ?? null;
+
+  // Which courses each class teaches. The landing card's "N live now" used to count
+  // every live session of every class member, while Today counted only lessons the
+  // class actually teaches — so the two screens reported different numbers for the same
+  // fact. Same query, same staleTime and same predicate as TodayScreen.
+  const classIds = (dashboard?.classes ?? []).map((row) => row.id);
+  const classLinksQuery = useQuery({
+    queryKey: ["classCourseLinks", classIds.join(",")],
+    queryFn: () => fetchClassCourseLinks(classIds),
+    enabled: classIds.length > 0,
+    staleTime: 60 * 1000,
+  });
   const booting = !authChecked || (Boolean(teacherId) && dashboardQuery.isPending);
 
   // Optimistic dashboard updates now target the React Query cache so every
@@ -811,7 +825,11 @@ export function TeacherConsole() {
                         <ClassButton
                           item={item}
                           active={item.id === selectedClassId}
-                          signals={classSignals(dashboard, item.id)}
+                          signals={classSignals(
+                            dashboard,
+                            item.id,
+                            teachesLessonFor(classLinksQuery.data, item.id, model.lessonsById),
+                          )}
                           onClick={() =>
                             navigate({
                               to: "/teacher/class/$classId",

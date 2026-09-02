@@ -84,7 +84,7 @@ function AccountMenuPanel({
           ) : (
             <Sun className="h-[15px] w-[15px]" strokeWidth={1.5} />
           )}
-          Theme
+          Appearance
         </span>
         <span className="flex rounded-pill border border-border bg-depth-sub p-[3px]">
           {(["dark", "light"] as const).map((mode) => {

@@ -81,10 +81,11 @@ class LoginTests(unittest.TestCase):
         self.assertIn("var(--aurora-1), var(--aurora-2), var(--aurora-3)", LOGIN)
         self.assertIn("Jargon AI tutor", LOGIN)
 
-    def test_demo_access_disclosure_survives(self):
-        # The pinned entry story: deterministic demo emails, password never embedded.
-        self.assertIn("Demo access", LOGIN)
-        self.assertIn("demo-student@example.com", LOGIN)
+    def test_the_entry_story_no_longer_advertises_demo_accounts(self):
+        # R53 shipped a "Demo access" disclosure as the entry story. R98 retired it:
+        # a school takes this on in production, and its sign-in page is not the place
+        # for example.com accounts. The rest of R53's login work stands.
+        self.assertNotIn("Demo access", LOGIN)
 
 
 class TableClipTests(unittest.TestCase):

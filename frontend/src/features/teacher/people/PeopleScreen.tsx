@@ -158,7 +158,7 @@ export function PeopleScreen({
           {studentIds.length} student{studentIds.length === 1 ? "" : "s"}
           {names.length ? ` · sections ${names.join(" · ")}` : ""}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-full border border-border p-0.5">
             {(["roster", "gradebook"] as const).map((option) => (
               <button
@@ -213,7 +213,7 @@ export function PeopleScreen({
                     return (
                       <div
                         key={studentId}
-                        className={`flex items-center gap-3 rounded-card border py-2 pl-4 pr-2 transition-colors ${
+                        className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-card border py-2 pl-4 pr-2 transition-colors ${
                           selectedStudentId === studentId
                             ? "border-primary/45 bg-depth-card"
                             : "border-border bg-depth-sub"
@@ -222,7 +222,7 @@ export function PeopleScreen({
                         <button
                           type="button"
                           onClick={() => onSelectStudent(studentId)}
-                          className="flex min-w-0 flex-1 items-center gap-3 py-1 text-left transition-colors hover:opacity-80"
+                          className="flex min-w-0 flex-1 basis-full items-center gap-3 py-1 text-left transition-colors hover:opacity-80 sm:basis-auto"
                         >
                           {liveByStudent.has(studentId) ? (
                             <span className="relative flex h-2.5 w-2.5 shrink-0">
@@ -232,7 +232,7 @@ export function PeopleScreen({
                           ) : (
                             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-border" />
                           )}
-                          <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
+                          <span className="min-w-0 truncate text-body font-medium text-foreground sm:min-w-[140px] sm:shrink-0">
                             {displayName(profile, studentId)}
                           </span>
                           <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
@@ -248,7 +248,7 @@ export function PeopleScreen({
                             {gradeChipLabel(gradeSummaries.get(studentId))}
                           </span>
                         </button>
-                        <label className="flex shrink-0 items-center">
+                        <label className="flex shrink-0 items-center max-sm:ml-[22px]">
                           <span className="sr-only">
                             Section for {displayName(profile, studentId)}
                           </span>

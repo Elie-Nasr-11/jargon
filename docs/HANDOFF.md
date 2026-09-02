@@ -6,6 +6,76 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-02 (R98: demo-ready)
+
+Status: Finished
+Task: the launch-brief items a school will meet tomorrow — on a laptop and on a phone.
+
+Summary:
+
+THE PHONE WAS THE REAL WORK. The brief measured the teacher's class card at 514px inside
+a 390px viewport, with the page CLIPPING rather than scrolling (TeacherShell owns the only
+`overflow-hidden`), so everything past 390px was unreachable — Watch buttons, the roster's
+section select, its remove control. The cause was the same shape in four places: a row of
+fixed-width children (`shrink-0` chips, buttons, selects, and a name holding a 140px floor)
+inside a single-track grid with no `min-w-0`, so the track took the row's min-content and
+the card grew to fit. The Course tab was worse at 535px, and the culprit there was measured
+rather than guessed: the unit header's nowrap title needs 226px on its own, and beside three
+fixed controls the row's min-content came to 485px.
+
+Every one of those rows now wraps, and the name gets the first line. Verified by re-measuring
+in the browser, not by eye: all six phone screens report `scrollWidth === innerWidth` with
+zero elements past the right edge, and the student menu button no longer intersects the page
+heading (it had been sitting on top of the greeting and the newest chat bubble, because the
+student stage had no phone-only top clearance while the teacher's PageShell has always had
+`max-lg:pt-14`).
+
+The sign-in page is a production door now: the Demo access panel with its three
+example.com accounts is gone, and so is the password placeholder that read as a hint.
+
+Also: the landing card and Today now compute "live now" from ONE predicate
+(`teachesLessonFor`, extracted into needsYou) — they had reported 3 and 2 for the same class
+because only one of them scoped by course. One pluraliser (`countOf`, moved into lib/format)
+replaced nine hand-written `n === 1 ? "" : "s"` sites, so "all 1 lessons" and "1 classes"
+cannot come back. The Thinking tab stopped telling teachers to press a button for scoring
+that has run itself every fifteen minutes since R92. The empty room stopped printing its
+headline twice. The admin stopped naming its vendor and calling itself a pilot. The entry
+route survives a failed role lookup instead of landing on the router's error boundary.
+Teacher and student menus now use one pair of words (Appearance / Sign out).
+
+Files changed: routes/login.tsx, routes/index.tsx, student/{StudentApp,StudentHome,
+StudentSidebar,LessonTree,ClassSummary}.tsx, features/teacher/{people/PeopleScreen,
+today/TodayScreen,today/needsYou,console/GlobalReviewQueue,console/derive,console/CognitionPanel,
+cognition/ClassRoomPanel,cognition/room,course/CourseOutline,course/coursePanels,
+authoring/StepCard,authoring/generatePanels,shell/TeacherSidebar}, TeacherConsole.tsx,
+features/admin/{AdminPage,PeoplePanel,HealthPanel}.tsx, lib/format.ts,
+public/manifest.webmanifest, tests/test_r98_demo_ready.py (new, 21 pins).
+
+SEVEN OLD PINS BROKE, and every one of them was pinning a SHAPE. This is the seventh release
+running where that has happened, so they are recorded rather than quietly patched: R46 pinned
+the argument list of a `classSignals(` call; R52 pinned an exact class string on a row whose
+real rule is "a row contains its own actions"; R53 pinned that "Demo access" EXISTS; R57
+pinned the literal `Build {lessonCount}`; R78's meta-pin caught my own new test naming
+TeacherConsole.tsx by path (correctly — it now reads the surface); R81 pinned the course-scope
+predicate at the address it used to live at; R93's deno harness had to be taught about the
+shared formatter. All re-expressed as rules.
+
+Tests run: python 1489 OK / 4 skipped · tsc 0 · eslint src 0 errors (36 pre-existing
+fast-refresh warnings) · vite build green · phone walk at 390x844 over sign-in, student Home,
+student Learn, teacher landing, class Today/People/Course — all clean.
+
+Remaining concerns:
+- The student greeting now wraps to three lines on a phone rather than clipping. Correct,
+  but tall; the stat pills could move under it.
+- Not touched, because they are decisions and not defects: the step-kind vocabulary
+  (Teach/Practice/Checkpoint/Reflect/Explain/Media vs the lexicon's three beats), and
+  "Home" vs the "Overview" row beneath it in the student sidebar.
+- The admin portal is still a top bar with a gear where the other two portals have a
+  sidebar (DESIGN_V6 §1 says three doors share one shell). R84 built it that way on purpose.
+
+Suggested next task: R99 — the judge's missing anchors and the evidence already being
+written but never rendered.
+
 ## Claude -> Codex / Human - 2026-09-02 (R97: the mastery write that never wrote)
 
 Status: Finished

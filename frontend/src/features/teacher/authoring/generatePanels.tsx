@@ -30,6 +30,7 @@ import type {
   LessonResource,
 } from "@/lib/types";
 import { Check, ChevronRight, MessageSquare, Save, Sparkles } from "lucide-react";
+import { countOf } from "@/lib/format";
 
 export type ItemStatus = "added" | "changed" | "same";
 
@@ -483,11 +484,11 @@ export function AiOutlinePanel({
                   setPrompt("");
                 }}
                 disabled={busy}
-                title={`Create the units and write all ${lessonCount} lessons`}
+                title={`Create the units and write all ${countOf(lessonCount, "lesson")}`}
                 className="btn btn-primary"
               >
                 <Sparkles className="h-3.5 w-3.5" strokeWidth={1.7} />
-                Build {lessonCount} {lessonCount === 1 ? "lesson" : "lessons"}
+                Build {countOf(lessonCount, "lesson")}
               </button>
               <button
                 type="button"

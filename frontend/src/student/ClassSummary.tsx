@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Loader2, Play } from "lucide-react";
 import { groupByUnit } from "@/features/student/lessonGroups";
 import { fetchClassResources, fetchStudentGrades } from "@/lib/api";
-import { formatDate, formatScore } from "@/lib/format";
+import { countOf, formatDate, formatScore } from "@/lib/format";
 import { ClassAvatar } from "@/student/ClassList";
 import { ProgressGlyph } from "@/student/LessonTree";
 import { ResourceCard } from "@/student/ResourceCard";
@@ -135,7 +135,7 @@ export function ClassSummary({
           <div className="flex shrink-0 items-center gap-2">
             <StatPill
               color={lessons && done === lessons.length && done > 0 ? "var(--success)" : undefined}
-              ariaLabel={`${done} of ${lessons?.length ?? 0} lessons complete`}
+              ariaLabel={`${done} of ${countOf(lessons?.length ?? 0, "lesson")} complete`}
             >
               {done}/{lessons?.length ?? "…"} LESSONS
             </StatPill>

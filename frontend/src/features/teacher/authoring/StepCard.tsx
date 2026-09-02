@@ -520,7 +520,7 @@ export function StepCard({
               {attached.length === 0 && stepMode === "media" ? (
                 <div className="rounded-card border border-dashed border-border px-3 py-2 text-meta text-muted-foreground">
                   {resources.length === 0
-                    ? "No lesson materials yet — add them in the class console's Resources tab, then attach them here."
+                    ? "No lesson materials yet — add them under Materials on this lesson, then attach them here."
                     : "Media steps present their attached materials when the step opens — attach one below."}
                 </div>
               ) : null}

@@ -114,7 +114,12 @@ class R52StructureTests(unittest.TestCase):
         # The live row's Watch button sits INSIDE the row container (it moved to Today
         # with the rest of "what needs me now"); the People row's section picker likewise.
         live = CONSOLE.split("In a lesson now", 1)[1].split("Waiting on you", 1)[0]
-        self.assertIn("flex items-center gap-3 rounded-card border border-border", live)
+        # The row is a bordered card that holds its own controls. Pinned as those two
+        # facts rather than as a class string: R98 had to add flex-wrap and min-w-0 so
+        # the row survives a 390px phone, which changed the string without changing
+        # anything this pin cares about.
+        self.assertRegex(live, r"rounded-card border border-border")
+        self.assertRegex(live, r"items-center")
         self.assertIn("Watch", live)
         # The People row: its section picker and its remove button sit inside the same
         # row container as the name, rather than floating beside it. Pinned as structure
@@ -122,7 +127,8 @@ class R52StructureTests(unittest.TestCase):
         # broke without changing a single pixel.
         row = people_source().split("group.students.map((studentId)", 1)[1]
         row = row.split("</div>\n                    );", 1)[0]
-        self.assertIn("flex items-center gap-3 rounded-card border", row)
+        self.assertRegex(row, r"rounded-card border")
+        self.assertRegex(row, r"items-center")
         self.assertIn("<select", row)
         self.assertIn("Remove ${displayName", row)
 
