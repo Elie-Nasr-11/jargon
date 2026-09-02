@@ -74,3 +74,28 @@ export function toMarkRows(
     (row) => row.classId === classId,
   );
 }
+
+/**
+ * Does this lesson belong to a course THIS class teaches?
+ *
+ * Extracted so the class card on the landing and the "in a lesson now" list inside the
+ * class read the same fact: they used to disagree (card said 3, Today said 2) because
+ * only one of them scoped by course, and students are commonly in several classes.
+ *
+ * Returns undefined while the links are unknown — unscoped is honest, silently empty is
+ * not. A lesson with no course_id stays visible for the same reason.
+ */
+export function teachesLessonFor(
+  links: Array<{ class_id: string; course_id: string }> | undefined,
+  classId: string,
+  lessonsById: Map<string, { course_id?: string | null }>,
+): ((lessonId: string) => boolean) | undefined {
+  if (!links) return undefined;
+  const courseIds = new Set(
+    links.filter((row) => row.class_id === classId).map((row) => row.course_id),
+  );
+  return (lessonId: string) => {
+    const courseId = lessonsById.get(lessonId)?.course_id;
+    return courseId ? courseIds.has(courseId) : true;
+  };
+}

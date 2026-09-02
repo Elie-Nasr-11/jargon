@@ -217,7 +217,7 @@ export function ClassRoomPanel({
           ) : (
             <p className="mt-2 text-meta text-muted-foreground">
               {active === ALL_SECTIONS
-                ? "No students in this class yet."
+                ? "Add students from People and their thinking will appear here."
                 : "Nobody is in this section."}
             </p>
           )}

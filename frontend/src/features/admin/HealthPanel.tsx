@@ -287,8 +287,8 @@ export function HealthPanel({
               </h2>
               <p className="mt-1 max-w-2xl text-meta leading-relaxed text-muted-foreground">
                 {costVisible
-                  ? "Platform admins see estimated model cost, tokens, latency, and failure signals across the pilot."
-                  : "Org admins see scoped usage and reliability. Dollar-cost totals stay platform-admin only."}
+                  ? "Estimated model cost, tokens, latency, and failure signals across every organization."
+                  : "Usage and reliability for your organization. Cost totals stay platform-level."}
               </p>
             </div>
             <button
@@ -330,11 +330,10 @@ export function HealthPanel({
               label="Avg latency"
               value={formatMs(costDashboard?.totals.average_latency_ms)}
             />
+            <MetricStat label="Errors" value={formatNumber(costDashboard?.totals.error_count)} />
             <MetricStat
-              label="Errors"
-              value={`${formatNumber(costDashboard?.totals.error_count)} · ${formatPercent(
-                costDashboard?.totals.error_rate,
-              )}`}
+              label="Error rate"
+              value={formatPercent(costDashboard?.totals.error_rate)}
             />
           </div>
 

@@ -299,16 +299,14 @@ export function AdminPage() {
             <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
               {adminLevelLabel}
             </div>
-            <h1 className="font-serif mt-2 text-display text-foreground">
-              Manage pilot classrooms.
-            </h1>
+            <h1 className="font-serif mt-2 text-display text-foreground">Manage classrooms.</h1>
             {/* R84: this described the old six tabs — including the "seeding" that no
                 longer exists — so it named jobs an admin could not find. It names the
                 four screens, in the order they are worked. */}
             <p className="mt-2 max-w-2xl text-body leading-relaxed text-muted-foreground">
-              Get a pilot ready, manage its people and classes, and watch it run
-              {isPlatformLevel ? " across the platform" : " inside your organization"}. Passwords
-              are sent only to Supabase Auth and are not stored in Jargon tables.
+              Get a class ready, manage its people, and watch it run
+              {isPlatformLevel ? " across the platform" : " inside your organization"}. Passwords go
+              straight to the sign-in service; Jargon never stores them.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -322,7 +320,7 @@ export function AdminPage() {
                 className={`h-4 w-4 ${scopeLoading ? "animate-spin" : ""}`}
                 strokeWidth={1.6}
               />
-              Refresh ops
+              Refresh
             </button>
           </div>
         </section>

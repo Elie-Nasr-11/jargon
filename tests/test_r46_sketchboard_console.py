@@ -13,6 +13,7 @@ still stands, pinned here:
   membership), and the class.
 """
 from pathlib import Path
+import re
 import unittest
 from tests.teacher_sources import console_source
 
@@ -42,7 +43,12 @@ class HomeTests(unittest.TestCase):
         self.assertIn("export function NumberFlip(", CONSOLE)
 
     def test_class_cards_carry_their_own_signals(self):
-        self.assertIn("signals={classSignals(dashboard, item.id)}", CONSOLE)
+        # Each card reads its own class's signals. R98 added the course-scope
+        # predicate as a third argument, so the pin asks for the RULE — signals
+        # computed per item.id — not for the argument list of the day.
+        call = re.search(r"signals=\{classSignals\((.*?)\)\}", CONSOLE, re.S)
+        self.assertIsNotNone(call, "class cards must compute their own signals")
+        self.assertIn("item.id", call.group(1))
         card = _slice(CONSOLE, "function ClassButton({", "function ClassDetail({")
         self.assertIn("live now", card)
         self.assertIn("quiet", card)

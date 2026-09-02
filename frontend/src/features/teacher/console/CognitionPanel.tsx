@@ -191,8 +191,8 @@ export function CognitionPanel({
           />
         ) : !profile && busy !== "score" ? (
           <EmptyInline
-            title="Nothing judged yet"
-            body="Press Read the thinking and Jargon will judge this lesson's responses."
+            title="Nothing read yet"
+            body="Jargon reads new work on its own every fifteen minutes. Read the thinking now if you would rather not wait."
           />
         ) : null}
 

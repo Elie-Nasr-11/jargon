@@ -124,7 +124,10 @@ class ReviewFirstTests(unittest.TestCase):
 
     def test_the_teacher_can_still_take_the_outline_alone(self):
         self.assertIn("Outline only", STUDIO)
-        self.assertIn("Build {lessonCount}", STUDIO)
+        # The button names the size of the job. R98 routed the count through the one
+        # pluraliser (countOf) so "all 1 lessons" stopped shipping, which moved the
+        # interpolation without changing what the button promises.
+        self.assertRegex(STUDIO, r"Build \{(lessonCount|countOf\(lessonCount)")
 
     def test_drafts_until_published_is_stated_in_the_ui(self):
         self.assertIn("Every lesson is a draft until you publish it.", STUDIO)

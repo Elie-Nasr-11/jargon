@@ -9,6 +9,7 @@ import type { CourseBuild } from "@/features/teacher/authoring/stepModel";
 import type { LessonReview } from "@/lib/api";
 import type { Lesson } from "@/lib/types";
 import { AlertCircle, Check, ClipboardCheck, Loader2, Sparkles } from "lucide-react";
+import { countOf } from "@/lib/format";
 
 // R57: the whole-course build's face. A run is minutes long and made of many model
 // calls, so the teacher gets a live per-lesson ledger — not a spinner: what is being
@@ -192,10 +193,10 @@ export function CourseBuildProgress({
             <div className="flex items-center gap-2 text-title font-medium text-foreground">
               <Sparkles className="h-4 w-4" strokeWidth={1.7} />
               {build.running
-                ? `Building your course — ${done} of ${total} lessons`
+                ? `Building your course — ${done} of ${countOf(total, "lesson")}`
                 : build.canceled
-                  ? `Build stopped — ${done} of ${total} lessons written`
-                  : `Build finished — ${done} of ${total} lessons written`}
+                  ? `Build stopped — ${done} of ${countOf(total, "lesson")} written`
+                  : `Build finished — ${done} of ${countOf(total, "lesson")} written`}
             </div>
             <p className="mt-1 text-meta text-muted-foreground">
               {build.running

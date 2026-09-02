@@ -185,7 +185,7 @@ class AdminOpsStaticTests(unittest.TestCase):
             "Model breakdown",
             "Task type breakdown",
             "Class operating load",
-            "Dollar-cost totals stay platform-admin only.",
+            "Cost totals stay platform-level.",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, surface)

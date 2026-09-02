@@ -15,7 +15,7 @@ import { fetchClassCourseLinks } from "@/lib/api";
 import { relTime } from "@/features/teacher/console/derive";
 import { ClassDigestCard } from "@/features/teacher/ClassDigestCard";
 import { ClassRoomPanel } from "@/features/teacher/cognition/ClassRoomPanel";
-import { liveNowRows, toMarkRows } from "@/features/teacher/today/needsYou";
+import { liveNowRows, teachesLessonFor, toMarkRows } from "@/features/teacher/today/needsYou";
 import type { Lesson, Profile, TeacherDashboardData } from "@/lib/types";
 
 export function TodayScreen({
@@ -46,17 +46,10 @@ export function TodayScreen({
     enabled: classIds.length > 0,
     staleTime: 60 * 1000,
   });
-  const teachesLesson = useMemo(() => {
-    const links = linksQuery.data;
-    if (!links) return undefined; // links unknown → unscoped, never silently empty
-    const courseIds = new Set(
-      links.filter((row) => row.class_id === classId).map((row) => row.course_id),
-    );
-    return (lessonId: string) => {
-      const courseId = lessonsById.get(lessonId)?.course_id;
-      return courseId ? courseIds.has(courseId) : true;
-    };
-  }, [linksQuery.data, classId, lessonsById]);
+  const teachesLesson = useMemo(
+    () => teachesLessonFor(linksQuery.data, classId, lessonsById),
+    [linksQuery.data, classId, lessonsById],
+  );
 
   const live = liveNowRows(dashboard, classId, profilesById, lessonsById, teachesLesson);
   const toMark = toMarkRows(dashboard, classId, profilesById, lessonsById);
@@ -83,7 +76,7 @@ export function TodayScreen({
             {live.map((row) => (
               <div
                 key={row.studentId}
-                className="flex items-center gap-3 rounded-card border border-border bg-depth-sub py-2 pl-4 pr-2"
+                className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-border bg-depth-sub py-2 pl-4 pr-2"
               >
                 <button
                   type="button"
@@ -94,7 +87,7 @@ export function TodayScreen({
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-success" />
                   </span>
-                  <span className="min-w-[140px] shrink-0 truncate text-body font-medium text-foreground">
+                  <span className="min-w-0 truncate text-body font-medium text-foreground sm:min-w-[140px] sm:shrink-0">
                     {row.studentName}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">

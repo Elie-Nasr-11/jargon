@@ -31,10 +31,10 @@ export function GlobalReviewQueue({
                 key={`${row.kind}:${row.itemId}:${row.studentName}:${row.at}`}
                 type="button"
                 onClick={() => onOpen(row)}
-                className="flex min-w-0 items-center gap-3 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
+                className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-card border border-border bg-depth-sub px-4 py-2.5 text-left transition-colors hover:bg-muted"
               >
                 <span className="h-2 w-2 shrink-0 rounded-full bg-warning" />
-                <span className="min-w-0 flex-1 truncate text-body text-foreground">
+                <span className="min-w-0 flex-1 basis-[12rem] truncate text-body text-foreground">
                   {row.studentName}
                   <span className="text-muted-foreground"> · {row.itemTitle}</span>
                 </span>

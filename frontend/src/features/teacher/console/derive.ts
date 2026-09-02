@@ -81,7 +81,15 @@ export type ClassSignals = {
   toReview: number;
 };
 
-export function classSignals(dashboard: TeacherDashboardData, classId: string): ClassSignals {
+export function classSignals(
+  dashboard: TeacherDashboardData,
+  classId: string,
+  // Same predicate Today uses (today/needsYou.ts). Students are commonly in several
+  // classes at once, so an unscoped count showed "3 live now" on the card beside a
+  // Today list holding 2. Undefined means the course links have not loaded — unscoped,
+  // never silently empty.
+  teachesLesson?: (lessonId: string) => boolean,
+): ClassSignals {
   const studentSet = new Set<string>();
   const sections = new Set<string>();
   for (const membership of dashboard.memberships) {
@@ -95,7 +103,10 @@ export function classSignals(dashboard: TeacherDashboardData, classId: string): 
     }
   }
   const liveNow = dashboard.sessions.filter(
-    (session) => studentSet.has(session.user_id) && session.status !== "complete",
+    (session) =>
+      studentSet.has(session.user_id) &&
+      session.status !== "complete" &&
+      (!teachesLesson || teachesLesson(session.lesson_id)),
   ).length;
   const classAssignmentIds = new Set(
     dashboard.assignments.filter((a) => a.class_id === classId).map((a) => a.id),

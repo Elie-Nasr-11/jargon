@@ -4,10 +4,11 @@ The rest of tests/test_r93_class_room.py pins source text. This one RUNS
 frontend/src/features/teacher/cognition/room.ts — the file that decides what a
 teacher actually reads when they open a class — against tests/room_view.test.ts.
 
-Mechanics, the same shape as the Pillar-4 flow harness: room.ts and labels.ts use
-the frontend's "@/" path alias, which deno cannot resolve, so this copies both into
-a temp dir beside the suite with the aliases rewritten to relative paths and the
-type-only import of the API types dropped (deno does not need it to run).
+Mechanics, the same shape as the Pillar-4 flow harness: room.ts, labels.ts and the
+shared formatter it uses all sit behind the frontend's "@/" path alias, which deno
+cannot resolve, so this copies them into a temp dir beside the suite with the aliases
+rewritten to relative paths and the type-only import of the API types dropped (deno
+does not need it to run).
 
 Skips (with a visible reason) when deno is not installed.
 """
@@ -20,6 +21,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 COGNITION = ROOT / "frontend" / "src" / "features" / "teacher" / "cognition"
+LIB = ROOT / "frontend" / "src" / "lib"
 SUITE = ROOT / "tests" / "room_view.test.ts"
 
 
@@ -30,6 +32,12 @@ def _portable(source: str) -> str:
     source = re.sub(
         r'import \{([^}]*)\} from "@/features/teacher/cognition/labels";',
         r'import {\1} from "./labels.ts";',
+        source,
+    )
+    # countOf lives with the other formatters (R98) so one pluraliser serves the app.
+    source = re.sub(
+        r'import \{([^}]*)\} from "@/lib/format";',
+        r'import {\1} from "./format.ts";',
         source,
     )
     # RoomStudent / RoomSummary came from the API module; the suite supplies shapes.
@@ -53,6 +61,9 @@ class RoomViewProperties(unittest.TestCase):
                 (scratch / name).write_text(
                     _portable((COGNITION / name).read_text(encoding="utf-8")), encoding="utf-8"
                 )
+            (scratch / "format.ts").write_text(
+                _portable((LIB / "format.ts").read_text(encoding="utf-8")), encoding="utf-8"
+            )
             (scratch / "room_view.test.ts").write_text(
                 SUITE.read_text(encoding="utf-8"), encoding="utf-8"
             )

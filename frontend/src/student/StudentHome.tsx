@@ -17,7 +17,7 @@ import {
   getSession,
   resetStudentMemory,
 } from "@/lib/api";
-import { formatScore, relativeTime } from "@/lib/format";
+import { countOf, formatScore, relativeTime } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/motion";
 import { masteryBands, type IdeaMasteryRow } from "@/lib/mastery";
 import { assignmentRows, checkpointRows, type CheckpointRowModel } from "@/student/checkpoints";
@@ -470,13 +470,13 @@ export function StudentHome({
         {/* ---- Identity band: the serif greeting stays personal; the stat cluster mirrors
              the class pages (mono counters, orange only when something is actionable). ---- */}
         <header className="mb-7 flex flex-wrap items-center gap-4">
-          <h1 className="min-w-0 flex-1 truncate font-serif text-[26px] tracking-tight text-foreground">
+          <h1 className="min-w-0 flex-1 truncate max-lg:whitespace-normal font-serif text-[26px] tracking-tight text-foreground">
             {greetingForHour(new Date().getHours())}
             {name ? `, ${name}` : ""}
           </h1>
           <div className="flex shrink-0 items-center gap-2">
             {classCount !== null ? (
-              <StatPill ariaLabel={`${classCount} classes`}>
+              <StatPill ariaLabel={countOf(classCount, "class", "classes")}>
                 {classCount} {classCount === 1 ? "CLASS" : "CLASSES"}
               </StatPill>
             ) : null}

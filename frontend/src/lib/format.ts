@@ -48,3 +48,10 @@ export function stripMarkdown(text: string): string {
     })
     .join("");
 }
+
+// "1 student ... are weak" reads as a broken product, not a broken sentence — so the
+// count and its noun are written together, once. Irregular plurals pass their own
+// ("class", "classes"); the default just adds an s.
+export function countOf(n: number, noun: string, plural = `${noun}s`): string {
+  return `${n} ${n === 1 ? noun : plural}`;
+}

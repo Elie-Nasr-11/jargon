@@ -91,12 +91,18 @@ class ClassScopeTests(unittest.TestCase):
     def test_in_a_lesson_now_reports_this_class_lessons(self):
         self.assertIn("teachesLesson?: (lessonId: string) => boolean", NEEDS)
         self.assertIn("if (teachesLesson && !teachesLesson(session.lesson_id)) continue;", NEEDS)
-        self.assertIn("courseIds.has(courseId)", SCREEN)
+        # R98 moved the predicate itself into needsYou (`teachesLessonFor`) so the class
+        # card on the landing computes the same fact the same way — the two screens used
+        # to report different live counts for one class. The rule is that Today builds
+        # its predicate from that shared factory, not that it inlines the course lookup.
+        self.assertIn("export function teachesLessonFor(", NEEDS)
+        self.assertIn("teachesLessonFor(", SCREEN)
 
     def test_unknown_links_over_report_rather_than_hide(self):
         # R43's discipline: an unreadable link set means unscoped, never a silent empty.
-        self.assertIn("if (!links) return undefined;", SCREEN)
-        self.assertIn("return courseId ? courseIds.has(courseId) : true;", SCREEN)
+        # Pinned where the rule now lives (see above).
+        self.assertIn("if (!links) return undefined;", NEEDS)
+        self.assertIn("return courseId ? courseIds.has(courseId) : true;", NEEDS)
 
 
 class SubtractionTests(unittest.TestCase):
