@@ -9,8 +9,15 @@ reachability + precedence, recognizer closure).
 Mechanics: the chat fn's jsr type-import is unreachable offline and its Deno.serve
 must not start under test, so this wrapper copies a stripped index.ts into a temp dir
 next to the test file and runs `JARGON_FLOW_TEST=1 deno test --no-check` there. The
-env guard lives at the bottom of index.ts; --no-check because deno-check parity (with
-its 8 pre-existing errors) is enforced by the deploy pipeline, not here.
+env guard lives at the bottom of index.ts; --no-check because a type error is not what
+this suite is for.
+
+On deno-check: chat carried 8 type errors for a long time, and one of them was real —
+a TS2554 for the student_idea_mastery upsert that dropped its required conflict-key
+argument, so the write failed on every turn and an empty catch hid it (R97). Nothing
+ran deno check in CI; the older claim here that "the deploy pipeline enforces it" was
+never true, and that is why the error sat there. The count is 7 as of 2026-09-02, and
+a release that changes it says so in its handoff entry.
 
 Skips (with a visible reason) when deno is not installed.
 """

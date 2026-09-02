@@ -6,6 +6,70 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-02 (R97: the mastery write that never wrote)
+
+Status: Finished
+Task: fix chat's student_idea_mastery upsert and give it something to write about.
+
+Summary: the reported bug was real and was NOT the whole story. Three faults, found in
+order, each hiding the next:
+
+1. THE WRITE NEVER WROTE. `upsertRows` takes four arguments; the student_idea_mastery
+   call passed three, so every request went out as `?on_conflict=undefined`, PostgREST
+   rejected it, and a bare `catch {}` swallowed the rejection. The table held 0 rows for
+   its entire life. `deno check` had been reporting it as a TS2554 the whole time, inside
+   the "8 pre-existing errors" nobody re-read — and the claim in the pillar-4 docstring
+   that the deploy pipeline enforced deno-check was never true (the workflow has no such
+   step). Both the count and that claim are corrected.
+
+2. THERE WAS ALMOST NOTHING TO WRITE ABOUT. Measured on production: of 992 graded
+   attempts, 973 sit on lessons with NO authored ideas and no step-level idea_keys —
+   including every lesson of the IT Frontiers books, which is the content a school
+   actually teaches. `evidenceIdeaKeys()` returns an empty list for those and an empty
+   list writes nothing, so the fixed writer would still have written for 14 attempts.
+   Every one of the 90 lessons without ideas carries exactly one milestone with a real
+   learning objective, so the migration mints one authored idea per lesson from that
+   objective — deterministic, no model call, namespaced `lesson-<lesson_id>` so finer
+   extraction can land later without colliding. 112 of 129 lessons now have ideas, and
+   all 992 graded attempts are mappable (was 14).
+
+3. THE EMA SEEDED FROM ZERO. With the first two fixed, the backfill produced 953 rows of
+   which 943 read "to refresh": a student who passed on their FIRST try scored 0.3,
+   because an absent row was read as a score of 0 — "never seen" and "got it wrong"
+   starting from the same place. That is the same `Number(null) === 0` family as the
+   scaffold-trend bug already recorded in COGNITION.md. Fixed with an explicit
+   `MASTERY_PRIOR = 0.5` in both the runtime and the replay: one correct answer now reads
+   as growing (0.65), two as solid (0.755), one wrong as needing a refresh (0.35).
+
+Files changed: supabase/functions/chat/index.ts (the conflict key, the logged catch,
+MASTERY_PRIOR); supabase/migrations/20261102000000_r97_idea_mastery_backfill.sql (new —
+mint, then replay); .github/workflows/deploy-backend.yml (the hardcoded replay list);
+tests/test_r97_idea_mastery.py (new, 14 pins); tests/test_flow_pillar4_properties.py
+(the corrected deno-check note).
+
+Tests run: python suite 1468 OK / 4 skipped (was 1454) · deno flow properties 32/32,
+verified by running the suite directly rather than trusting the wrapper's 0.19s ·
+deno check on chat 8 -> 7 errors, the removed one being exactly this TS2554.
+
+Live state after applying the migration by hand (the deploy will replay it as a no-op):
+student_idea_mastery holds 953 rows across 198 students — 6 solid, 946 growing, 1 to
+refresh, average 0.650. Every idea_key resolves to a published idea with a title, so
+`buildBrainContext` can rank weak/strong for the first time.
+
+Remaining concerns:
+- The minted ideas are LESSON-GRAINED — one per lesson. That is a floor: honest, and
+  enough for the read model to work, but it is not the fine-grained idea graph the
+  brain-first plan describes. Real extraction remains worth doing.
+- `fetchIdeas` is unscoped (all published ideas, cap 300) and BrainGraph caps at 90, so
+  the student's map now draws idea satellites for lessons they may never open. That was
+  already true of the 39 pre-existing ideas; minting 90 more amplifies it. It belongs to
+  the brain-map decision, not to this release.
+- The replay reads an echo-rejected answer as a fail (the attempt row only knows
+  passed=false); the runtime scores it neutral. Recorded in the migration header.
+
+Suggested next task: R98 — the demo-ready pass (docs/LAUNCH_BRIEF.md §A and the copy
+items), since the school sees this tomorrow.
+
 ## Claude -> Codex / Human - 2026-09-01 (R96: pre-launch polish audit)
 
 Status: Finished
