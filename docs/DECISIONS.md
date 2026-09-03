@@ -2,6 +2,36 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-09-03 (later): cut it, but keep it readable — the archive
+
+The feature audit found 48 of 105 backend actions with no caller. The owner's call: keep
+every thin-but-reachable feature, cut the weekly digest, keep the OCR path and archive the
+rest — *"make sure it is well annotated that that code is there so that if i ever bring it
+back i can know."*
+
+- **Removed code goes to `archive/`, not to git history alone.** History is a second copy,
+  not a plan: "it's in the log somewhere" is not something a person can act on eighteen
+  months later. Each archived feature gets a folder with the code and a `NOTES.md` saying
+  what it did, why it left, what still exists that it depends on, **what changed underneath
+  it since**, and numbered restore steps. The archive is not compiled, linted, tested or
+  deployed.
+- **No tables were dropped.** Every archived feature's tables stay, empty. A restore needs
+  no migration and no data recovery. Dropping them is a separate, deliberate, irreversible
+  step that has to be asked for on its own.
+- **"Keep only the OCR" needed a correction, and the correction is the interesting part.**
+  `ocr_pdf_pages` reads `resource_page_assets` (written by `save_pdf_page_assets`) and
+  writes `resource_text_chunks` (read by `list_resource_chunks`). Keeping the one action
+  named would have preserved a function that can never execute. Three actions stayed — the
+  minimum runnable chain — and the NOTES lead with why.
+- **"No frontend caller" is not "no caller".** The audit flagged `import_curriculum` as
+  dead; it is the book importer, driven from `scripts/` and `tools/`. It was archived and
+  restored in the same release, caught by its own tests (R58, R61) rather than by the audit.
+  Future dead-code claims must check scripts, tools, other edge functions and cron too.
+- **Pins state rules, not shapes** (ninth release). The `allow_live_artifacts` pin listed
+  three code shapes; two lived in the archived template handlers. It now asserts the rule —
+  the toggle survives the lesson write path.
+
+
 ## 2026-09-03: the Thinking tab shows; it does not ask
 
 The owner, looking at the live tab: *"lets have it just show. not as an action you need to

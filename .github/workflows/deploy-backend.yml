@@ -24,8 +24,6 @@ on:
       - "supabase/functions/assessment-admin/**"
       - "supabase/functions/voice-session/**"
       - "supabase/functions/run/**"
-      - "supabase/functions/canvas/**"
-      - "supabase/functions/google-classroom/**"
       - "supabase/functions/resource-processing/**"
       - "supabase/functions/admin-ops/**"
       - "supabase/functions/submission-maintenance/**"
@@ -187,8 +185,6 @@ jobs:
           supabase functions deploy assessment-admin --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy voice-session --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy run --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy canvas --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy google-classroom --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy resource-processing --project-ref "$PROJECT_REF" --no-verify-jwt
           # admin-ops now auto-deploys (actively developed as of the Live tab); it stays JWT- +
           # actor-access-gated internally. admin-seed remains manual (account provisioning).

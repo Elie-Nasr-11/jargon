@@ -4,7 +4,20 @@ Written 2026-09-03, at the owner's request: *"lets remove the weekly digest for 
 energy on core features. actually, make a list of all features so that we can decide what
 to trim down."*
 
-This is that list. Nothing here is trimmed yet, except where noted as decided.
+**Acted on the same day (R102).** The owner's decisions: keep everything in the *thin*
+section, cut the weekly digest, keep the OCR path and archive the rest of the chunk
+pipeline. Everything removed went to [`archive/`](../archive/) with a NOTES file per
+feature saying what it did and how to restore it — no tables were dropped, so every
+restore is code-only. What is still live below is what survived.
+
+**One correction to this document.** It listed `import_curriculum` among the dead
+`curriculum-admin` actions. That was wrong: the audit's "no caller" test only searched
+`frontend/src`, and `import_curriculum` is called from `scripts/import-curriculum.mjs` and
+`tools/book-import/` — it is the agent-driven path that put the IT Frontiers books into
+production. It was archived and then restored within the same release. **The lesson for the
+next audit: "no frontend caller" is not "no caller" — check `scripts/`, `tools/`, other edge
+functions and cron before calling anything dead.** Everything else on the dead list was
+re-checked against those same places and held up.
 
 ## How to read the evidence
 
