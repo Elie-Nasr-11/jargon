@@ -54,7 +54,7 @@ function room(over: Partial<Parameters<typeof roomHeadline>[0]> = {}) {
     read: 8,
     unread: 2,
     weakest: [],
-    groups: { dependent: 0, mastered: 0, needs: 0, steady: 0, unread: 2 },
+    groups: { dependent: 0, load: 0, mastered: 0, needs: 0, steady: 0, unread: 2 },
     ...over,
   } as Parameters<typeof roomHeadline>[0];
 }
@@ -66,12 +66,72 @@ Deno.test("the alarm is read before the good news", () => {
     student({ user_id: "c", group: "dependent" }),
     student({ user_id: "d", group: "needs", focus: "reasoning" }),
     student({ user_id: "e", group: "steady" }),
+    student({ user_id: "f", group: "load" }),
   ]);
   eq(
     groups.map((g) => g.key),
-    ["dependent", "needs:reasoning", "mastered", "steady", "unread"],
+    ["dependent", "load", "needs:reasoning", "mastered", "steady", "unread"],
     "a teacher meets the problem before the opportunity",
   );
+});
+
+// --- R103: §19's eighth rule in the room --------------------------------------------
+
+Deno.test("R103: overload is an alarm, and it says what to do", () => {
+  const [group] = roomGroups([student({ user_id: "a", group: "load" })]);
+  eq(group.tone, "alert", "an overloaded room is not a quiet one");
+  ok(/break tasks down/i.test(group.title), `the title names the move: ${group.title}`);
+  ok(
+    /one step|one sentence|one example/i.test(group.body),
+    `the body says what smaller looks like: ${group.body}`,
+  );
+  ok(
+    !/\d/.test(group.title + group.body),
+    "the teacher's copy carries no measurement either",
+  );
+});
+
+Deno.test("R103: an overloaded room is not told to reteach", () => {
+  // The dimensions ARE weak in an overloaded room — that is what producing stubs looks
+  // like. Reteaching the weakest one is the wrong instruction, so the headline must not
+  // be the weak-dimension one.
+  const line = roomHeadline(
+    room({
+      read: 6,
+      weakest: [{ dimension: "elaboration", students: 5 }],
+      groups: { dependent: 0, load: 4, mastered: 0, needs: 2, steady: 0, unread: 0 },
+    }),
+  );
+  ok(/smaller steps/i.test(line), `the headline breaks the work down: ${line}`);
+  ok(
+    !/weak on/i.test(line) && !/a lesson to reteach, not/i.test(line),
+    `and it is not the weak-dimension sentence: ${line}`,
+  );
+});
+
+Deno.test("R103: dependency still outranks overload in the headline", () => {
+  const line = roomHeadline(
+    room({
+      read: 6,
+      weakest: [],
+      groups: { dependent: 4, load: 4, mastered: 0, needs: 0, steady: 0, unread: 0 },
+    }),
+  );
+  ok(
+    /assistance problem/i.test(line),
+    `a room being carried is named first, as it is in the mentor: ${line}`,
+  );
+});
+
+Deno.test("R103: one overloaded student in a big room is not the headline", () => {
+  const line = roomHeadline(
+    room({
+      read: 8,
+      weakest: [{ dimension: "reasoning", students: 3 }],
+      groups: { dependent: 0, load: 1, mastered: 0, needs: 3, steady: 4, unread: 0 },
+    }),
+  );
+  ok(!/smaller steps/i.test(line), `one student is a tutorial, not a room problem: ${line}`);
 });
 
 Deno.test("needs splits by dimension, most-affected group first", () => {

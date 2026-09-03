@@ -75,6 +75,10 @@ class RoomViewProperties(unittest.TestCase):
                 timeout=300,
             )
         self.assertEqual(result.returncode, 0, f"{result.stdout}\n{result.stderr}")
+        # Every Deno.test in the suite ran — a green run that quietly filtered half the
+        # properties is the failure mode this harness exists to prevent (Pillar 4).
+        expected = SUITE.read_text(encoding="utf-8").count("Deno.test(")
+        self.assertIn(f"{expected} passed", result.stdout)
 
 
 if __name__ == "__main__":

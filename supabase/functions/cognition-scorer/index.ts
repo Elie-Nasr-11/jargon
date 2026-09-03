@@ -315,6 +315,34 @@ const STEER_FLOOR = 3;
 // A dimension at or below 2 is weak; at or above 3 is proficient.
 const WEAK_AT_OR_BELOW = 2;
 const PROFICIENT_AT_OR_ABOVE = 3;
+// R103 / §19's eighth rule: "If cognitive load appears excessive: break the task into
+// smaller steps."
+//
+// Overload has a signature, and it is NOT weakness. A student who finds the work hard
+// produces weak answers; a student who is OVERLOADED produces almost nothing while the
+// tutor carries the turn. So both halves must hold at once over the recent window: the
+// help is heavy AND the answers are coming back short. Either alone is a different
+// student — heavy help with full answers is a scaffolded learner working, and short
+// answers with no help is someone disengaged or simply fast — and breaking the task
+// down would be the wrong move for both.
+//
+// Heavy is the same S-level as SUPPORTED_AT_OR_ABOVE: S3+ is where the tutor supplies
+// actual content. "Short" is a word count, and words are counted by textSignals, which
+// R99 started writing: a row without them counts as NOT short, so responses judged
+// before R99 can never flag anyone.
+//
+// EIGHT WORDS, AND THE LIVE CORPUS PICKED IT. The first draft said twelve, which read
+// well and was wrong: measured against the 132 judged responses on production, the
+// MEDIAN response is 11 words, so a twelve-word cutoff put "short" above the middle of
+// the distribution and would have flagged 6 of the 15 eligible (student, lesson) pairs.
+// A rule that fires on 40% of a school is a description of the corpus, not a signal.
+// Eight words is one clause -- an answer with no room for a "because" -- sits at the
+// corpus's 25th percentile, and fires on nobody today with three pairs one response
+// away from it. Re-measure before moving it; docs/COGNITION.md carries the numbers.
+const LOAD_WINDOW = 6;
+const LOAD_SHARE = 0.5;
+const LOAD_HEAVY_AT_OR_ABOVE = SUPPORTED_AT_OR_ABOVE;
+const LOAD_SHORT_WORDS_AT_OR_BELOW = 8;
 // Weakest first, ties broken in the rubric's own order — retrieval leads because
 // everything else is built on it.
 const STEER_PRIORITY = [
@@ -656,7 +684,52 @@ function buildProfile(rows: DbRow[]): DbRow {
     independent: medianOver(unaided),
     supported: medianOver(supported),
   };
+
+  // §19's eighth rule: cognitive load. Read over the RECENT window only — overload is a
+  // state, not a trait, and a student who was drowning three weeks ago and is fine now
+  // must not still be flagged.
+  //
+  // The counts are stored beside the verdict because a bare boolean is unfalsifiable:
+  // a teacher (or the next person reading this code) can see that it fired on four
+  // heavy turns out of six with four short answers, and disagree with the thresholds
+  // rather than with the machine.
+  const recent = chronological.slice(-LOAD_WINDOW);
+  const heavyCount = recent.filter(
+    (row) => Number(row.scaffold_level) >= LOAD_HEAVY_AT_OR_ABOVE,
+  ).length;
+  const shortCount = recent.filter((row) => {
+    const words = wordsOf(row);
+    return words !== null && words <= LOAD_SHORT_WORDS_AT_OR_BELOW;
+  }).length;
+  const wordsMissing = recent.filter((row) => wordsOf(row) === null).length;
+  // STEER_FLOOR for the same reason chat uses it: below three judged responses one bad
+  // afternoon would set a posture. Shares must CLEAR the half, so at six rows it takes
+  // four of each — a majority, not a tie.
+  profile.load_flag =
+    recent.length >= STEER_FLOOR &&
+    heavyCount / recent.length > LOAD_SHARE &&
+    shortCount / recent.length > LOAD_SHARE;
+  profile.load_signals = {
+    window: recent.length,
+    heavy_scaffold: heavyCount,
+    short_answers: shortCount,
+    words_missing: wordsMissing,
+  };
   return profile;
+}
+
+/**
+ * How many words a stored response came back as, or null when nobody counted.
+ *
+ * Null is load-neutral by design (see LOAD_WINDOW): the alternative — treating an
+ * uncounted response as short — would have flagged every student whose recent work
+ * predates R99's textSignals, on evidence that does not exist.
+ */
+function wordsOf(row: DbRow): number | null {
+  const signals = row.signals;
+  if (!signals || typeof signals !== "object") return null;
+  const words = (signals as DbRow).words;
+  return typeof words === "number" && Number.isFinite(words) ? words : null;
 }
 
 const SCORE_COLUMNS =
@@ -1023,7 +1096,7 @@ type RoomStudent = {
   // R94: which stream of the class this student is in, or null for the people not in
   // one. A class that has never used sections is one flat room and says so.
   section: string | null;
-  group: "dependent" | "mastered" | "needs" | "steady" | "unread";
+  group: "dependent" | "load" | "mastered" | "needs" | "steady" | "unread";
   focus: string | null;
   dims: DbRow;
   turns_scored: number;
@@ -1071,6 +1144,10 @@ function rollUpStudent(userId: string, section: string | null, profiles: DbRow[]
           : "steady"
       : null;
 
+  // R103: the freshest lesson's verdict, for the same reason scaffold_recent is — a
+  // student overloaded in the unit they finished last month is not overloaded now.
+  const loaded = freshest?.load_flag === true;
+
   const dim = (key: string) => numOrNull(dims[key]);
   const independence = dim("independence");
   const retrieval = dim("retrieval");
@@ -1090,6 +1167,12 @@ function rollUpStudent(userId: string, section: string | null, profiles: DbRow[]
     recent >= PROFICIENT_AT_OR_ABOVE
   ) {
     group = "dependent";
+  } else if (loaded) {
+    // §19's eighth rule. It sits second because a student who is BOTH being carried and
+    // producing stubs is a dependency case first — that is also the order learnerSteer
+    // pushes the two moves in, and the room must never name a different first move than
+    // the one the mentor is making.
+    group = "load";
   } else if (
     // §19's last rule: they own the material on the three dimensions that mean it.
     retrieval !== null &&
@@ -1211,7 +1294,7 @@ async function classView(config: Config, actorId: string, body: DbRow): Promise<
     selectAll(
       config,
       `cognition_profiles?user_id=in.(${studentIds.map(enc).join(",")})` +
-        `&select=user_id,lesson_id,${DIMENSIONS.join(",")},scaffold_earlier,scaffold_recent,turns_scored,updated_at&limit=2000`,
+        `&select=user_id,lesson_id,${DIMENSIONS.join(",")},scaffold_earlier,scaffold_recent,turns_scored,load_flag,updated_at&limit=2000`,
     ),
   ]);
 
@@ -1242,7 +1325,7 @@ async function classView(config: Config, actorId: string, body: DbRow): Promise<
 // What the ROOM needs, which is a different question from what any student needs: a
 // dimension weak in nine of twelve is a lesson to reteach, not nine tutorials.
 function summarizeRoom(students: RoomStudent[]): DbRow {
-  const groups: DbRow = { dependent: 0, mastered: 0, needs: 0, steady: 0, unread: 0 };
+  const groups: DbRow = { dependent: 0, load: 0, mastered: 0, needs: 0, steady: 0, unread: 0 };
   for (const student of students) {
     groups[student.group] = (Number(groups[student.group]) || 0) + 1;
   }

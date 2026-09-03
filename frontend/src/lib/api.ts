@@ -4357,7 +4357,9 @@ export type RoomStudent = {
   user_id: string;
   /** Which stream of the class, or null for the people not in one. */
   section: string | null;
-  group: "dependent" | "mastered" | "needs" | "steady" | "unread";
+  // R103: "load" is §19's eighth rule — heavy help and short answers together, which
+  // reads as overload rather than as any one weak dimension.
+  group: "dependent" | "load" | "mastered" | "needs" | "steady" | "unread";
   focus: keyof CognitionDims | null;
   dims: CognitionDims;
   turns_scored: number;
