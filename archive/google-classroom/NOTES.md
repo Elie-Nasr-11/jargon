@@ -29,11 +29,12 @@ far more common in schools than self-hosted Canvas. If exactly one comes back, t
 ## What is still live that it needs
 
 - Its tables and RLS, from the Google Classroom migration, still in the deploy list.
-- Env vars (names only): the Google OAuth client id and secret, plus the redirect URI.
-  Still set; nothing reads them.
-- Note the OAuth **redirect URI is registered with Google** against a callback this
-  function no longer serves. That registration is inert but should be cleaned up with the
-  env vars if you are sure.
+- **The deployed function itself.** Owner's decision 2026-09-03: `google-classroom` stays
+  deployed (v18) rather than being deleted. Its source left this repo, but the last build is
+  live and still serves its OAuth callback.
+- Env vars (names only): the Google OAuth client id and secret, plus the redirect URI —
+  deliberately kept set, since the function is still deployed and the registered redirect
+  URI still points at a callback it can serve.
 
 ## What changed underneath it since
 
