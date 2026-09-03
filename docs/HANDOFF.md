@@ -6,6 +6,37 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-03 (archive docs: Canvas and Classroom stay deployed)
+
+Status: Finished
+Task: record the owner's decision — "lets not remove the google and canvas" — in the archive
+docs, which said the opposite.
+
+Summary: archiving the source of the two LMS integrations and dropping them from the deploy
+workflow stopped them being *updated*. It did not undeploy them. Both still answer requests
+at their function URLs (canvas v17, google-classroom v18), verified against the live function
+list, and their OAuth secrets are still set on the project. The archive docs had drifted from
+that in three places: `archive/README.md` told the reader that "nothing reads them" and that
+removing the env vars was "worth doing for its own sake"; the Canvas NOTES said "consider
+removing them"; the Classroom NOTES called its registered redirect URI "inert" and said it
+"should be cleaned up". All three now say what is true — the functions are live on purpose,
+the env vars are deliberately kept, and restoring either one is cheaper than the general
+restore steps because the function is already deployed. The README also names the only path
+to deleting a deployed function (a manual-dispatch workflow, since the account access token
+lives only as a repository secret) for whoever revisits the trade.
+
+Files changed: archive/README.md, archive/canvas-lms/NOTES.md,
+archive/google-classroom/NOTES.md.
+
+Tests run: none — documentation only, and no test reads these files.
+
+Remaining concerns: the trade the owner accepted is that anyone with a function URL and a
+valid JWT can still reach both integrations. Their tables are empty and their actions all
+require an authenticated caller, so the exposure is the code path, not data.
+
+Suggested next task: R103 (§19's cognitive-load rule), which is the next unshipped item on
+the roadmap.
+
 ## Claude -> Codex / Human - 2026-09-03 (R102: the trim, and the archive that remembers)
 
 Status: Finished

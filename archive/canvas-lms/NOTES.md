@@ -36,8 +36,12 @@ The code is believed sound; it has simply never run against a real Canvas.
   still in the deploy list. A restore needs no migration.
 - **`class_memberships`, `classes`, `courses`, `assignments`, `assessments`** — unchanged
   in shape since this was written, as far as the R102 audit could tell.
-- **Env vars** (names only): the Canvas OAuth client id and secret. Still set on the
-  project; nothing reads them now. Consider removing them.
+- **The deployed function itself.** Owner's decision 2026-09-03: `canvas` stays deployed
+  (v17) rather than being deleted. Its source left this repo, but the last build is live.
+  Restoring therefore means "put the source back so it can be updated again", not "deploy
+  it from scratch".
+- **Env vars** (names only): the Canvas OAuth client id and secret, deliberately kept set,
+  since the function is still deployed.
 
 ## What changed underneath it since
 

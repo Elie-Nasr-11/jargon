@@ -32,11 +32,19 @@ and those migrations are still in the deploy list, so a fresh environment still 
 schema. If you decide these are gone for good, dropping the tables is a separate, deliberate
 and **irreversible** step — ask for it explicitly.
 
-**2. Secrets outlived their code.** Canvas and Google Classroom read OAuth client
-credentials from environment variables that are, as far as this repo knows, still set on the
-Supabase project. With the functions gone, nothing reads them. Removing those env vars is
-worth doing for its own sake — the credential you do not hold cannot leak — and it is not
-something this repo can do for you.
+**2. Canvas and Google Classroom are still DEPLOYED, on purpose.** Archiving their source
+and dropping them from the deploy workflow stopped them being *updated*; it did not undeploy
+them. Both still answer requests at their function URLs (canvas v17, google-classroom v18),
+and their OAuth client secrets are still set as environment variables on the project.
+
+**That is the owner's decision, taken 2026-09-03**: keep them running rather than delete
+them. So these two are not "archived" in the sense the other three are — their source has
+left the repo, but the last-deployed build is live and armed. The practical effect is that
+restoring either one is even cheaper than the steps below (the function is already there),
+and that anyone with the URL and a valid JWT can still reach them. If that trade ever stops
+being worth it, deleting a deployed function needs an account access token, which lives only
+as a repository secret — do it through a manual-dispatch workflow, the way the three orphan
+probe functions were removed on the same day.
 
 **3. Git history is the other copy.** Everything here is also in the history at commit
 `a9ded0b` and its parents. This directory exists because "it's in git somewhere" is not a
