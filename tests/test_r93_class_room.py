@@ -296,7 +296,12 @@ class TheRoomAgreesWithTheMentorTests(unittest.TestCase):
     def test_the_mastery_rule_is_the_same_three_dimensions(self):
         roll = SCORER[SCORER.index("function rollUpStudent(") :]
         roll = roll[: roll.index("\nasync function classView(")]
-        mastery = roll[roll.index('} else if ('): roll.index('group = "mastered"')]
+        # The RULE: whatever decides "mastered" in the room reads the same three
+        # dimensions chat's does. R101b lifted the condition into a named predicate, so a
+        # pin that only looked between the branch's `else if (` and its assignment found
+        # a variable name and no dimensions — it was pinning where the code sat, not what
+        # it read. Everything from the top of the rollup to the assignment is the answer.
+        mastery = roll[: roll.index('group = "mastered"')]
         for dimension in ("retrieval", "reasoning", "independence"):
             with self.subTest(dimension=dimension):
                 self.assertIn(dimension, mastery)

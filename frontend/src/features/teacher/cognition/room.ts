@@ -36,9 +36,12 @@ const GROUP_RANK: Record<string, number> = {
   // is both is grouped as dependent — the help comes down before the task is chunked.
   load: 1,
   needs: 2,
-  mastered: 3,
-  steady: 4,
-  unread: 5,
+  // R101b: the correction to an optimistic reading sits immediately before the reading
+  // it corrects, so a teacher meets "it did not stick" before "ready for harder ground".
+  not_held: 3,
+  mastered: 4,
+  steady: 5,
+  unread: 6,
 };
 
 /**
@@ -97,6 +100,15 @@ function describeGroup(key: string): Omit<RoomGroup, "key" | "students"> {
           "sentence, one example at a time, and let them finish it before the next.",
         tone: "alert",
       };
+    case "not_held":
+      return {
+        title: "It did not stick",
+        body:
+          "They work well with you in the room, but asked again a day later with no help, " +
+          "the idea was not there. Keep the support where it is and spend a session making " +
+          "it stay — have them say it back in their own words, then use it on a new case.",
+        tone: "neutral",
+      };
     case "mastered":
       return {
         title: "Ready for harder ground",
@@ -108,7 +120,10 @@ function describeGroup(key: string): Omit<RoomGroup, "key" | "students"> {
     case "steady":
       return {
         title: "Holding steady",
-        body: "Nothing weak enough to steer on, and not yet independent enough to fade. Leave them be.",
+        body:
+          "Nothing weak enough to steer on, and not yet independent enough to fade. Some " +
+          "are here because almost everything they have done came with help — the chip " +
+          "says which. Give those one thing to try before you offer anything.",
         tone: "quiet",
       };
     default:
@@ -120,6 +135,48 @@ function describeGroup(key: string): Omit<RoomGroup, "key" | "students"> {
         tone: "quiet",
       };
   }
+}
+
+// ---------------------------------------------------------------------------
+// R101b: §14 in the room.
+//
+// "A learner who performs well only when substantial AI support is available should not
+// be classified as independently proficient." The groups above say what to DO about a
+// student; this says what the saying rests on. Without it a teacher reading "needs:
+// reasoning" cannot tell whether that came from work the child did alone or work the
+// tutor carried, and those are different lessons.
+//
+// It is a COUNT over a count, never a percentage and never a dimension value: "2 of 14"
+// and "14%" are different claims, and the second hides the denominator that decides how
+// much the first is worth.
+// ---------------------------------------------------------------------------
+
+/** Cross-pinned to MASTERY_MIN_SHARE_UNAIDED in cognition-scorer and chat. Below this,
+ *  the mentor will not fade and the room says so out loud. */
+export const MOSTLY_SUPPORTED_BELOW = 0.25;
+
+/** True when almost nothing this student has done was unaided. Never true for a student
+ *  nobody has read: absent evidence is not evidence. */
+export function mostlySupported(student: RoomStudent): boolean {
+  if (student.group === "unread") return false;
+  return student.share_unaided !== null && student.share_unaided < MOSTLY_SUPPORTED_BELOW;
+}
+
+/** The chip's short form: §14's fraction, exactly as it is counted. */
+export function unaidedLabel(student: RoomStudent): string {
+  return `${student.unaided_count}/${student.turns_scored}`;
+}
+
+/** The chip's tooltip. Says the fraction in words, then whether anyone has ever checked
+ *  the reading away from the lesson that produced it. */
+export function independenceNote(student: RoomStudent): string {
+  const answers = countOf(student.turns_scored, "answer");
+  const unaided = `${student.unaided_count} of ${answers} came with no help before them`;
+  const checked =
+    student.probes_answered > 0
+      ? `checked a day later ${countOf(student.probes_answered, "time")}`
+      : "never checked a day later";
+  return `${unaided} · ${checked}`;
 }
 
 /**

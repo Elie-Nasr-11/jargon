@@ -224,7 +224,8 @@ would make for each of them.
 | **Leaning on the tutor** | independence ≤ 2, recent scaffolding ≥ S3 | they need less help, not more |
 | **Overloaded — break tasks down** | `load_flag` on the freshest lesson | one step at a time, not a reteach |
 | **needs: \<dimension\>** | weakest dimension, rubric order breaking ties | the §19 move, said to a person |
-| **Ready for harder ground** | retrieval, reasoning, independence all ≥ 3 | give them something uncovered |
+| **It did not stick** | strong on the three, but a delayed check found nothing | consolidate; do not fade yet |
+| **Ready for harder ground** | strong on the three, it held, **and** they have been seen working alone | give them something uncovered |
 | **Holding steady** | nothing weak, not yet independent | leave them be |
 | **Not read yet** | under three judged responses | named, never silently dropped |
 
@@ -238,6 +239,42 @@ big, so reteaching the weakest one is the wrong instruction. A student who is bo
 carried and overloaded is grouped as **Leaning on the tutor** — the same order in which
 the mentor pushes the two moves, so the room never names a different first move than the
 one being made.
+
+### §14 beside every student (R101b)
+
+The groups say what to DO about a student. §14 says what the saying rests on. A teacher
+reading *"needs: reasoning"* could not tell whether that reading came from work the child
+did alone or work the tutor carried — and those are different lessons. So every read
+student's chip carries **the count of their answers that had no help before them, over
+its own denominator**: `2/14`, turned amber below a quarter, with the full sentence and
+*"never checked a day later"* in the tooltip. Never a percentage: "2 of 14" and "14%" are
+different claims, and the second hides what decides how much the first is worth. The share
+is one fraction over one denominator across every lesson, not a mean of per-lesson shares,
+which would weight a three-response lesson like a thirty-response one.
+
+`probes_answered` reads **zero for the whole school** today. Rendering nothing there would
+have looked like "fine"; it means nobody has ever asked these students cold.
+
+Two guards came with it, and both close disagreements that existed **in code**:
+
+- **§11.** Since R100 `chat` has told the mentor CONSOLIDATE, DO NOT FADE for a student
+  who is strong in the lesson but failed a delayed check — while this view went on calling
+  them *"ready for harder ground"*. That is precisely the contradiction the first rule
+  below forbids. The room now has the matching group.
+- **§14.** Mastery additionally requires having been seen working alone
+  (`MASTERY_MIN_SHARE_UNAIDED`, one number cross-pinned across `chat`, `cognition-scorer`
+  and `room.ts`). Absent evidence does not block — the guard fires on evidence of low
+  independence, never on its silence, the same posture R100 took for retention.
+
+**What was deliberately not built, and why it is worth recording.** The release was
+planned as a positive "looks strong, but only with help" chip. Measured on production
+first: **zero of the nineteen profiles are mastery-shaped, and zero of the fifteen eligible
+have no weak dimension** — every read student today is *Leaning on the tutor* (5) or
+*needs* (10), and `mastered` and `steady` are both empty groups. A chip gated on "looks
+strong" **could not have fired on anyone**, which makes it an unfalsifiable rule, exactly
+what R103's twelve-word threshold nearly shipped in the opposite direction. So §14 became
+a number shown beside every student and a guard that can only withhold — the safe home for
+a threshold nothing has calibrated.
 
 Four rules keep it honest:
 
@@ -320,13 +357,13 @@ Live probing found things review and 1454 offline pins did not.
 
 ## Verification
 
-- **1564 python pins** over the prompt's judgment rules, the API contracts, the schedule's
+- **1579 python pins** over the prompt's judgment rules, the API contracts, the schedule's
   contract, the room's rules and the Thinking tab's — including the pins that read `chat`,
   `cognition-scorer` and `thinking.ts` together and fail if a shared threshold drifts.
-- **27 executable property tests** over the real room derivations (`tests/room_view.test.ts`
+- **32 executable property tests** over the real room derivations (`tests/room_view.test.ts`
   via `tests/test_r93_room_view.py`), **20** over the Thinking tab's derivations
   (`tests/thinking_view.test.ts` via `tests/test_r101_thinking_view.py` — scopes, medians,
-  the line by sitting, the §16 pattern, and that no sentence carries a grade), plus the 50
+  the line by sitting, the §16 pattern, and that no sentence carries a grade), plus the 55
   flow-core properties. Both deno harnesses assert that every `Deno.test` in the file
   actually ran: a green suite that quietly filtered half its properties is the failure mode
   they exist to prevent.
@@ -355,7 +392,7 @@ Everything in this document is live as of 2026-09-03.
 | the ledger + sweep tables, `cognition-sweep` cron, the two-hour tail rule | live, firing every 15 minutes |
 | the teacher console (Thinking tab without a button, room panel) | live |
 | `chat` — §19 steering, R100's probe opener, R103's BREAK IT DOWN | **live (v122)** |
-| `curriculum-admin` — R85 provider switch, R89 shared-book fix | **live (v44)** |
+| `curriculum-admin` — R85 provider switch, R89 shared-book fix, R102's restored importer | **live (v45)** |
 
 The expired `SUPABASE_ACCESS_TOKEN` that held the last three of those for two days was
 rotated on 2026-09-01. Two things are worth keeping from how that went:
