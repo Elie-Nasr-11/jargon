@@ -335,6 +335,15 @@ Live probing found things review and 1454 offline pins did not.
   auth door (403 / 403 / ran), the class door (403 for a teacher of another class in the
   same org), lesson scoping (a profile outside the class's courses correctly excluded),
   every grouping branch, and all three section shapes.
+- **R103, live and read-only** (2026-09-03): the two columns exist with their
+  not-overloaded defaults across all 19 profiles; PostgREST's schema cache was reloaded so
+  the profile upsert cannot fail with `PGRST204` on the first sweep after the DDL; and the
+  DEPLOYED builds were read back and grepped rather than assumed — `cognition-scorer` v16
+  carries the eight-word threshold, `buildProfile`'s two writes, `wordsOf`, the `load`
+  group and `load_flag` in the class-view select; `chat` v122 carries BREAK IT DOWN,
+  `profile.load_flag === true` and the `!loaded` guard on mastery. What is NOT yet proven
+  live is the flag ever being TRUE: it fires on nobody in today's ledger, by design, so
+  the first genuinely overloaded student is the end-to-end test.
 
 ## Operational state
 
@@ -342,10 +351,10 @@ Everything in this document is live as of 2026-09-03.
 
 | piece | status |
 |---|---|
-| `cognition-scorer` | live (v15 — R103's `load_flag`; R101's `student_view` before it) |
+| `cognition-scorer` | live (**v16** — R103's `load_flag`; R101's `student_view` before it) |
 | the ledger + sweep tables, `cognition-sweep` cron, the two-hour tail rule | live, firing every 15 minutes |
 | the teacher console (Thinking tab without a button, room panel) | live |
-| `chat` — §19 steering, R100's probe opener | **live (v120)** |
+| `chat` — §19 steering, R100's probe opener, R103's BREAK IT DOWN | **live (v122)** |
 | `curriculum-admin` — R85 provider switch, R89 shared-book fix | **live (v44)** |
 
 The expired `SUPABASE_ACCESS_TOKEN` that held the last three of those for two days was

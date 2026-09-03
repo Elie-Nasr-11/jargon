@@ -69,6 +69,16 @@ room 27, thinking 20. tsc 0 errors; eslint src 0 errors (36 pre-existing warning
 build green. `deno check`: cognition-scorer CLEAN, chat 7 errors — identical to the
 pre-existing baseline, none in or near the changed lines.
 
+Live, after the merge (deploy run #170 green, tests #418 green, live smoke #54 green):
+the migration was applied by hand as R97/R100/R101 were, both columns exist with their
+not-overloaded defaults across all 19 profiles, and `notify pgrst, 'reload schema'` was
+issued so the first sweep after the DDL cannot fail with PGRST204 on the profile upsert —
+that write is uncaught, so a stale schema cache would have stopped scoring outright. The
+deployed builds were then READ BACK rather than assumed: `cognition-scorer` **v16** carries
+the eight-word threshold, `buildProfile`'s two writes, `wordsOf`, the `load` group and
+`load_flag` in the class-view select; `chat` **v122** carries BREAK IT DOWN,
+`profile.load_flag === true` and the `!loaded` guard on mastery.
+
 Remaining concerns:
 
 - **The rule has never fired on a real student.** By construction: it fires on nobody in
