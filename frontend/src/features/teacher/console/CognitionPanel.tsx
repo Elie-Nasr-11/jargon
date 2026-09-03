@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Brain, Loader2, RefreshCw } from "lucide-react";
 // R93: one home for the dimension vocabulary — this panel and the class room view
 // render the same eight names, and two copies of a label list drift.
-import { DIMENSION_LABELS } from "@/features/teacher/cognition/labels";
+import { DIMENSION_LABELS, PROBE_LABELS } from "@/features/teacher/cognition/labels";
 import {
   attributionFallback,
   attributionSide,
@@ -23,6 +23,7 @@ import {
 } from "@/features/teacher/cognition/evidence";
 import { EmptyInline, Panel } from "@/features/teacher/console/chrome";
 import { formatDateTime, lessonName } from "@/features/teacher/classShared";
+import { countOf } from "@/lib/format";
 import {
   fetchCognitionProfile,
   getSession,
@@ -33,13 +34,22 @@ import {
 } from "@/lib/api";
 import type { LearningSession, Lesson } from "@/lib/types";
 
-function DimensionRow({ label, value }: { label: string; value: number | null }) {
+function DimensionRow({
+  label,
+  value,
+  pending = false,
+}: {
+  label: string;
+  value: number | null;
+  /** Nothing has been asked yet — different from "asked and scored nothing". */
+  pending?: boolean;
+}) {
   return (
     <div className="flex items-center gap-3">
       <span className="w-40 shrink-0 text-meta text-muted-foreground">{label}</span>
       <span
         className="flex items-center gap-1"
-        aria-label={`${label}: ${value ?? "no evidence"} of 4`}
+        aria-label={`${label}: ${value !== null ? `${value} of 4` : pending ? "not checked yet" : "no evidence"}`}
       >
         {[1, 2, 3, 4].map((step) => (
           <span
@@ -51,7 +61,7 @@ function DimensionRow({ label, value }: { label: string; value: number | null })
         ))}
       </span>
       <span className="text-meta font-medium text-foreground">
-        {value === null ? "—" : `${value}/4`}
+        {value !== null ? `${value}/4` : pending ? "Pending" : "—"}
       </span>
     </div>
   );
@@ -324,10 +334,32 @@ export function CognitionPanel({
               {DIMENSION_LABELS.map(({ key, label }) => (
                 <DimensionRow key={key} label={label} value={profile[key]} />
               ))}
+              {/* R100 (§10/§11): what a delayed unaided question found. Kept apart from
+                  the eight by a hairline, because these come from a different KIND of
+                  evidence — one question at the start of a later session, not the work
+                  the lesson itself collected. "Pending" is the honest reading before one
+                  has been asked; the rubric's own §15 example prints "Retention: Pending"
+                  the same way. */}
+              <div className="mt-1 border-t border-border pt-1.5">
+                {PROBE_LABELS.map(({ key, label }) => (
+                  <DimensionRow
+                    key={key}
+                    label={label}
+                    value={typeof profile[key] === "number" ? (profile[key] as number) : null}
+                    pending={!profile.probes_answered}
+                  />
+                ))}
+              </div>
             </div>
 
             <p className="text-meta text-muted-foreground">
-              {profile.turns_scored} response{profile.turns_scored === 1 ? "" : "s"} judged.
+              {countOf(profile.turns_scored, "response")} judged.
+              {typeof profile.unaided_count === "number" && profile.turns_scored ? (
+                <>
+                  {" "}
+                  {profile.unaided_count} of {profile.turns_scored} came with no help before them.
+                </>
+              ) : null}
               {scaffoldTrend ? (
                 <>
                   {" "}

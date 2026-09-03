@@ -152,7 +152,23 @@ class TheLedgerIsSafeTests(unittest.TestCase):
         tables = {path.split("/rest/v1/")[1].split("?")[0] for path, _ in writes}
         self.assertEqual(
             tables,
-            {"cognition_turn_scores", "cognition_profiles", "cognition_sweep_runs"},
+            {
+                # Its own ledger.
+                "cognition_turn_scores",
+                "cognition_profiles",
+                # Its own run log (R92).
+                "cognition_sweep_runs",
+                # R100: the probe it just scored — chat asks and records, the judge fills
+                # in what the answer was worth. Still the scoring outcome, still its own.
+                "cognition_probes",
+                # R100, and the ONE table here the scorer does not own: a delayed unaided
+                # check is the strongest evidence there is about what a student knows now,
+                # so it moves their mastery. Deliberate, narrow (one idea per scored
+                # probe), and held to chat's arithmetic by tests/test_r100_probe.py, which
+                # reads MASTERY_EMA_ALPHA and MASTERY_PRIOR out of both files. If a third
+                # table ever appears in this set, ask the same question again.
+                "student_idea_mastery",
+            },
         )
 
     def test_scoring_is_idempotent_per_rubric_version(self):

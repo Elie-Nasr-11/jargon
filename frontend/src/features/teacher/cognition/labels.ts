@@ -40,3 +40,15 @@ export const DIMENSION_MOVE: Record<DimensionKey, string> = {
   independence: "Give less. Make them produce before you add anything.",
   metacognition: "Ask how sure they are, and what would make them surer.",
 };
+
+/**
+ * R100: the two dimensions a delayed unaided question measures (§10, §11).
+ *
+ * Named for what a teacher wants to know rather than for the rubric's nouns — "does it
+ * stick" and "can they use it elsewhere" are the questions; "retention" and "transfer"
+ * are the words for the answers.
+ */
+export const PROBE_LABELS: Array<{ key: "retention" | "transfer"; label: string }> = [
+  { key: "retention", label: "Remembers it later" },
+  { key: "transfer", label: "Uses it elsewhere" },
+];

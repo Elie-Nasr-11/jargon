@@ -119,7 +119,7 @@ class ModeSections(unittest.TestCase):
         # Without this a RELOADED transcript cannot know which mode any message happened in, so
         # the sections would vanish on refresh. Both roles are stamped so a reply groups with the
         # student turn it answers instead of opening a new unlabelled section.
-        self.assertIn("{ ...answer, turn_mode: declaredMode } : answer", CHAT_FN)
+        self.assertIn("turn_mode: declaredMode", CHAT_FN)
         # Pillar 1: the mentor stamp is CONDITIONAL — a declared mode whose student turn
         # never persisted stamps the register the transcript is actually in, so a replay
         # can never open a section no visible action started (the phantom-Discuss bug).

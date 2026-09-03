@@ -2948,6 +2948,11 @@ export type CognitionSteer = {
 // A dimension is ACTIONABLE at 2 or below (the rubric's "no evidence" / "minimal" /
 // "developing" bands) and PROFICIENT at 3+. Ties break in the rubric's own §19 order,
 // which puts retrieval first because retrieval is what everything else is built on.
+// R100: what a delayed unaided check has to say before §19 will call someone mastered.
+// tests/test_r100_probe.py reads these out of BOTH chat and cognition-scorer and fails
+// if the two files drift — they cannot import each other.
+const RETENTION_WEAK_AT_OR_BELOW = 2;
+const TRANSFER_HOLDS_AT_OR_ABOVE = 2;
 const STEER_PRIORITY = [
   "retrieval",
   "reasoning",
@@ -3018,6 +3023,13 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
   const independence = steerDim(profile, "independence");
   const retrieval = steerDim(profile, "retrieval");
   const reasoning = steerDim(profile, "reasoning");
+  // R100: what a delayed unaided check found. §14's whole point is that performance WITH
+  // help does not establish independent proficiency, so these two outrank the in-lesson
+  // dimensions where they disagree: a student who scores well mid-lesson and cannot
+  // retrieve it a day later needs retrieval practice, whatever their retrieval median
+  // says, and cannot be called mastered.
+  const retention = steerDim(profile, "retention");
+  const transfer = steerDim(profile, "transfer");
   const moves: string[] = [];
 
   // §19's FIRST rule, and the one that outranks the rest: "If cognitive production is
@@ -3039,7 +3051,31 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
     reasoning !== null &&
     reasoning >= 3 &&
     independence !== null &&
-    independence >= 3;
+    independence >= 3 &&
+    // Never fade on someone who could not retrieve it a day later, and never send them
+    // to transfer work when the last transfer question found nothing to build on.
+    (retention === null || retention > RETENTION_WEAK_AT_OR_BELOW) &&
+    (transfer === null || transfer >= TRANSFER_HOLDS_AT_OR_ABOVE);
+  // Strong in the lesson, but the delayed check says it has not stuck. §14's exact case:
+  // supported proficiency is not proficiency. Fading here would withdraw help from
+  // someone who has already shown they cannot hold the idea overnight.
+  const strongButNotHeld =
+    !dependent &&
+    !mastered &&
+    retrieval !== null &&
+    retrieval >= 3 &&
+    reasoning !== null &&
+    reasoning >= 3 &&
+    independence !== null &&
+    independence >= 3 &&
+    ((retention !== null && retention <= RETENTION_WEAK_AT_OR_BELOW) ||
+      (transfer !== null && transfer < TRANSFER_HOLDS_AT_OR_ABOVE));
+  if (strongButNotHeld) {
+    moves.push(
+      "CONSOLIDATE, DO NOT FADE: they work well with you in the room, but a delayed unaided check found the idea did not hold. Keep the help where it is and spend this session making it stick — have them restate it in their own words, then use it on one case you have not worked through together. Do not reduce scaffolding this session.",
+    );
+  }
+
   if (mastered) {
     moves.push(
       "FADE AND TRANSFER: they are producing this material independently. Stop scaffolding — ask them to apply the idea somewhere it has not appeared yet, or to predict a case you have not covered.",
@@ -3047,12 +3083,27 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
   }
 
   if (!mastered) {
+    // Retention failing is itself a retrieval finding, so retrieval joins the weak list
+    // even when the in-lesson median never flagged it.
+    if (
+      retention !== null &&
+      retention <= RETENTION_WEAK_AT_OR_BELOW &&
+      !weakAll.includes("retrieval")
+    ) {
+      weakAll.unshift("retrieval");
+    }
     // Weakest first; expression only under §18's caution — weak wording beside strong
     // reasoning is a language issue, and asking for a reformulation is the fix. When
     // the reasoning is ALSO weak, the reasoning move is the one that matters.
+    // A failed delayed check puts retrieval at the head of the queue whatever the
+    // in-lesson medians say: §11 is measuring the thing the lesson cannot see.
     const ranked = weakAll
       .filter((key) => key !== "expression" || (reasoning !== null && reasoning >= 3))
       .sort((a, b) => {
+        if (retention !== null && retention <= RETENTION_WEAK_AT_OR_BELOW) {
+          if (a === "retrieval") return -1;
+          if (b === "retrieval") return 1;
+        }
         const byValue = (steerDim(profile, a) ?? 9) - (steerDim(profile, b) ?? 9);
         return byValue !== 0
           ? byValue
@@ -3094,6 +3145,99 @@ export function heuristicKind(text: string): RouterVerdict {
   return { kind: "answer_attempt", confidence: 0.3 };
 }
 
+
+// --- R100: the delayed unaided ask (rubric §10 transfer, §11 retention, §20) --------
+//
+// The rubric will not let these be inferred: transfer "should generally be assessed
+// through a separate task rather than inferred from the original response", retention
+// "through delayed independent retrieval". So there has to be a moment where the product
+// asks for something with no help, later — and the owner's call is that it lives at the
+// top of the next lesson session rather than on a surface a student can ignore.
+//
+// This function only CHOOSES. Whether to ask at all (opening turn, one a session, one a
+// day) is the handler's, because it needs reads this cannot do. Keeping the choice pure
+// is what makes it property-testable, and the properties are the guarantees that matter:
+// never an idea with no evidence, never one taught inside this very session, never one
+// younger than the gap.
+
+const PROBE_MIN_AGE_HOURS = 20;
+// One a day, not one a session. A student who opens three lessons in an afternoon should
+// meet this once; the gap is what separates a measurement from an interrogation.
+const PROBE_MIN_GAP_HOURS = 20;
+// Mastered enough that asking them to REPEAT it teaches nobody anything — so the ask
+// becomes §10's "apply it somewhere it has not appeared" instead. Same threshold the
+// brain read model calls strong, deliberately: one idea of "solid" across the system.
+const PROBE_TRANSFER_AT_OR_ABOVE = 0.75;
+
+export type ProbePick = {
+  idea_key: string;
+  title: string;
+  kind: "retention" | "transfer";
+  effective: number;
+};
+
+export function pickProbe(input: {
+  /** student_idea_mastery rows: idea_key, score, attempts, last_evidence_at. */
+  mastery: DbRow[];
+  /** Published ideas, for titles and for which ones belong to this lesson. */
+  ideas: DbRow[];
+  /** Idea keys this lesson teaches — probing a neighbour beats probing a stranger. */
+  lessonIdeaKeys: string[];
+  /** When the current session began: evidence from inside it is not "delayed". */
+  sessionStartedAt: string | null;
+  now: number;
+}): ProbePick | null {
+  const titleByKey = new Map<string, string>();
+  for (const idea of input.ideas) {
+    const key = String(idea.key || "").trim();
+    if (key && !titleByKey.has(key)) {
+      titleByKey.set(key, String(idea.title || "").trim() || key);
+    }
+  }
+  const related = new Set(input.lessonIdeaKeys.filter(Boolean));
+  const sessionStart = input.sessionStartedAt ? Date.parse(input.sessionStartedAt) : NaN;
+  const cutoff = input.now - PROBE_MIN_AGE_HOURS * 3_600_000;
+
+  const candidates: Array<ProbePick & { related: boolean }> = [];
+  for (const row of input.mastery) {
+    const key = String(row.idea_key || "").trim();
+    if (!key || !titleByKey.has(key)) continue;
+    // No evidence means nothing to remember — an unattempted idea is not a retention
+    // question, it is a comprehension question the student has never been asked.
+    if (!(Number(row.attempts) > 0)) continue;
+    const at = typeof row.last_evidence_at === "string" ? Date.parse(row.last_evidence_at) : NaN;
+    if (!Number.isFinite(at)) continue;
+    // Delayed means delayed: after the gap, and before this sitting began.
+    if (at > cutoff) continue;
+    if (Number.isFinite(sessionStart) && at >= sessionStart) continue;
+    const effective = effectiveMastery(row.score, row.last_evidence_at);
+    candidates.push({
+      idea_key: key,
+      title: titleByKey.get(key) as string,
+      kind: effective >= PROBE_TRANSFER_AT_OR_ABOVE ? "transfer" : "retention",
+      effective,
+      related: related.has(key),
+    });
+  }
+  if (!candidates.length) return null;
+
+  // Fading first, and among the fading the weakest — that is where a delayed check is
+  // most informative and where §19's own precedence would look. Related beats unrelated
+  // at the same strength so the question sits near what this lesson is about. Mastered
+  // ideas are last: they are worth a transfer question, not a rescue.
+  const rank = (c: (typeof candidates)[number]) =>
+    (c.kind === "retention" ? 0 : 2) + (c.related ? 0 : 1);
+  candidates.sort((a, b) => {
+    const byRank = rank(a) - rank(b);
+    if (byRank !== 0) return byRank;
+    const byStrength = a.kind === "transfer" ? b.effective - a.effective : a.effective - b.effective;
+    if (byStrength !== 0) return byStrength;
+    // Total order, so the same inputs always choose the same idea whatever the row order.
+    return a.idea_key.localeCompare(b.idea_key);
+  });
+  const best = candidates[0];
+  return { idea_key: best.idea_key, title: best.title, kind: best.kind, effective: best.effective };
+}
 
 // --- Brain read model (Phase B, docs/BRAIN_FIRST_PLAN.md) ---------------------------
 // Idea-level mastery: an EMA in [0,1] updated free from the existing grading path, with
@@ -4237,6 +4381,12 @@ export function turnDirective(args: {
   studentMode: StudentTurnMode | null;
   // Phase A: non-null when THIS turn is the student tapping a mode hand-off pill.
   modeOfferAccept: { mode: "practice" | "discuss" | "lesson"; topic: string } | null;
+  // R100: non-null when this reply opens the session with a delayed unaided question
+  // (§10/§11). The handler decides WHETHER — it needs reads this function cannot do —
+  // and this decides what the turn then is. It must own the whole reply, which is why it
+  // is a directive key and not a room fact: `presentsThisTurn` accepts only present_step
+  // and brief, so a probe turn cannot also present the step.
+  probeAsk?: { kind: "retention" | "transfer"; title: string } | null;
   // R48: the current step's linked work item (assignment/quiz created FROM the step).
   // Optional so existing callers/tests stay valid; only read when requirements.work.
   stepWork?: { kind: "assignment" | "assessment"; title: string } | null;
@@ -4277,6 +4427,7 @@ export function turnDirective(args: {
     brainHints,
   } = args;
   const stepWork = args.stepWork ?? null;
+  const probeAsk = args.probeAsk ?? null;
   // R63: this very message is a skip request ("no can we move on now") — concluding
   // directives drop their closing-question ritual, and integrity holds say so plainly.
   const skipShaped =
@@ -4302,6 +4453,24 @@ export function turnDirective(args: {
     " short sentence with no new question.";
 
   const pick = (): TurnDirective => {
+    // --- R100: the delayed unaided ask, before anything else -------------------------
+    // First because it owns the whole reply. The handler only sets it on a session's
+    // OPENING turn, so it cannot displace navigation, grading or a step in progress —
+    // at that point there is nothing yet to displace.
+    if (probeAsk) {
+      const ask =
+        probeAsk.kind === "transfer"
+          ? `They know "${probeAsk.title}" well, so ask where else it applies — a case you have NOT worked through together.`
+          : `Ask what they remember about "${probeAsk.title}" from an earlier session.`;
+      return {
+        key: "probe_opener",
+        text:
+          `Greet them in no more than one short sentence, then ask EXACTLY ONE question and stop. ${ask} ` +
+          "This is a delayed check on their own recall, so it only counts if it is unaided: give NO content, no hint, no definition, no example, and no reminder of what the idea was, and do not answer any part of it yourself. If they cannot remember, that is a real answer and a useful one — take it kindly when it comes. " +
+          "Do NOT present or begin today's step in this reply. It comes next turn, once they have answered.",
+      };
+    }
+
     // --- Flow v3 navigation branches (win over everything: a revisit turn must never
     // read as an attempt, a completion, or a post-completion follow-up) ---------------
     if (navAction === "revisit") {
@@ -4758,6 +4927,12 @@ async function loadContext(
   // R91: the §19 cognition profile for this (student, lesson). Null until the
   // cognition-scorer has judged something — steering is additive, never a gate.
   cognitionProfile: DbRow | null;
+  // R100: this session's probe if one was already asked (so a reload cannot ask twice),
+  // and the student's most recent probe across all sessions (so the one-a-day gap can be
+  // measured). Both best-effort: a read failure means no probe this turn, never a
+  // blocked lesson.
+  sessionProbe: DbRow | null;
+  lastProbeAt: string | null;
   pendingCheckpoints: PendingCheckpoint[];
   pendingCheckpointsOk: boolean;
   // R48: the work item linked to the CURRENT step (null = unlinked / late enrollee).
@@ -4935,6 +5110,8 @@ async function loadContext(
     fallbackQuiz,
     misconceptions,
     cognitionProfile,
+    sessionProbe,
+    lastProbeRow,
     resourceChunks,
     stepWork,
   ] =
@@ -4972,7 +5149,19 @@ async function loadContext(
       // input — absent (nothing scored yet) simply means no §19 steering this turn.
       loadFirst(
         config,
-        `cognition_profiles?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&limit=1&select=retrieval,organization,reasoning,elaboration,vocabulary,expression,independence,metacognition,scaffold_earlier,scaffold_recent,turns_scored`,
+        `cognition_profiles?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&limit=1&select=retrieval,organization,reasoning,elaboration,vocabulary,expression,independence,metacognition,scaffold_earlier,scaffold_recent,turns_scored,retention,transfer,probes_answered`,
+      ).catch(() => null),
+      // R100: has this session already asked its one probe (a reload must not ask a
+      // second), and when was this student's last probe of any kind (the one-a-day gap).
+      loadFirst(
+        config,
+        `cognition_probes?session_id=eq.${encodeURIComponent(String(session.id))}&limit=1` +
+          `&select=id,idea_key,idea_title,kind,status`,
+      ).catch(() => null),
+      loadFirst(
+        config,
+        `cognition_probes?user_id=eq.${encodeURIComponent(userId)}` +
+          `&order=asked_at.desc&limit=1&select=asked_at`,
       ).catch(() => null),
       resourceIds.length
         ? loadMany(
@@ -5019,6 +5208,8 @@ async function loadContext(
     profile,
     misconceptions,
     cognitionProfile,
+    sessionProbe,
+    lastProbeAt: lastProbeRow ? String(lastProbeRow.asked_at || "").trim() || null : null,
     pendingCheckpoints: pendingResult ?? [],
     pendingCheckpointsOk: pendingResult !== null,
     stepWork,
@@ -6925,6 +7116,32 @@ async function handleTypedRequest(
       }
     }
 
+    // R100: is THIS message the answer to a probe asked at the top of the session?
+    //
+    // The mark rides the turn's payload so the scorer can tell an unaided delayed recall
+    // from an ordinary response — nothing else distinguishes them, and scored as an
+    // ordinary response it would read as a terrible answer to a question nobody asked.
+    //
+    // A skip or a "continue" is not an answer. Those expire the probe instead of scoring
+    // a zero: the rubric measures what a student produced, and declining to try is not a
+    // production of zero quality, it is an absence of one.
+    const pendingProbe =
+      context.sessionProbe && String(context.sessionProbe.status) === "asked"
+        ? context.sessionProbe
+        : null;
+    const probeDeclined =
+      answer?.mode === "text" &&
+      (isSkipRequest(String(answer?.text || "")) ||
+        CONTINUE_SIGNAL_RE.test(String(answer?.text || "")));
+    const probeAnswerMark =
+      pendingProbe && answer && content && !controlType && !probeDeclined
+        ? {
+            id: String(pendingProbe.id),
+            idea_key: String(pendingProbe.idea_key || ""),
+            kind: String(pendingProbe.kind || "retention"),
+          }
+        : null;
+
     // The student-turn insert runs CONCURRENTLY with the grader below — nothing this
     // request reads the row (recentTurns is already loaded). It is joined into the
     // grader Promise.all so a failure still fails the turn before the mentor call.
@@ -6941,9 +7158,36 @@ async function handleTypedRequest(
             // v6: persist the student's declared TurnMode so a RELOADED transcript can still
             // show which mode each stretch of conversation happened in. Omitted when null so
             // legacy turns stay byte-identical and the client can tell "unknown" from a value.
-            payload: declaredMode ? { ...answer, turn_mode: declaredMode } : answer,
+            payload: probeAnswerMark
+              ? { ...answer, ...(declaredMode ? { turn_mode: declaredMode } : {}), probe: probeAnswerMark }
+              : declaredMode
+                ? { ...answer, turn_mode: declaredMode }
+                : answer,
           })
         : Promise.resolve(null);
+
+    // Close the probe out. An ANSWER waits on the turn insert so `answer_turn_id` points
+    // at the row that actually landed — the scorer joins on it, and a probe pointing at
+    // a turn that failed to persist would be scored against nothing. A DECLINE needs no
+    // turn: it is marked expired immediately, so an unanswered probe reads as itself
+    // rather than sitting "asked" forever and blocking the next one.
+    if (pendingProbe && (probeAnswerMark || probeDeclined)) {
+      const probePath = `cognition_probes?id=eq.${encodeURIComponent(String(pendingProbe.id))}`;
+      scheduleBackground(
+        (probeAnswerMark
+          ? studentTurnPromise.then((row) =>
+              patchRows(config, probePath, {
+                status: "answered",
+                answered_at: new Date().toISOString(),
+                answer_turn_id: row?.id ?? null,
+              }),
+            )
+          : patchRows(config, probePath, { status: "expired" })
+        ).catch((err) => {
+          console.error("probe_close_failed", errorMessage(err));
+        }),
+      );
+    }
 
     // v1.2 loop-closer: for a free-text explanation turn, a dedicated grader judges whether
     // the student demonstrated the objective; its verdict hard-gates completion below and is
@@ -7296,6 +7540,58 @@ async function handleTypedRequest(
     const attachedResourceIds = new Set(
       attachedResources.map((resource) => String(resource.id)),
     );
+    // R100: does THIS reply open the session with a delayed unaided question (§10/§11)?
+    //
+    // Every condition needing a read lives here; pickProbe only chooses which idea.
+    // The gates, in the order they rule things out:
+    //   * the mentor has not spoken yet this session — a probe belongs before any
+    //     teaching, never dropped into the middle of a step;
+    //   * this session has not already asked one (unique(session_id) enforces that in
+    //     the database too, but a second attempt would just be a wasted error);
+    //   * the student has not been probed within the gap;
+    //   * they are in a plain lesson — a revisit, a nav control and a mode hand-off each
+    //     already own their opening turn, and practice/discuss are not lesson time.
+    const mentorHasSpoken = context.recentTurns.some((turn) => String(turn.role) === "mentor");
+    const lastProbeAge = context.lastProbeAt ? Date.now() - Date.parse(context.lastProbeAt) : null;
+    const probePick =
+      !mentorHasSpoken &&
+      !context.sessionProbe &&
+      !inRevisit &&
+      navAction === null &&
+      controlType !== "mode_offer" &&
+      (declaredMode === null || declaredMode === "lesson") &&
+      (lastProbeAge === null ||
+        !Number.isFinite(lastProbeAge) ||
+        lastProbeAge >= PROBE_MIN_GAP_HOURS * 3_600_000)
+        ? pickProbe({
+            mastery: context.ideaMastery,
+            ideas: context.ideas,
+            lessonIdeaKeys: stepIdeaKeys,
+            sessionStartedAt: String(session?.created_at || "") || null,
+            now: Date.now(),
+          })
+        : null;
+
+    // Record the ask BEFORE the reply goes out. The unique(session_id) constraint is the
+    // real guard against asking twice, so a losing race here simply fails and the turn
+    // carries on — a probe is enrichment, and it never costs a lesson.
+    if (probePick) {
+      scheduleBackground(
+        insertRow(config, "cognition_probes", {
+          user_id: userId,
+          session_id: sessionId,
+          lesson_id: lessonId,
+          idea_key: probePick.idea_key,
+          idea_title: probePick.title.slice(0, 300),
+          kind: probePick.kind,
+          effective_at_ask: Math.round(probePick.effective * 1000) / 1000,
+          status: "asked",
+        }).catch((err) => {
+          console.error("probe_insert_failed", errorMessage(err));
+        }),
+      );
+    }
+
     // ONE composed per-turn instruction (priority ladder) replacing the old pedagogy
     // block and the six ad-hoc directive strings.
     const directive = turnDirective({
@@ -7333,6 +7629,7 @@ async function handleTypedRequest(
               topic: String(control.topic || "this idea").slice(0, 120),
             }
           : null,
+      probeAsk: probePick ? { kind: probePick.kind, title: probePick.title } : null,
     });
     // Round 22i: conversation turns no longer stamp presented_at in applyTurn — the
     // stamp belongs to the turn whose reply ACTUALLY presents the step's material.
