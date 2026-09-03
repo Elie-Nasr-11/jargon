@@ -2978,6 +2978,11 @@ const STEER_MOVES: Record<string, string> = {
     "ASK THEM TO REFORMULATE: the thinking is sound and the wording is what slips. Ask them to say it again more clearly in their own words — never rewrite it for them.",
   metacognition:
     "ASK THEM TO CHECK THEMSELVES: before you confirm or correct, ask how sure they are and what would make them surer.",
+  // R103 / §19's eighth rule. Not keyed on a dimension: overload is a state of the TASK
+  // against this student right now, and the scorer decides it from how much help they
+  // are taking and how little comes back (see cognition-scorer's LOAD_WINDOW).
+  load:
+    "BREAK IT DOWN: they are being handed a lot and giving back very little, which is what a task too big to hold at once looks like — not laziness, and not a student who does not care. Ask for ONE thing at a time: one step, one sentence, one example. Wait for that piece before you introduce the next, and never stack a new question on top of one they have not answered.",
 };
 
 function steerDim(profile: DbRow, key: string): number | null {
@@ -3030,6 +3035,12 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
   // says, and cannot be called mastered.
   const retention = steerDim(profile, "retention");
   const transfer = steerDim(profile, "transfer");
+  // R103: the scorer's verdict, not a threshold repeated here. A boolean is the whole
+  // point — the arithmetic behind it needs `signals.words` off the ledger rows, which a
+  // profile does not carry, so recomputing it in this file would mean inventing a
+  // second, worse answer. tests/test_r103_cognitive_load.py reads both files and fails
+  // if the column name drifts.
+  const loaded = profile.load_flag === true;
   const moves: string[] = [];
 
   // §19's FIRST rule, and the one that outranks the rest: "If cognitive production is
@@ -3042,10 +3053,20 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
     );
   }
 
+  // §19's EIGHTH rule: "If cognitive load appears excessive: break the task into smaller
+  // steps." Second, because a student who is both carried and overloaded needs the help
+  // cut before the task is chunked — but both moves fit inside the cap, and together
+  // they are one coherent posture: smaller asks, less supplied.
+  if (loaded) moves.push(STEER_MOVES.load);
+
   // §19's LAST rule: "If mastery appears strong: fade scaffolding and introduce
   // transfer." Keyed on the three dimensions that mean the student owns the material.
+  //
+  // Never on someone overloaded: fading help from a student who is already producing
+  // stubs under heavy scaffolding would be reading the same evidence backwards.
   const mastered =
     !dependent &&
+    !loaded &&
     retrieval !== null &&
     retrieval >= 3 &&
     reasoning !== null &&

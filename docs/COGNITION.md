@@ -93,9 +93,51 @@ STUDENT THINKS rules place ABOVE the default help level.
 | when | the move |
 |---|---|
 | low independence **and** heavy recent scaffolding | REDUCE ASSISTANCE — a rung below normal |
+| **cognitive load excessive** (R103) | BREAK IT DOWN — one step, one sentence, one example |
 | a dimension weak, weakest first | the matching §19 ask |
 | expression weak **while reasoning is strong** (§18) | ask them to reformulate — never rewrite it |
 | retrieval, reasoning **and** independence all proficient | FADE AND TRANSFER |
+
+### The eighth rule: cognitive load
+
+*"If cognitive load appears excessive: break the task into smaller steps."* This one could
+not be read off the eight dimensions, because **overload is not weakness**. A student who
+finds the work hard produces weak answers. An overloaded student produces almost nothing
+*while the tutor carries the turn* — and the two need opposite responses.
+
+So the flag needs two facts at once, and `cognition-scorer`'s `buildProfile` is the only
+place that has both. Over the last `LOAD_WINDOW = 6` judged responses, **more than half**
+must be heavily scaffolded (S3+, the same level §14 calls *supported*) **and** more than
+half must come back short (≤ 8 words, counted by R99's `textSignals`). Either condition
+alone is a different student: heavy help with full answers is a scaffolded learner
+working, and short answers with no help is someone disengaged or simply fast. Breaking
+the task down would be the wrong move for both.
+
+**Eight words, and the live corpus picked it.** The first draft of this rule said twelve.
+Measured against the 132 judged responses on production, the median response is **11
+words** — so a twelve-word cutoff put "short" *above* the middle of the distribution and
+would have flagged **6 of the 15** eligible (student, lesson) pairs. A rule that fires on
+40% of a school is a description of the corpus, not a signal. Eight words is one clause,
+an answer with no room for a *because*; it sits at the corpus's 25th percentile, fires on
+nobody today, and leaves three pairs one response short of it. The threshold is a
+measurement, not a taste — re-measure before moving it.
+
+Three details are deliberate:
+
+- **A response with no word count is never short.** `signals.words` arrived with R99, so
+  older rows carry none, and treating them as short would have flagged every student
+  whose recent work predates it — on evidence that does not exist.
+- **The arithmetic is stored beside the verdict.** `load_signals` holds
+  `{ window, heavy_scaffold, short_answers, words_missing }`, so a reader can disagree
+  with the thresholds rather than with the machine. A bare boolean is unfalsifiable.
+- **The scorer decides whether; `chat` decides what.** `learnerSteer` reads `load_flag`
+  and never recomputes it — the arithmetic needs ledger rows a profile does not carry, and
+  a second implementation of one rule is a second answer to one question. It also blocks
+  FADE AND TRANSFER: withdrawing help from someone already producing stubs under heavy
+  scaffolding is reading the same evidence backwards.
+
+Overload is a **state, not a trait** — read over the recent window only, so a student who
+was drowning three weeks ago and is fine now is not still flagged.
 
 Three rules make it safe rather than merely clever:
 
@@ -180,6 +222,7 @@ would make for each of them.
 | group | what it means | what the teacher is told |
 |---|---|---|
 | **Leaning on the tutor** | independence ≤ 2, recent scaffolding ≥ S3 | they need less help, not more |
+| **Overloaded — break tasks down** | `load_flag` on the freshest lesson | one step at a time, not a reteach |
 | **needs: \<dimension\>** | weakest dimension, rubric order breaking ties | the §19 move, said to a person |
 | **Ready for harder ground** | retrieval, reasoning, independence all ≥ 3 | give them something uncovered |
 | **Holding steady** | nothing weak, not yet independent | leave them be |
@@ -188,7 +231,13 @@ would make for each of them.
 Alarm first: a teacher reading top to bottom meets what is going wrong before what is
 going well. The headline follows §19's own precedence — a room being carried by the tutor
 reads as *"an assistance problem before it is a content one"* even when some dimension is
-weaker.
+weaker, and a room where half the read students are overloaded is told to break the work
+into smaller steps *before* it reteaches anything. Both outrank the weakest dimension for
+the same reason: in an overloaded room the dimensions are weak because the task is too
+big, so reteaching the weakest one is the wrong instruction. A student who is both
+carried and overloaded is grouped as **Leaning on the tutor** — the same order in which
+the mentor pushes the two moves, so the room never names a different first move than the
+one being made.
 
 Four rules keep it honest:
 
@@ -271,14 +320,16 @@ Live probing found things review and 1454 offline pins did not.
 
 ## Verification
 
-- **1561 python pins** over the prompt's judgment rules, the API contracts, the schedule's
+- **1564 python pins** over the prompt's judgment rules, the API contracts, the schedule's
   contract, the room's rules and the Thinking tab's — including the pins that read `chat`,
   `cognition-scorer` and `thinking.ts` together and fail if a shared threshold drifts.
-- **23 executable property tests** over the real room derivations (`tests/room_view.test.ts`
+- **27 executable property tests** over the real room derivations (`tests/room_view.test.ts`
   via `tests/test_r93_room_view.py`), **20** over the Thinking tab's derivations
   (`tests/thinking_view.test.ts` via `tests/test_r101_thinking_view.py` — scopes, medians,
-  the line by sitting, the §16 pattern, and that no sentence carries a grade), plus the 43
-  flow-core properties.
+  the line by sitting, the §16 pattern, and that no sentence carries a grade), plus the 50
+  flow-core properties. Both deno harnesses assert that every `Deno.test` in the file
+  actually ran: a green suite that quietly filtered half its properties is the failure mode
+  they exist to prevent.
 - `deno check` clean on the scorer; `tsc`, `eslint` and `vite build` clean.
 - **Live, against production**, on probe rigs created and deleted each time: the sweep's
   auth door (403 / 403 / ran), the class door (403 for a teacher of another class in the
@@ -291,7 +342,7 @@ Everything in this document is live as of 2026-09-03.
 
 | piece | status |
 |---|---|
-| `cognition-scorer` | live (v14 — R101's `student_view`; R99 and R100 before it) |
+| `cognition-scorer` | live (v15 — R103's `load_flag`; R101's `student_view` before it) |
 | the ledger + sweep tables, `cognition-sweep` cron, the two-hour tail rule | live, firing every 15 minutes |
 | the teacher console (Thinking tab without a button, room panel) | live |
 | `chat` — §19 steering, R100's probe opener | **live (v120)** |

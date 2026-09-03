@@ -9,6 +9,7 @@ the WIRING and the prompt rules: that the profile is actually read per turn, rid
 payload, reaches the model as instructions that outrank the default help level, and
 that none of it is ever said to the student.
 """
+import re
 import unittest
 from pathlib import Path
 
@@ -70,10 +71,21 @@ class TheStudentIsNeverToldTests(unittest.TestCase):
 
     def test_no_move_text_carries_a_number_or_names_the_measurement(self):
         # Belt to the deno property's braces: the literal move strings themselves.
-        moves = CHAT[CHAT.index("const STEER_MOVES") : CHAT.index("function steerDim")]
-        for banned in ("rubric", "score", "dimension", "0-4", "/4"):
-            with self.subTest(banned=banned):
-                self.assertNotIn(banned, moves.lower())
+        #
+        # The rule is about what a student could be shown, so it reads the STRINGS. The
+        # comments around them are for whoever maintains this table and are allowed to
+        # name the measurement — R103's move is documented as "not keyed on a dimension",
+        # which the old slice-the-whole-block version read as a violation.
+        block = without_comments(CHAT)
+        block = block[block.index("const STEER_MOVES") : block.index("function steerDim")]
+        moves = re.findall(r'"((?:[^"\\]|\\.)*)"', block)
+        self.assertGreaterEqual(len(moves), 7, "the move strings were not found")
+        for move in moves:
+            for banned in ("rubric", "score", "dimension", "0-4", "/4"):
+                with self.subTest(banned=banned, move=move[:40]):
+                    self.assertNotIn(banned, move.lower())
+            with self.subTest(move=move[:40]):
+                self.assertNotRegex(move, r"\d")
 
 
 class TheDerivationIsPropertyTestedTests(unittest.TestCase):

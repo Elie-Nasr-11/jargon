@@ -32,10 +32,13 @@ export type RoomGroup = {
 // thing that is going well.
 const GROUP_RANK: Record<string, number> = {
   dependent: 0,
-  needs: 1,
-  mastered: 2,
-  steady: 3,
-  unread: 4,
+  // R103: overload is the other alarm. It sits below dependency because a student who
+  // is both is grouped as dependent — the help comes down before the task is chunked.
+  load: 1,
+  needs: 2,
+  mastered: 3,
+  steady: 4,
+  unread: 5,
 };
 
 /**
@@ -85,6 +88,15 @@ function describeGroup(key: string): Omit<RoomGroup, "key" | "students"> {
           "They need less help, not more — a question where you would have given a hint.",
         tone: "alert",
       };
+    case "load":
+      return {
+        title: "Overloaded — break tasks down",
+        body:
+          "They are taking a lot of help and giving back very little. That is a task too " +
+          "big to hold at once, not a student who does not care: ask for one step, one " +
+          "sentence, one example at a time, and let them finish it before the next.",
+        tone: "alert",
+      };
     case "mastered":
       return {
         title: "Ready for harder ground",
@@ -128,6 +140,14 @@ export function roomHeadline(room: RoomSummary | null | undefined): string {
   // by the tutor is a different, worse problem than a room that finds one thing hard.
   if (dependent > 0 && dependent >= room.read / 2) {
     return `${countOf(dependent, "student")} of the ${room.read} read ${isAre(dependent)} leaning on the tutor for most of their thinking. That is an assistance problem before it is a content one.`;
+  }
+
+  // R103: and overload outranks a weak dimension for the same reason — the dimensions
+  // ARE weak in an overloaded room, and reteaching the weakest one is the wrong move
+  // when the task itself is too big to hold.
+  const overloaded = room.groups.load ?? 0;
+  if (overloaded > 0 && overloaded >= room.read / 2) {
+    return `${countOf(overloaded, "student")} of the ${room.read} read ${isAre(overloaded)} taking heavy help and giving back very little. Break the work into smaller steps before you reteach any of it.`;
   }
 
   if (!top) {

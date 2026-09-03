@@ -126,7 +126,8 @@ jobs:
             supabase/migrations/20261015000000_step_work_links.sql \
             supabase/migrations/20261102000000_r97_idea_mastery_backfill.sql \
             supabase/migrations/20261103000000_r100_cognition_probes.sql \
-            supabase/migrations/20261104000000_r101_sweep_aging.sql ; do
+            supabase/migrations/20261104000000_r101_sweep_aging.sql \
+            supabase/migrations/20261105000000_r103_cognitive_load.sql ; do
             echo "Applying $f"
             # Body goes through a temp file, not a shell argument: large seed migrations
             # (e.g. the Book F content seed, ~254KB) exceed the kernel's per-argument

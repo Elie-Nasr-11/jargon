@@ -2,6 +2,50 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-09-03 (latest): overload is not weakness — §19's eighth rule
+
+The rubric's last unshipped steering rule: *"If cognitive load appears excessive: break the
+task into smaller steps."* Seven of the eight steered the mentor already. This one could not
+be read off the eight dimensions, and the reason is the decision.
+
+- **Overload and weakness produce the same dimension scores and need opposite responses.**
+  A student who finds the work hard produces weak answers. An overloaded student produces
+  almost nothing *while the tutor carries the turn*. The only thing that separates them is
+  how much came back, so the flag requires **both** halves over the recent six responses:
+  more than half heavily scaffolded (S3+) **and** more than half short. Either alone is a
+  different student, and the conjunction is pinned — an `||` there would flag every
+  heavily-scaffolded child in the school.
+- **The threshold is a measurement, not a taste, and live data moved it.** The draft said
+  twelve words. Against the 132 judged responses on production the median response is
+  **11 words**, so twelve put "short" above the middle of the distribution and would have
+  fired on 6 of 15 eligible pairs — 40% of the school, which describes the corpus rather
+  than finding anything in it. Eight words (one clause, no room for a *because*) sits at
+  the 25th percentile, fires on nobody today, and leaves three pairs one response away.
+  A python pin now asserts the rule — short must be shorter than typical — against the
+  median the doc records, so the two cannot be moved apart.
+- **A missing word count is never short.** `signals.words` arrived with R99; treating an
+  uncounted response as short would have flagged every student whose recent work predates
+  it, on evidence that does not exist.
+- **The verdict is stored with its arithmetic.** `load_flag` is the answer; `load_signals`
+  holds the counts behind it. A bare boolean is unfalsifiable — a reader has to be able to
+  disagree with the thresholds rather than with the machine.
+- **The scorer decides whether; chat decides what.** `learnerSteer` reads the flag and never
+  recomputes it: the arithmetic needs ledger rows a profile does not carry, and a second
+  implementation of one rule is a second answer to one question. The flag also blocks FADE
+  AND TRANSFER — withdrawing help from a student already producing stubs under heavy
+  scaffolding is the same evidence read backwards.
+- **The room gets an alarm, not a dimension.** Without a group of its own an overloaded
+  student lands under "needs: elaboration" — and their elaboration IS weak, because the
+  task is too big. Reteaching it is the wrong instruction. A student who is both carried
+  and overloaded is grouped as *Leaning on the tutor*, the same order in which the mentor
+  pushes the two moves.
+- **Pins state rules, not shapes** (tenth release). Two broke. R93's group-order pin listed
+  the five groups in order and failed for the sixth existing; it now asserts the rule —
+  alarms before teachable before opportunity, unread last. R91's "no move names the
+  measurement" pin sliced the whole `STEER_MOVES` block including comments, and failed
+  because the new move's comment says it is *not keyed on a dimension*; it now reads the
+  string literals, which is what a student could ever be shown.
+
 ## 2026-09-03 (later): cut it, but keep it readable — the archive
 
 The feature audit found 48 of 105 backend actions with no caller. The owner's call: keep

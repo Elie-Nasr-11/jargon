@@ -6,6 +6,86 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-03 (R103: §19's eighth rule, cognitive load)
+
+Status: Finished
+Task: ship the last unshipped rubric rule — "if cognitive load appears excessive, break the
+task into smaller steps". Seven of §19's eight steered the mentor before this.
+
+Summary:
+
+WHY IT COULD NOT BE READ OFF THE EIGHT DIMENSIONS. Overload and weakness produce the same
+dimension scores and need opposite responses. A student who finds the work hard produces
+weak answers; an OVERLOADED student produces almost nothing while the tutor carries the
+turn. The only thing separating them is how much came back — so the flag needs both halves
+over the last six judged responses: more than half heavily scaffolded (S3+, §14's own
+"supported" line) AND more than half short. Either alone is a different student, and the
+conjunction is pinned; an `||` there would flag every heavily-scaffolded child in the
+school.
+
+THE LIVE CORPUS MOVED A THRESHOLD, AND THAT IS THE PART WORTH KEEPING. The draft said
+twelve words. Measured against the 132 judged responses on production, the median response
+is ELEVEN words — twelve put "short" above the middle of the distribution and would have
+fired on 6 of the 15 eligible (student, lesson) pairs. A rule that fires on 40% of a school
+describes the corpus rather than finding anything in it. Eight words (one clause, no room
+for a "because") sits at the 25th percentile, fires on nobody today, and leaves three pairs
+one response away from it — `camp-math-l1` and `camp-hist-l1` at heavy 5/6, short 3/6. A
+python pin now asserts the RULE — short must be shorter than typical — against the median
+COGNITION.md records, so the number and its justification cannot be moved apart. This was
+found by querying the ledger before shipping, not by a test.
+
+THE ROOM NEEDED THE GROUP, IT IS NOT DECORATION. Without one, an overloaded student lands
+under "needs: elaboration" — and their elaboration IS weak, because the task is too big.
+Reteaching it is the wrong instruction, so the group is what stops the view giving bad
+advice. A student who is BOTH carried and overloaded is grouped as "Leaning on the tutor",
+which is also the order learnerSteer pushes the two moves in, so the room never names a
+different first move than the one the mentor is making.
+
+TWO PINS MOVED, for the tenth release running, and both were shapes:
+1. R93's group-order pin listed the five groups in order and failed for the sixth existing.
+   It now asserts the rule: alarms before teachable before opportunity, unread last.
+2. R91's "no move names the measurement" pin sliced the whole STEER_MOVES block INCLUDING
+   comments, and failed because the new move's comment says it is "not keyed on a
+   dimension". It now reads the string literals — which is the only text a student could
+   ever be shown — and additionally forbids digits in every move, which the old version
+   never checked.
+
+Also added, unasked but in the same spirit: tests/test_r93_room_view.py now asserts that
+every Deno.test in room_view.test.ts actually ran, matching the Pillar-4 harness. A green
+suite that silently filtered half its properties was possible there and is not now.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (LOAD_* constants, buildProfile
+derives load_flag/load_signals, wordsOf, class_view selects load_flag and groups on it),
+supabase/functions/chat/index.ts (STEER_MOVES.load, learnerSteer reads the flag, mastered
+requires !loaded), supabase/migrations/20261105000000_r103_cognitive_load.sql (new) +
+.github/workflows/deploy-backend.yml, frontend lib/api.ts + cognition/room.ts (the
+"Overloaded" group, its rank and the headline), tests/flow_core.test.ts (+7),
+tests/room_view.test.ts (+4), tests/test_r103_cognitive_load.py (new, 27 pins),
+tests/test_r91_cognition_steer.py + tests/test_r93_class_room.py + tests/test_r93_room_view.py
+(re-expressed), docs/COGNITION.md + DECISIONS.md.
+
+Tests run: python 1564 OK / 4 skipped (Flask, pre-existing) — was 1537. Deno: flow-core 50,
+room 27, thinking 20. tsc 0 errors; eslint src 0 errors (36 pre-existing warnings); vite
+build green. `deno check`: cognition-scorer CLEAN, chat 7 errors — identical to the
+pre-existing baseline, none in or near the changed lines.
+
+Remaining concerns:
+
+- **The rule has never fired on a real student.** By construction: it fires on nobody in
+  today's 132 rows. That is the calibration working, but it means the end-to-end path
+  (flag -> steer -> room group) is proven only by property tests and the SQL counterfactual,
+  not by a live case. The first genuinely overloaded student will be the real test, and the
+  numbers to re-run are in COGNITION.md.
+- **The threshold is calibrated on 132 responses from a handful of students.** That is
+  enough to reject twelve and not enough to be confident in eight. Re-measure once the
+  school is at volume; the query is a percentile over `signals->>'words'`.
+- **Not done deliberately:** the Thinking tab does not show the flag. The room is where §19
+  groups live and where the wrong-advice problem was; putting a per-lesson overload marker
+  on the student view is a small follow-up (LessonLine gains a boolean) if the owner wants it.
+
+Suggested next task: R101b (§14 in the room — the watch marker and later-recall counts in
+class_view), then R104 (docs rewrite + the brain-map decision, which needs the owner's call).
+
 ## Claude -> Codex / Human - 2026-09-03 (archive docs: Canvas and Classroom stay deployed)
 
 Status: Finished
