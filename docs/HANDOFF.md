@@ -71,6 +71,16 @@ Tests run: python 1579 OK / 4 skipped (was 1564). Deno: flow-core 55, room 32, t
 tsc 0; eslint src 0 errors (36 pre-existing warnings); vite build green. `deno check`:
 cognition-scorer CLEAN, chat 7 — the unchanged pre-existing baseline.
 
+Live, after the merge (deploy run #171 green): NO MIGRATION — every column this reads
+(`unaided_count`, `probes_answered`, `retention`, `transfer`) arrived with R100, so CI
+correctly skipped the replay (R50b's rule: function-only pushes do not replay) and the
+deploy carried no schema risk. The deployed builds were read back rather than assumed:
+`cognition-scorer` **v17** carries `strongOnTheThree`, the `not_held` group,
+`seenWorkingAlone`, the §14 columns in the class-view select and `not_held: 0` in the room
+summary; `chat` **v123** carries `MASTERY_MIN_SHARE_UNAIDED`, the `share_unaided` read and
+the guard on mastery. Only the two changed functions bumped version; the CLI no-ops on an
+unchanged bundle hash, which is why the run took 41 seconds and not three minutes.
+
 Remaining concerns:
 
 - **Neither guard can fire today, by construction.** No student is mastery-shaped, so
