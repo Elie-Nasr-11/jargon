@@ -287,15 +287,15 @@ Live probing found things review and 1454 offline pins did not.
 
 ## Operational state
 
-Everything in this document is live as of 2026-09-01.
+Everything in this document is live as of 2026-09-03.
 
 | piece | status |
 |---|---|
-| `cognition-scorer` | live (v11) |
-| the ledger + sweep tables, `cognition-sweep` cron | live, firing every 15 minutes |
-| the teacher console (Thinking tab, room panel) | live |
-| `chat` — §19 steering | **live (v116)** |
-| `curriculum-admin` — R85 provider switch, R89 shared-book fix | **live (v43)** |
+| `cognition-scorer` | live (v14 — R101's `student_view`; R99 and R100 before it) |
+| the ledger + sweep tables, `cognition-sweep` cron, the two-hour tail rule | live, firing every 15 minutes |
+| the teacher console (Thinking tab without a button, room panel) | live |
+| `chat` — §19 steering, R100's probe opener | **live (v120)** |
+| `curriculum-admin` — R85 provider switch, R89 shared-book fix | **live (v44)** |
 
 The expired `SUPABASE_ACCESS_TOKEN` that held the last three of those for two days was
 rotated on 2026-09-01. Two things are worth keeping from how that went:

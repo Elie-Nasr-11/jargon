@@ -8,8 +8,7 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Claude -> Codex / Human - 2026-09-03 (R101: the Thinking tab just shows)
 
-Status: Finished (code, tests, docs; the live check after deploy is recorded below the
-Summary as it lands)
+Status: Finished
 Task: the owner, looking at the live Thinking tab — "lets have it just show. not as an
 action you need to click and analyze … a total breakdown of these for all their work and
 progress over time, and a selector to see a breakdown of specific lessons, units, and
@@ -95,13 +94,21 @@ select lists Everything / 2 classes / 2 units / 3 lessons with counts, the readi
 the delayed-checks tally render, 10 sparklines and 8 first→now arrows, unit scope and
 lesson scope switch instantly, lesson scope shows the narrative and six evidence
 disclosures, no `%` anywhere in the panel, scrollWidth === innerWidth on the phone, no
-page errors. Live: the migration applied; `cognition_sweep_queue` = 9 pairs / 18
-responses immediately after (they will drain over the next few ticks — recorded below
-once the deploy is through).
+page errors. Live, after the merge (PR #100, squash-merged; deploy run #168 green in two minutes;
+`cognition-scorer` v14, verify_jwt off; Render rebuilt the site at 09:17:51Z and its
+teacher chunk carries `student_view` with no trace of the old button): the queue
+migration, applied by hand before the merge, showed the nine aged pairs at once and the
+next five sweep ticks (09:15–10:15 UTC) saw 9 pairs, scored 9, 18 responses, 0 errors —
+queue 0 / 0 afterwards, ledger 113 → 131 rows. The rule worked on the scorer that was
+already live; nothing about it needed the new code.
 
 Remaining concerns:
-- The live `student_view` path is unproven until the scorer deploys through CI (v13); the
-  Thinking tab of the heaviest real student is the check, on desktop and at 390px.
+- The deployed `student_view` path is confirmed by version and bundle, not by a signed-in
+  open: there are no teacher credentials in this session and the sign-in page carries no
+  demo accounts by design (R98). The check that remains is the owner opening any scored
+  student's Thinking tab once on desktop and once on a phone. A rig teacher by SQL was
+  offered and not chosen — it is a production write and would put a real student's name
+  on a screenshot.
 - Sweep capacity, not the tail rule, is the ceiling: 2 pairs per 15 minutes is 192 pairs
   a day, and 198 students × 3 lessons/day would exceed it. The knob is the cron body's
   `"limit"` (up to SWEEP_BATCH_MAX = 10). Untouched here; worth a decision before the
