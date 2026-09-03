@@ -2,6 +2,41 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-09-03 (last): §14 beside every student, and the chip that was not built
+
+The room said what to DO about each student. It did not say what the saying rested on — a
+teacher reading "needs: reasoning" could not tell whether that came from work the child did
+alone or work the tutor carried, and those are different lessons.
+
+- **The release was planned as a positive chip and the live data killed it.** "Looks strong,
+  but only with help" was the intended marker. Measured on production BEFORE building: zero
+  of the nineteen profiles are mastery-shaped, and zero of the fifteen eligible have no weak
+  dimension. Every read student today is *Leaning on the tutor* (5) or *needs* (10);
+  `mastered` and `steady` are empty groups. A chip gated on "looks strong" could not have
+  fired on anyone — an unfalsifiable rule, the same trap R103's twelve-word threshold nearly
+  walked into from the other side. **Measure the population before designing a rule about
+  it** is now two-for-two.
+- **So §14 became a number, not a group.** Every read student's chip carries the count of
+  their answers with no help before them over its own denominator (`2/14`), amber below a
+  quarter. Never a percentage: "2 of 14" and "14%" are different claims and the second hides
+  what decides the first. One fraction over one denominator across every lesson, not a mean
+  of per-lesson shares, which would weight a three-response lesson like a thirty-response one.
+- **"Never checked a day later" is said out loud.** `probes_answered` is zero for the whole
+  school. Rendering nothing would have read as "fine"; it means nobody has asked them cold.
+- **Two guards, and both closed disagreements that already existed in code.** Since R100
+  `chat` has told the mentor CONSOLIDATE, DO NOT FADE for a strong-but-not-retained student
+  while the room called them "ready for harder ground" — the exact contradiction R93 says is
+  worse than having no view. The room now has the matching group. And mastery, in both files,
+  additionally requires having been seen working alone.
+- **A guard is where an uncalibrated number belongs.** `MASTERY_MIN_SHARE_UNAIDED` has never
+  had a student to withhold from, so it is unmeasured. It can only ever take away an
+  optimistic label, never assert something about a child — which is why it shipped and the
+  chip did not. Absent evidence does not block, matching R100's retention and transfer.
+- **Pins state rules, not shapes** (eleventh release). R93's mastery pin sliced between the
+  branch's `else if (` and its assignment and expected three dimension names inline; lifting
+  the condition into a named predicate broke it. It was pinning where the code sat, not what
+  it read.
+
 ## 2026-09-03 (latest): overload is not weakness — §19's eighth rule
 
 The rubric's last unshipped steering rule: *"If cognitive load appears excessive: break the

@@ -4359,10 +4359,20 @@ export type RoomStudent = {
   section: string | null;
   // R103: "load" is §19's eighth rule — heavy help and short answers together, which
   // reads as overload rather than as any one weak dimension.
-  group: "dependent" | "load" | "mastered" | "needs" | "steady" | "unread";
+  // R101b: "not_held" is §11 — strong in the lesson, but a delayed unaided check found
+  // the idea did not come back. The mentor has been told to consolidate rather than fade
+  // since R100; this is the room saying the same thing.
+  group: "dependent" | "load" | "needs" | "not_held" | "mastered" | "steady" | "unread";
   focus: keyof CognitionDims | null;
   dims: CognitionDims;
   turns_scored: number;
+  // R101b / §14, as counts. The room may never carry a dimension VALUE; how many of a
+  // student's answers had no help before them is a count of responses, not a judgment
+  // of one, and it is the denominator under every other label on the screen.
+  unaided_count: number;
+  share_unaided: number | null;
+  /** Delayed unaided checks actually answered. Zero everywhere until a probe lands. */
+  probes_answered: number;
   lessons_read: number;
   scaffold_recent: number | null;
   scaffold_trend: "falling" | "rising" | "steady" | null;

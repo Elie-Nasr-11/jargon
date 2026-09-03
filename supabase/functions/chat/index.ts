@@ -2953,6 +2953,13 @@ export type CognitionSteer = {
 // if the two files drift — they cannot import each other.
 const RETENTION_WEAK_AT_OR_BELOW = 2;
 const TRANSFER_HOLDS_AT_OR_ABOVE = 2;
+// R101b / §14: "a learner who performs well only when substantial AI support is available
+// should NOT be classified as independently proficient." The eight dimensions cannot see
+// this alone — a student can word an answer independently while the tutor supplies the
+// content, and the blended median reads the same either way. So fading additionally
+// requires having been SEEN working alone. A guard, never a marker: it can only withhold
+// an optimistic label, which is the right place for a number nothing has calibrated yet.
+const MASTERY_MIN_SHARE_UNAIDED = 0.25;
 const STEER_PRIORITY = [
   "retrieval",
   "reasoning",
@@ -3035,6 +3042,11 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
   // says, and cannot be called mastered.
   const retention = steerDim(profile, "retention");
   const transfer = steerDim(profile, "transfer");
+  // §14's own statistic: the share of their answers that had no help before them. Absent
+  // evidence does not block, the same posture the two probe guards take — this fires on
+  // evidence of low independence, never on its silence.
+  const shareUnaided = steerDim(profile, "share_unaided");
+  const seenWorkingAlone = shareUnaided === null || shareUnaided >= MASTERY_MIN_SHARE_UNAIDED;
   // R103: the scorer's verdict, not a threshold repeated here. A boolean is the whole
   // point — the arithmetic behind it needs `signals.words` off the ledger rows, which a
   // profile does not carry, so recomputing it in this file would mean inventing a
@@ -3076,7 +3088,9 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
     // Never fade on someone who could not retrieve it a day later, and never send them
     // to transfer work when the last transfer question found nothing to build on.
     (retention === null || retention > RETENTION_WEAK_AT_OR_BELOW) &&
-    (transfer === null || transfer >= TRANSFER_HOLDS_AT_OR_ABOVE);
+    (transfer === null || transfer >= TRANSFER_HOLDS_AT_OR_ABOVE) &&
+    // §14: never fade on a proficiency nobody has watched happen unaided.
+    seenWorkingAlone;
   // Strong in the lesson, but the delayed check says it has not stuck. §14's exact case:
   // supported proficiency is not proficiency. Fading here would withdraw help from
   // someone who has already shown they cannot hold the idea overnight.

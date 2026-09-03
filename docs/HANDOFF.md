@@ -6,6 +6,90 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-03 (R101b: §14 in the room)
+
+Status: Finished
+Task: put §14's independence evidence and the delayed-check counts into the class view, and
+close the places where the room and the mentor would say different things about one child.
+
+Summary:
+
+THE RELEASE WAS PLANNED AS A CHIP AND THE LIVE DATA KILLED IT. It was to be a positive
+"looks strong, but only with help" marker. Measured on production BEFORE building anything:
+zero of the nineteen profiles are mastery-shaped, and zero of the fifteen eligible have no
+weak dimension. Every read student today is Leaning on the tutor (5) or needs (10);
+`mastered` and `steady` are EMPTY GROUPS in production. A chip gated on "looks strong"
+could not have fired on anyone — an unfalsifiable rule, which is what R103's twelve-word
+threshold nearly shipped from the other direction. Measuring the population before
+designing a rule about it is now two-for-two, and it is worth making a habit.
+
+SO §14 BECAME A NUMBER, NOT A GROUP. Every read student's chip carries the count of their
+answers that had no help before them, over its own denominator — `2/14`, amber below a
+quarter, with the sentence and "never checked a day later" in the tooltip. Never a
+percentage: "2 of 14" and "14%" are different claims and the second hides what decides how
+much the first is worth. The share is one fraction over one denominator across every
+lesson, not a mean of per-lesson shares, which would weight a three-response lesson like a
+thirty-response one. `probes_answered` reads zero for the whole school; rendering nothing
+would have looked like "fine", when it means nobody has ever asked these students cold.
+
+TWO GUARDS, AND BOTH CLOSED DISAGREEMENTS THAT ALREADY EXISTED IN CODE.
+1. §11. Since R100, `chat` has told the mentor CONSOLIDATE, DO NOT FADE for a student
+   strong in the lesson whose delayed check found nothing — while this view went on calling
+   them "ready for harder ground". That is exactly the contradiction R93 says is worse than
+   having no room view. The room now has the matching group, "It did not stick", ranked
+   immediately before the reading it corrects.
+2. §14. Mastery, in BOTH files, now additionally requires having been seen working alone.
+   One number, `MASTERY_MIN_SHARE_UNAIDED`, cross-pinned across chat, cognition-scorer and
+   room.ts so the chip and the mentor cannot disagree about who is on which side of it.
+
+A GUARD IS WHERE AN UNCALIBRATED NUMBER BELONGS. That threshold has never had a student to
+withhold from, so it is unmeasured — and it can only ever take away an optimistic label,
+never assert something about a child. That asymmetry is the whole reason it shipped and the
+chip did not. Absent evidence does not block, matching R100's posture for retention and
+transfer: it fires on evidence of low independence, never on its silence.
+
+R93's RULE HELD, LITERALLY: retention and transfer are read in `rollUpStudent` to decide
+whether the reading held, and deliberately NOT returned on RoomStudent. They are dimension
+values and no dimension value may reach the room. A pin asserts both halves.
+
+A PIN MOVED, for the eleventh release running, and it was a shape again. R93's mastery pin
+sliced between the branch's `else if (` and its assignment, expecting three dimension names
+inline; lifting the condition into a named predicate broke it. It was pinning where the
+code sat rather than what it read, and now reads everything from the top of the rollup to
+the assignment.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (MASTERY_MIN_SHARE_UNAIDED and
+the two probe thresholds, class_view selects the §14 and probe columns, rollUpStudent
+aggregates and gains not_held plus the mastery guard), supabase/functions/chat/index.ts
+(the §14 guard on mastery), frontend lib/api.ts + cognition/room.ts (MOSTLY_SUPPORTED_BELOW,
+mostlySupported, unaidedLabel, independenceNote, the not_held group, refreshed steady copy)
++ cognition/ClassRoomPanel.tsx (the chip and its tooltip), tests/room_view.test.ts (+5),
+tests/flow_core.test.ts (+5), tests/test_r101b_room_independence.py (new, 15 pins),
+tests/test_r93_class_room.py (re-expressed), docs/COGNITION.md + DECISIONS.md.
+
+Tests run: python 1579 OK / 4 skipped (was 1564). Deno: flow-core 55, room 32, thinking 20.
+tsc 0; eslint src 0 errors (36 pre-existing warnings); vite build green. `deno check`:
+cognition-scorer CLEAN, chat 7 — the unchanged pre-existing baseline.
+
+Remaining concerns:
+
+- **Neither guard can fire today, by construction.** No student is mastery-shaped, so
+  nothing has ever met the rest of the rule for either to withhold from, and no probe has
+  ever been answered. They are correctness against the day the population changes, not
+  features. The visible half — the `2/14` chip and the "never checked" note — works now and
+  is the only part a teacher will see this week.
+- **MASTERY_MIN_SHARE_UNAIDED is unmeasured.** A quarter is a judgement, not a measurement,
+  because there is nobody to measure it against. Re-derive it the first time a real student
+  clears the three dimensions; the query is share_unaided over cognition_profiles.
+- **share_unaided is bimodal on production** — median 0.23, p25 0.05, p75 1.00, two students
+  at exactly 0. Whatever the threshold becomes, it is separating two clusters, not cutting
+  a smooth distribution.
+- **Not done:** the Thinking tab still does not show R103's load flag (noted last release,
+  still true), and the room's `2/14` has not been seen at 390px by anyone.
+
+Suggested next task: R104 (docs rewrite + the brain-map decision, which needs the owner's
+call and is now the last item on the roadmap).
+
 ## Claude -> Codex / Human - 2026-09-03 (R103: §19's eighth rule, cognitive load)
 
 Status: Finished
