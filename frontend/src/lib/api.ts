@@ -4230,6 +4230,9 @@ export type CognitionTurnScore = CognitionDims & {
   stage: string | null;
   objective: string;
   scaffold_level: number;
+  // Deliberately loose: the judge's JSON is additive across rubric revisions, and a row
+  // written before R99 has neither `attribution` nor `sentences`. Readers narrow these
+  // through features/teacher/cognition/evidence.ts, which tolerates every vintage.
   evidence: Record<string, unknown>;
   signals: Record<string, unknown>;
   note: string;

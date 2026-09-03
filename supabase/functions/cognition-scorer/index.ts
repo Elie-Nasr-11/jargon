@@ -347,22 +347,24 @@ Then score these dimensions, each 0-4, or null when this response gives no evide
 - retrieval: how much relevant knowledge the student pulled up themselves. 0 none/all supplied; 2 several relevant facts with gaps; 4 comprehensive, accurate, uncued.
 - organization: connecting ideas vs listing them. 0 incoherent; 2 some sequence/grouping/causal links; 4 a coherent structure (hierarchy, sequence, comparison, causation).
 - reasoning: what they DID with the knowledge. 0 copied; 1 bare assertion; 2 a simple reason; 3 connects principles/evidence to justify; 4 generalizes, evaluates, predicts, or draws a new inference.
-- elaboration: whether added language adds intellectual content. NEVER equate word count with elaboration — repetition and filler score low.
-- vocabulary: independent use of subject terms at the student's level. Precision matters more than sophistication; do not reward needlessly difficult words. Terms the tutor just supplied count less than terms the student produced unprompted.
-- expression: how successfully thought became communication (clarity, sequencing, connectives, referential clarity). This is the ONLY dimension where language mechanics belong.
+- elaboration: whether added language adds intellectual content. 0 no meaningful response; 1 minimal information, undeveloped; 2 one or more relevant details or examples; 3 develops ideas with explanation, relationships or examples; 4 expands meaningfully through several relevant propositions, connections or implications. NEVER equate word count with elaboration — repetition and filler score low.
+- vocabulary: independent use of subject terms at the student's level. 0 no assessable evidence; 1 vague language throughout ("thing", "stuff", "does"); 2 some correct terminology, used imprecisely; 3 relevant subject terms used accurately and naturally; 4 precise disciplinary vocabulary, including distinctions between related concepts. Precision matters more than sophistication; do not reward needlessly difficult words. Terms the tutor just supplied count less than terms the student produced unprompted.
+- expression: how successfully thought became communication. 0 meaning cannot reliably be determined; 1 partly understandable, ideas disconnected; 2 the main idea can be followed, with coherence weaknesses; 3 ideas communicated clearly and logically; 4 clear, purposeful and structured, with relationships between ideas made explicit. This is the ONLY dimension where language mechanics belong.
 - independence: how much of the cognitive content originated with the student given the assistance above. 0 reproduces supplied content; 2 meaningful additional reasoning on heavy scaffolding; 4 substantive response with no meaningful content supplied beforehand.
-- metacognition: monitoring their own thinking. 1 bare (un)certainty; 2 names an uncertainty/error/gap; 3 explains why an answer may be wrong or revises from evidence; 4 evaluates and independently repairs their own reasoning.
+- metacognition: monitoring their own thinking. 0 no evidence of it either way; 1 bare (un)certainty; 2 names an uncertainty/error/gap; 3 explains why an answer may be wrong or revises from evidence; 4 evaluates and independently repairs their own reasoning.
 
 RULES.
 - Grammar, spelling and accent NEVER lower any dimension except expression, and even expression is about communication, not correctness cosmetics. Strong reasoning in broken sentences is strong reasoning.
 - Normalize every judgment to the student's grade band, the subject, and the response modality given in the context. A short, mathematically precise explanation is not weaker than a long humanities paragraph.
 - Evidence over vibes: for each dimension you score, quote 3-12 words from the response (or the tutor's preceding turn, for independence) that ground the score.
-- signals: count what is countable in the response — words, relevant propositions, subject terms used, causal links, comparisons, conditionals, examples, self-corrections, and hints_before (tutor turns since the student's last substantive attempt).
+- attribution: the rubric's §8 question, split the way it asks. Under ai_supplied put what the tutor had already given — concepts, reasoning, vocabulary, examples, sentence structure — quoting the tutor. Under student_originated put what this response added in each of the same five. Each is a list of short quotes; leave a category as an empty list when it holds nothing. This is what makes "the student produced it" inspectable rather than asserted.
+- ai_traceable_share: 0..1, the proportion of this response's cognitive content traceable to the assistance before it. 0 = all their own.
+- signals: count what only a reader can count — relevant propositions, subject terms used, causal links, comparisons, conditionals, examples, self-corrections, concepts_introduced (ideas the student brought that the tutor had not), and hints_before (tutor turns since the student's last substantive attempt). Word and sentence counts are computed in code; do not report them.
 - note: ONE sentence a teacher reads about this response — what the thinking showed, in plain language, naming any confusion precisely (e.g. "confuses the term for the concept with the term for its opposite"). Never a percentage, never generic praise.
 - narrative: across everything you have seen of this student on this lesson (including the earlier scored work in the context), write 2-4 sentences for the teacher: what they now understand, what they confuse or lean on the tutor for, whether their independence is rising or falling, and ONE concrete next move (e.g. "ready to progress after one more retrieval-practice pass without hints"). No scores, no percentages, no filler.
 
 Return ONLY JSON:
-{"turns":[{"turn_id":string,"scaffold_level":0-5,"dims":{"retrieval":int|null,"organization":int|null,"reasoning":int|null,"elaboration":int|null,"vocabulary":int|null,"expression":int|null,"independence":int|null,"metacognition":int|null},"evidence":{"<dimension>":"short quote",...,"ai_supplied":string,"student_originated":string},"signals":{"words":int,"propositions":int,"subject_terms":int,"causal_links":int,"comparisons":int,"conditionals":int,"examples":int,"self_corrections":int,"hints_before":int},"note":string}],"narrative":string}`;
+{"turns":[{"turn_id":string,"scaffold_level":0-5,"dims":{"retrieval":int|null,"organization":int|null,"reasoning":int|null,"elaboration":int|null,"vocabulary":int|null,"expression":int|null,"independence":int|null,"metacognition":int|null},"evidence":{"<dimension>":"short quote",...,"ai_supplied":string,"student_originated":string,"attribution":{"ai_supplied":{"concepts":[string],"reasoning":[string],"vocabulary":[string],"examples":[string],"sentence_structure":[string]},"student_originated":{"concepts":[string],"reasoning":[string],"vocabulary":[string],"examples":[string],"sentence_structure":[string]}}},"signals":{"propositions":int,"subject_terms":int,"causal_links":int,"comparisons":int,"conditionals":int,"examples":int,"self_corrections":int,"concepts_introduced":int,"ai_traceable_share":number,"hints_before":int},"note":string}],"narrative":string}`;
 
 function scorerModel(): string {
   return (
@@ -480,6 +482,43 @@ function cleanScaffold(value: unknown): number {
 }
 
 // ---------------------------------------------------------------------------
+// §12's countable signals, split by who can count them honestly.
+//
+// The rubric lists eighteen "supporting quantitative signals … stored as underlying
+// data, never individually determining cognitive performance". Some are judgments
+// (relevant propositions, causal links) and only a reader can make them. The rest are
+// arithmetic, and asking a language model to do arithmetic on text it is also grading
+// is how a signal becomes a guess. These four are computed here and spread OVER the
+// judge's object, so code wins any disagreement about counting.
+//
+// Latency, revisions and speaking duration are the rubric's remaining signals; they
+// need client-side events that do not exist, and are not faked here.
+// ---------------------------------------------------------------------------
+
+export function textSignals(text: string): DbRow {
+  const trimmed = cleanText(text);
+  if (!trimmed) return { words: 0, sentences: 0, avg_sentence_length: 0, lexical_diversity: 0 };
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  // A sentence ends at .!?… or a newline; trailing punctuation must not invent an
+  // empty one, and a response with no terminator is still one sentence.
+  const sentences = trimmed
+    .split(/[.!?\u2026]+|\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const distinct = new Set(words.map((w) => w.toLowerCase().replace(/[^\p{L}\p{N}'-]/gu, "")));
+  distinct.delete("");
+  const sentenceCount = Math.max(1, sentences.length);
+  return {
+    words: words.length,
+    sentences: sentenceCount,
+    avg_sentence_length: Math.round((words.length / sentenceCount) * 10) / 10,
+    // Type-token ratio. Short answers score high by construction, which is why this is
+    // stored beside the response length and never read on its own.
+    lexical_diversity: words.length ? Math.round((distinct.size / words.length) * 100) / 100 : 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Profile rollup: per dimension, the median of the last (up to) 10 non-null turn
 // scores — recency-weighted enough to move, robust enough not to whiplash on one
 // bad afternoon. Scaffold trend = mean S-level of the earlier vs the recent half.
@@ -540,19 +579,29 @@ async function storedProfile(config: Config, userId: string, lessonId: string): 
 }
 
 async function lessonFraming(config: Config, userId: string, lessonId: string) {
-  const [lesson, milestone, profile] = await Promise.all([
+  const [lesson, milestone, profile, idea] = await Promise.all([
     selectFirst(config, `lessons?id=eq.${enc(lessonId)}&select=title,level,grade_band&limit=1`),
     selectFirst(
       config,
       `milestones?lesson_id=eq.${enc(lessonId)}&order=position.asc&select=objective&limit=1`,
     ),
     selectFirst(config, `profiles?id=eq.${enc(userId)}&select=grade&limit=1`),
+    // §17 asks for the SUBJECT, not just the grade band: "a short mathematically precise
+    // explanation should not be penalized because it contains fewer words than a history
+    // response." The lesson table has no subject column and the course chain is four hops
+    // away; an authored idea carries it in one, and R97 gave every taught lesson one.
+    selectFirst(
+      config,
+      `ideas?lesson_id=eq.${enc(lessonId)}&user_id=is.null&status=eq.published` +
+        `&subject=neq.&select=subject&limit=1`,
+    ),
   ]);
   return {
     title: cleanText(lesson?.title),
     level: cleanText(lesson?.grade_band) || cleanText(lesson?.level),
     objective: cleanText(milestone?.objective),
     grade: cleanText(profile?.grade),
+    subject: cleanText(idea?.subject),
   };
 }
 
@@ -609,9 +658,26 @@ async function runScoring(
   sections.push(
     `LESSON: ${framing.title || lessonId}` +
       (framing.level ? ` (level: ${framing.level})` : "") +
+      (framing.subject ? `\nSUBJECT: ${framing.subject}` : "") +
       (framing.grade ? `\nSTUDENT GRADE: ${framing.grade}` : "") +
       (framing.objective ? `\nOBJECTIVE: ${framing.objective}` : ""),
   );
+  // §17's last normalization input: "the amount of AI assistance previously provided".
+  // Counts only — the notes come next, and a judge given both would double-weigh them.
+  if (existing.length) {
+    const scaffolds = existing
+      .map((row) => Number(row.scaffold_level))
+      .filter((n) => Number.isFinite(n));
+    const heavy = scaffolds.filter((n) => n >= 4).length;
+    const mean = scaffolds.length
+      ? (scaffolds.reduce((a, b) => a + b, 0) / scaffolds.length).toFixed(1)
+      : null;
+    sections.push(
+      `PRIOR ASSISTANCE ON THIS LESSON: ${existing.length} responses already read` +
+        (mean ? `, mean scaffold S${mean}` : "") +
+        `, ${heavy} of them at S4-S5.`,
+    );
+  }
   if (existing.length) {
     const recap = existing
       .slice(-8)
@@ -666,7 +732,12 @@ async function runScoring(
       scaffold_level: cleanScaffold(row.scaffold_level),
       evidence:
         row.evidence && typeof row.evidence === "object" ? (row.evidence as DbRow) : {},
-      signals: row.signals && typeof row.signals === "object" ? (row.signals as DbRow) : {},
+      // Code's counts go OVER the judge's: if the two disagree about how many words a
+      // response holds, the one that counted them is right (§12).
+      signals: {
+        ...(row.signals && typeof row.signals === "object" ? (row.signals as DbRow) : {}),
+        ...textSignals(studentText(turn)),
+      },
       note: clampText(cleanText(row.note), 400),
       model,
       rubric_version: RUBRIC_VERSION,

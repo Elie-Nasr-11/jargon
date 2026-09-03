@@ -30,6 +30,7 @@ on:
       - "supabase/functions/admin-ops/**"
       - "supabase/functions/submission-maintenance/**"
       - "supabase/functions/artifact-live/**"
+      - "supabase/functions/cognition-scorer/**"
       - "supabase/migrations/**"
       - ".github/workflows/deploy-backend.yml"
 
@@ -196,6 +197,13 @@ jobs:
           # artifact-live: P8 live mentor-generated artifacts — student-JWT identity,
           # service-role writes (student_private lesson_resources rows + storage).
           supabase functions deploy artifact-live --project-ref "$PROJECT_REF" --no-verify-jwt
+          # cognition-scorer: the rubric judge. It shipped v3->v11 through the MCP deploy
+          # channel while every other function came through here, which meant a scorer
+          # change could reach production without the migration replay that a schema
+          # change beside it needs. It resolves its own actor (a user JWT for the teacher
+          # actions, the sweep key for the cron), so --no-verify-jwt matches how it has
+          # always been deployed.
+          supabase functions deploy cognition-scorer --project-ref "$PROJECT_REF" --no-verify-jwt
 
       - name: Smoke-check deployed functions answer typed responses
         run: |

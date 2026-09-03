@@ -6,6 +6,74 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-03 (R99: what the judge is told, and what the teacher is shown)
+
+Status: Finished
+Task: close the rubric's fidelity gaps — §2-§9 anchors, §8's attribution split, §12's
+countable signals, §17's subject — and render the evidence the ledger has been writing
+since R90 and nobody has ever seen.
+
+Summary:
+
+FIVE DIMENSIONS HAD ANCHORS AND THREE HAD ONLY WARNINGS. Elaboration, vocabulary and
+expression reached the judge as cautions ("never equate word count with elaboration") with
+no 0-4 bands, which says what not to do without saying what a 3 looks like. All three now
+carry the document's own bands. Writing the pin as a RULE — every dimension in DIMENSIONS
+names a 0 and a 4 — immediately caught a sixth gap I had not noticed: metacognition's
+scale started at 1, though §9 defines a 0. That is the pin doing its job on the day it was
+written.
+
+§8 IS INSPECTABLE NOW. The rubric asks the system to identify AI-supplied concepts,
+reasoning, vocabulary, examples and sentence structure against what the student added.
+The judge wrote two free-text strings; it now writes those five categories on each side,
+as short quotes. Old rows keep rendering through a fallback.
+
+CODE COUNTS WHAT CODE CAN COUNT. §12 lists eighteen supporting signals. Four of them —
+words, sentences, average sentence length, lexical diversity — are arithmetic over the
+response, and a model asked to do arithmetic on text it is also grading will approximate.
+`textSignals()` computes them and is spread AFTER the judge's object, so code wins any
+disagreement; the judge is told not to report them. Latency, revisions and speaking
+duration need client events that do not exist and are not faked.
+
+§17 GAINED THE SUBJECT. The rubric wants judgments normalized to the subject as well as
+the grade band. `lessons` has no subject column and the course chain is four hops away —
+but an authored idea carries it in one, and R97 gave every taught lesson an authored idea,
+so the hop that was impossible last week now resolves for 112 of 129 lessons. The framing
+also carries a PRIOR ASSISTANCE line (responses read, mean scaffold, how many at S4-S5),
+which is §17's last normalization input.
+
+THE EVIDENCE IS ON SCREEN. `turn.evidence` and `turn.signals` were fetched, typed, and
+rendered nowhere. Each response row now opens an "Evidence" disclosure: the per-dimension
+quotes, the two attribution columns, and a signals line. §15's rule holds one level down —
+nothing in the disclosure prints a score, and the traceable share is three worded bands
+rather than a percentage, because "68% AI-supplied" is exactly the sentence that would be
+repeated to a parent as a grade.
+
+THE SCORER SHIPS THROUGH CI NOW. It had reached production v3 to v11 through the MCP
+deploy channel while every other function came through the workflow, which meant a scorer
+change could land without the migration replay a schema change beside it needs. It is in
+the paths filter and the deploy step.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (anchors, attribution,
+textSignals, framing), .github/workflows/deploy-backend.yml, frontend/src/lib/api.ts
+(a note on why the two shapes stay loose), frontend/src/features/teacher/cognition/evidence.ts
+(new), features/teacher/console/CognitionPanel.tsx, tests/test_r99_judge_fidelity.py
+(new, 17 pins).
+
+Tests run: python 1506 OK / 4 skipped (was 1489) · tsc 0 · eslint src 0 errors (36
+pre-existing warnings) · vite build green · deno check on the scorer clean.
+
+Remaining concerns:
+- RUBRIC_VERSION stays 1 deliberately: every change is additive JSON, so nothing
+  re-scores and old rows stay readable. The cost is that rows scored before today have no
+  attribution and no sentence count, and the panel shows the older shape for them.
+- The first CI deploy of the scorer is the one to watch: if the --no-verify-jwt flag
+  differs from how the MCP channel deployed it, a teacher's Thinking tab returns 401/403.
+  Check that before anything else.
+
+Suggested next task: R100 — the in-session retention/transfer probe, which is the last
+mechanism the rubric is missing and what §14 and §16 need before they can be honest.
+
 ## Claude -> Codex / Human - 2026-09-02 (R98: demo-ready)
 
 Status: Finished

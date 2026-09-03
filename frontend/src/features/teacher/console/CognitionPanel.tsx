@@ -14,6 +14,13 @@ import { Brain, Loader2, RefreshCw } from "lucide-react";
 // R93: one home for the dimension vocabulary — this panel and the class room view
 // render the same eight names, and two copies of a label list drift.
 import { DIMENSION_LABELS } from "@/features/teacher/cognition/labels";
+import {
+  attributionFallback,
+  attributionSide,
+  dimensionQuotes,
+  signalsLine,
+  traceableShareLabel,
+} from "@/features/teacher/cognition/evidence";
 import { EmptyInline, Panel } from "@/features/teacher/console/chrome";
 import { formatDateTime, lessonName } from "@/features/teacher/classShared";
 import {
@@ -22,6 +29,7 @@ import {
   scoreCognitionLesson,
   type CognitionDims,
   type CognitionResponse,
+  type CognitionTurnScore,
 } from "@/lib/api";
 import type { LearningSession, Lesson } from "@/lib/types";
 
@@ -45,6 +53,113 @@ function DimensionRow({ label, value }: { label: string; value: number | null })
       <span className="text-meta font-medium text-foreground">
         {value === null ? "—" : `${value}/4`}
       </span>
+    </div>
+  );
+}
+
+/**
+ * What the judge actually saw, for one response.
+ *
+ * Closed by default: a teacher reading top to bottom wants the sentence, and the
+ * quotes are what they open when they doubt it — or when a parent asks how the system
+ * knows. Everything here is quotes and counts. §15's rule that the model is never one
+ * number holds one level down too: no score appears in this disclosure, and the
+ * traceable share is words rather than a percentage.
+ */
+function ResponseEvidence({ turn }: { turn: CognitionTurnScore }) {
+  const quotes = dimensionQuotes(
+    turn.evidence,
+    DIMENSION_LABELS.map(({ key }) => key),
+  );
+  const fromTutor = attributionSide(turn.evidence, "ai_supplied");
+  const theirOwn = attributionSide(turn.evidence, "student_originated");
+  const tutorFallback = attributionFallback(turn.evidence, "ai_supplied");
+  const ownFallback = attributionFallback(turn.evidence, "student_originated");
+  const line = signalsLine(turn.signals);
+  const share = traceableShareLabel(turn.signals);
+
+  if (
+    !quotes.length &&
+    !fromTutor.length &&
+    !theirOwn.length &&
+    !tutorFallback &&
+    !ownFallback &&
+    !line
+  ) {
+    return null;
+  }
+
+  const labelFor = (key: string) =>
+    DIMENSION_LABELS.find((entry) => entry.key === key)?.label ?? key;
+
+  return (
+    <details className="mt-1.5 group">
+      <summary className="cursor-pointer list-none text-meta text-muted-foreground transition-colors hover:text-foreground">
+        Evidence
+        {share ? <span className="ml-2 text-muted-foreground">· {share}</span> : null}
+      </summary>
+      <div className="mt-2 grid gap-2 border-l border-border pl-3">
+        {quotes.length ? (
+          <div className="grid gap-1">
+            {quotes.map(({ dimension, quote }) => (
+              <p key={dimension} className="text-meta text-muted-foreground">
+                <span className="text-foreground">{labelFor(dimension)}</span> — “{quote}”
+              </p>
+            ))}
+          </div>
+        ) : null}
+
+        {fromTutor.length || theirOwn.length || tutorFallback || ownFallback ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            <AttributionColumn
+              title="From the tutor"
+              rows={fromTutor}
+              fallback={tutorFallback}
+              empty="Nothing was supplied before this."
+            />
+            <AttributionColumn
+              title="Their own"
+              rows={theirOwn}
+              fallback={ownFallback}
+              empty="Nothing new in this response."
+            />
+          </div>
+        ) : null}
+
+        {line ? <p className="font-mono text-[10px] text-muted-foreground">{line}</p> : null}
+      </div>
+    </details>
+  );
+}
+
+function AttributionColumn({
+  title,
+  rows,
+  fallback,
+  empty,
+}: {
+  title: string;
+  rows: ReturnType<typeof attributionSide>;
+  /** Pre-R99 rows carry one free-text string instead of the five categories. */
+  fallback: string;
+  empty: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        {title}
+      </div>
+      {rows.length ? (
+        <ul className="mt-1 grid gap-0.5">
+          {rows.map(({ category, label, quotes }) => (
+            <li key={category} className="text-meta text-muted-foreground">
+              <span className="text-foreground">{label}:</span> {quotes.join("; ")}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-meta text-muted-foreground">{fallback || empty}</p>
+      )}
     </div>
   );
 }
@@ -263,6 +378,7 @@ export function CognitionPanel({
                       <span className="ml-2 text-muted-foreground">
                         {formatDateTime(turn.created_at)}
                       </span>
+                      <ResponseEvidence turn={turn} />
                     </span>
                   </div>
                 ))}
