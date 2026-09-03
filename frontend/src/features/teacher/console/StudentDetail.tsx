@@ -79,12 +79,18 @@ export function StudentDetail({
   onResumeSession,
   tab,
   onTabChange,
+  classId,
+  classLinks,
 }: {
   studentId: string;
   profile: Profile | null;
   stats: StudentSummary;
   section: string | null;
   classLabel: string | null;
+  /** R101: the class the teacher came from, and which courses each class links. The
+      Thinking tab scopes by class with the room's own rule, so both travel together. */
+  classId: string | null;
+  classLinks: Array<{ class_id: string; course_id: string }> | undefined;
   dashboard: TeacherDashboardData;
   lessonsById: Map<string, Lesson>;
   sessions: LearningSession[];
@@ -267,7 +273,15 @@ export function StudentDetail({
           {/* R90: the Independent Cognitive Production Profile (docs/COGNITION.md) —
               what this student's own thinking produced, never a percentage. */}
           <WorkspacePanel value="thinking">
-            <CognitionPanel studentId={studentId} sessions={sessions} lessonsById={lessonsById} />
+            <CognitionPanel
+              studentId={studentId}
+              sessions={sessions}
+              lessonsById={lessonsById}
+              classId={classId}
+              classes={dashboard.classes}
+              memberships={dashboard.memberships.filter((m) => m.user_id === studentId)}
+              classLinks={classLinks}
+            />
           </WorkspacePanel>
 
           <WorkspacePanel value="transcript">

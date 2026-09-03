@@ -2,6 +2,44 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-09-03: the Thinking tab shows; it does not ask
+
+The owner, looking at the live tab: *"lets have it just show. not as an action you need to
+click and analyze … a total breakdown of these for all their work and progress over time,
+and a selector to see a breakdown of specific lessons, units, and classes … design it in a
+way thats bang for buck."* Two things made "just show" false at the root, and neither was
+cosmetic: the sweep queue never finished a lesson (a tail of one to four responses waited
+forever — nine such pairs live, all older than two hours), and there was no cross-lesson
+read at all.
+
+- **No button, because the queue owes completeness.** A "Read the thinking" button was the
+  only thing reading small lessons. Rather than hide it, the queue gained a rule: a tail
+  surfaces two hours after its last response, at whatever count. One short judge call per
+  abandoned tail, bounded by lessons and pauses rather than by the clock. Nothing in the
+  frontend can trigger a judge call any more, and a dead export is how a button comes back,
+  so the export went too.
+- **One read per student, numbers and ids only.** `student_view` returns every judged
+  response as its levels and ids — never `evidence`, `signals` or a `note`. The quotes stay
+  on the per-lesson read and appear when a lesson is selected. A cross-lesson payload
+  should not carry a child's words it has no immediate reason to show.
+- **Every scope is computed where the data already is.** Class, unit and lesson are filters
+  over that one payload in the browser, built from the lesson catalogue and the class→course
+  links the console already holds; switching costs no request. The four thresholds the
+  browser shares with the scorer are named the same in both files and cross-pinned, the
+  R93/R100 pattern. A class scopes by the room's own strict rule, so the two views agree.
+- **A sitting is the unit of progress.** One session is one point, the running middle of
+  five; "first → now" is the earlier half of their sittings against the later half. By
+  calendar week every student is one point on the day the ledger is four days old; the
+  weekly bucketer is one function away if a term of sittings proves too dense.
+- **The whole-student reading is deterministic.** Offered a model-written narrative
+  (refreshed by the sweep, or written on open when stale) and chose the sentence built from
+  the numbers: zero model spend, exact, never stale. Counts beside their denominators, a
+  share in words, never a percentage. A lesson keeps the judge's narrative.
+- **Pins state rules, not shapes** (eighth release). One R100 pin named the object that held
+  the denominator (`profile.turns_scored`) and broke when the statistic moved one scope out.
+  It now asserts what it meant: the count is printed in one expression with its denominator.
+
+
 ## 2026-08-31 (later still): a section is a second room, not a filter
 
 "Now do sections." The cheap reading is a dropdown that hides rows. The real one is that

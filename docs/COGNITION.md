@@ -31,9 +31,9 @@ That refusal is structural, not stylistic, and it holds at all three levels:
 learning_turns ──read──▶ cognition-scorer ──write──▶ cognition_turn_scores
 (the transcript          ▲   (edge fn)               cognition_profiles
  chat already writes)    │                                 │
-                    ┌────┴────┐                            ├──▶ chat  (§19 steers the mentor)
-                 a teacher   pg_cron                       └──▶ teacher console
-                 presses     every 15m                          · student ▸ Thinking
+                         │                                 ├──▶ chat  (§19 steers the mentor)
+                      pg_cron                              └──▶ teacher console
+                    every 15m                                   · student ▸ Thinking
                                                                 · class ▸ How the room is thinking
 ```
 
@@ -123,9 +123,20 @@ The awkward part is the caller: a cron tick has no user, so it cannot pass
 - **One scoring body.** `runScoring` carries no authorization of its own; each caller
   brings its own. Otherwise a swept profile and a pressed one could disagree.
 
-`cognition_sweep_queue` mirrors the judge's constructed-response test exactly and only
-surfaces a pair once **five** new responses are waiting. A scored turn leaves the queue by
-construction, so the sweep is idempotent and a failed pair simply waits for the next tick.
+`cognition_sweep_queue` mirrors the judge's constructed-response test exactly and surfaces
+a pair on one of three conditions: **five** new responses are waiting; a probe answer is
+waiting (R100); or — R101 — the pair's last constructed response is **two hours** old, at
+whatever count. The third rule is what lets the Thinking tab show without a button. Before
+it, a lesson a student finished or abandoned with one to four responses waiting was never
+read at any age (measured 2026-09-03: nine such pairs holding eighteen responses, all
+older than two hours, and a sweep that had run 96 times in a day and scored nothing) —
+the teacher's "Read the thinking" button had been the only thing reading them. The cost
+is one short judge call per abandoned tail, under five responses by definition; the sweep
+orders by last activity, so live work goes first and aged tails fill the idle ticks. The
+thirty-day window stays: the responses beyond it predate the ledger, and `score_lesson`
+remains as an API for anyone who wants a specific lesson read. A scored turn leaves the
+queue by construction, so the sweep is idempotent and a failed pair simply waits for the
+next tick.
 
 **Bounded, and honest about it.** A tick takes at most 2 pairs and 8 responses per pair,
 and only starts another pair if there is room for one as expensive as the priciest so far.
@@ -135,9 +146,31 @@ is a fact worth having, and silence is not.
 
 ## The teacher's two views
 
-**A student ▸ Thinking** — eight dimensions, the S-level under each response, the scaffold
-trajectory, and the narrative. This is where the numbers live, beside a lesson and the
-evidence that grounds them.
+**A student ▸ Thinking** — the whole student, and it shows without a click (R101). One
+read, `student_view`, brings every judged response of the student as numbers and ids —
+never `evidence`, `signals` or a `note`; the quotes that ground a score stay on the
+per-lesson `profile` read and appear when a lesson is selected. A scope selector
+(Everything / Classes / Units / Lessons, each with its response count) is computed in the
+browser from that one payload plus the lesson catalogue and the class→course links the
+console already holds, so switching scope costs no request. A class scopes by the room's
+own strict rule — a lesson's course is one the class links; no links means everything —
+so "this class" here agrees with the room the teacher came from.
+
+The eight dimensions are the **median over every response in the scope**. That is
+deliberately not `buildProfile`'s last-ten: the profile feeds §19, which must react to
+now, so it windows; a scope is the teacher's question "how has this student done across
+this unit", and a last-ten window would make Everything equal to the most recent lesson.
+Recency lives beside each dimension instead: a line **by sitting** (one session is one
+point, the running middle of the last five so one bad afternoon is a dip, not a spike)
+and "first → now", the earlier half of their sittings against the later half, shown only
+at four or more. A lesson keeps the judge's own narrative; every other scope reads a
+deterministic sentence built from the numbers — counts beside their denominators, never
+a percentage — so it is exact and never stale. §16 / §14 is read across lessons: a
+pattern ("work that holds up while the tutor carries it") is called only at three or more
+lessons and two or more concurring signals, and it names them. It is a reading for the
+teacher; it is not a §19 input and steers nothing. One caveat, stated: the order of
+sittings uses the time the judge read the work, which trails the work by up to fifteen
+minutes (the sweep) or two hours (a lesson's tail).
 
 **A class ▸ How the room is thinking** — the first surface that reads ACROSS a class, and
 the one that had to resist the class average hardest. It is arranged by what to DO: one
@@ -202,8 +235,13 @@ plans, so one blended reading can hide a whole stream. Measured, on a five-stude
 - **§10 transfer and §11 retention as scheduled tasks.** Both need a task generator — a
   delayed retrieval prompt is a new student-facing surface. The schema already
   distinguishes them: they arrive as new columns later, not a redesign.
-- **A cross-class view.** The room reads one class at a time; a teacher with five classes
-  still has no way to see where to spend their morning.
+- **A cross-class ROOM.** The room reads one class at a time; a teacher with five classes
+  still has no way to see where to spend their morning. (The student's Thinking tab does
+  read across classes since R101 — one student, their own work — which is a different
+  object from a room.)
+- **A model-written whole-student narrative.** Offered and declined on 2026-09-03: the
+  whole-student reading is built from the numbers, so it costs nothing, is exact, and is
+  never stale. The sweep is where it would hook in if it is ever wanted.
 - **Section hygiene.** A section is an unvalidated text label on a membership, so `"A"`
   and `"a "` are two sections. A teacher will eventually create a duplicate stream by typo.
 
@@ -233,11 +271,14 @@ Live probing found things review and 1454 offline pins did not.
 
 ## Verification
 
-- **1454 python pins** over the prompt's judgment rules, the API contracts, the schedule's
-  contract and the room's rules — including two that read `chat` and `cognition-scorer`
-  together and fail if the §19 thresholds drift apart.
-- **22 executable property tests** over the real room derivations (`tests/room_view.test.ts`
-  via `tests/test_r93_room_view.py`), plus the 32 flow-core properties.
+- **1561 python pins** over the prompt's judgment rules, the API contracts, the schedule's
+  contract, the room's rules and the Thinking tab's — including the pins that read `chat`,
+  `cognition-scorer` and `thinking.ts` together and fail if a shared threshold drifts.
+- **23 executable property tests** over the real room derivations (`tests/room_view.test.ts`
+  via `tests/test_r93_room_view.py`), **20** over the Thinking tab's derivations
+  (`tests/thinking_view.test.ts` via `tests/test_r101_thinking_view.py` — scopes, medians,
+  the line by sitting, the §16 pattern, and that no sentence carries a grade), plus the 43
+  flow-core properties.
 - `deno check` clean on the scorer; `tsc`, `eslint` and `vite build` clean.
 - **Live, against production**, on probe rigs created and deleted each time: the sweep's
   auth door (403 / 403 / ran), the class door (403 for a teacher of another class in the

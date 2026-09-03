@@ -6,6 +6,117 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-03 (R101: the Thinking tab just shows)
+
+Status: Finished (code, tests, docs; the live check after deploy is recorded below the
+Summary as it lands)
+Task: the owner, looking at the live Thinking tab — "lets have it just show. not as an
+action you need to click and analyze … a total breakdown of these for all their work and
+progress over time, and a selector to see a breakdown of specific lessons, units, and
+classes … design it in a way thats bang for buck."
+
+Summary:
+
+TWO THINGS MADE "JUST SHOW" FALSE AT THE ROOT, and neither was cosmetic. The sweep queue
+never finished a lesson: it surfaced a (student, lesson) pair only at five new responses
+(or a probe), so a tail of one to four responses waited forever — measured live, nine
+such pairs holding eighteen responses across two students, every one older than two
+hours, while the sweep had run 96 times in a day and scored nothing. The "Read the
+thinking" button was the only thing reading them, which is exactly the click the owner
+asked to remove. And there was no cross-lesson read at all: `profile` required a lesson
+id, `storedScores` was lesson-scoped, and `cognition_profiles` has one row per lesson
+with no history, so "all their work" and "over time" had no data path.
+
+THE QUEUE NOW OWES COMPLETENESS. `cognition_sweep_queue` gained a third condition on its
+one HAVING line: a pair surfaces two hours after its last constructed response, at
+whatever count. One short judge call per abandoned tail (under five responses by
+definition); the sweep already orders by last activity, so live work goes first and aged
+tails drain in the idle ticks. The thirty-day window stays — the 149 responses beyond it
+predate the ledger. Applied to production by hand (as R97/R100 were) and in the deploy
+list: the moment it landed the queue showed the nine pairs.
+
+ONE READ, NUMBERS AND IDS ONLY. A new scorer action `student_view {user_id}` returns every
+judged response of a student as levels and ids — `STUDENT_VIEW_COLUMNS` never names
+`evidence`, `signals` or `note` (pinned); the quotes stay on the per-lesson `profile`
+read, fetched only when a lesson is selected. The read is paged (PostgREST's max-rows is
+1000 and `selectAll` cannot tell when it is cut) newest-first with a named cap of 5,000,
+deduplicated by id (a sweep INSERT between two pages shifts the later page — newest-first
+turns that into a duplicate, never a miss) and reversed to chronological; `truncated` is
+returned and the panel says so. Authorization is on the student, so no scope reaches the
+server.
+
+EVERY SCOPE IS COMPUTED WHERE THE DATA ALREADY IS. `cognition/thinking.ts` (new, pure,
+deno-tested) builds the scope groups from the one payload plus the lesson catalogue and
+the class→course links the console already holds: Everything / Classes (this student's
+active memberships among the teacher's classes, the class the teacher came from first;
+a lesson is in a class iff its course is one the class links — the room's own strict
+rule, so the two views agree; no links = everything; links still loading = no Classes
+group rather than a wrong one for a moment) / Units / Lessons, each with its count, and
+an option with nothing in it is never offered. Switching scope costs no request. The
+eight dimensions are the median over every response in the scope — deliberately not
+buildProfile's last-ten, which feeds §19 and must react to now; a last-ten window would
+make Everything equal to the latest lesson. Recency lives beside each dimension: a line
+BY SITTING (one session is one point, the running middle of the last five so one bad
+afternoon is a dip, not a spike; a sitting with no value is a hole, never an
+interpolated slope) and "first → now" from the earlier half of their sittings against
+the later half, shown at four or more. The §16/§14 pattern ("work that holds up while
+the tutor carries it") is called only at three lessons and two concurring signals, and
+it names them; it steers nothing. The whole-student reading is a deterministic sentence
+built from the numbers — the owner chose it over a model-written narrative (offered
+sweep-refreshed or on-open) — counts beside their denominators, a share in words, never
+a percentage. A lesson keeps the judge's own narrative and its response-by-response
+list with evidence, unchanged.
+
+THE FOUR THRESHOLDS the browser shares with the scorer are named the same in both files
+and cross-pinned, the R93/R100 pattern. The sparkline is inline SVG with `role="img"`
+and words for a screen reader (no chart library — R82). On a 390px phone the line wraps
+under the pills (R98's rule: min-w-0, flex-wrap).
+
+Owner decisions taken during planning (AskUserQuestion): deterministic reading; one
+sitting = one point; default scope Everything; no manual refresh at all.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (selectPaged, the R101
+constants, studentView, the router line), supabase/migrations/20261104000000_r101_sweep_aging.sql
+(new), .github/workflows/deploy-backend.yml (the list), frontend/src/lib/api.ts
+(fetchStudentThinking + wire types; scoreCognitionLesson deleted — a dead export is how
+the button comes back), frontend/src/features/teacher/cognition/thinking.ts (new),
+console/CognitionPanel.tsx (rebuilt around the scope selector; ResponseEvidence and
+AttributionColumn untouched and adjacent, which the R99 slice pin needs),
+StudentDetail.tsx + TeacherConsole.tsx (classId and classLinks threaded),
+tests/thinking_view.test.ts (new, 20 deno properties), tests/test_r101_thinking_view.py
+(new, 21 pins + the deno runner), tests/test_r100_probe.py (one pin re-expressed as the
+rule it meant), docs/COGNITION.md, docs/DECISIONS.md, .gitignore (frontend/dist-mock/).
+
+Tests run: python 1561 OK / 4 skipped (was 1539) · deno thinking properties 20/20, room
+23/23, flow 43/43 · tsc 0 · eslint src 0 errors (36 pre-existing warnings) · vite build
+green · deno check on the scorer clean (chat untouched, baseline 7) · mock walk
+(scratchpad/walk_r101.mjs) at 1440×900 and 390×844: no "Read the thinking" button, the
+select lists Everything / 2 classes / 2 units / 3 lessons with counts, the reading and
+the delayed-checks tally render, 10 sparklines and 8 first→now arrows, unit scope and
+lesson scope switch instantly, lesson scope shows the narrative and six evidence
+disclosures, no `%` anywhere in the panel, scrollWidth === innerWidth on the phone, no
+page errors. Live: the migration applied; `cognition_sweep_queue` = 9 pairs / 18
+responses immediately after (they will drain over the next few ticks — recorded below
+once the deploy is through).
+
+Remaining concerns:
+- The live `student_view` path is unproven until the scorer deploys through CI (v13); the
+  Thinking tab of the heaviest real student is the check, on desktop and at 390px.
+- Sweep capacity, not the tail rule, is the ceiling: 2 pairs per 15 minutes is 192 pairs
+  a day, and 198 students × 3 lessons/day would exceed it. The knob is the cron body's
+  `"limit"` (up to SWEEP_BATCH_MAX = 10). Untouched here; worth a decision before the
+  school is at full use.
+- Aged tails sit behind fresher pairs in the queue's order and drain in quiet hours.
+- The order of sittings uses the time the judge read the work, up to two hours behind
+  the work itself. Sittings themselves key on the session id and are exact.
+- An unlinked class is an option whose count equals Everything; kept, because hiding
+  the class would read as a bug.
+- Still open from R100: the probe path unproven against a real student on a rig.
+
+Suggested next task: R101b (the room's "watch" marker and later-recall counts in
+class_view, server-side, no dimension value in the room), then R102 (§19's cognitive-load
+move), then R103 (docs + the brain-map decision with live numbers).
+
 ## Claude -> Codex / Human - 2026-09-03 (R100: the delayed unaided ask)
 
 Status: Finished

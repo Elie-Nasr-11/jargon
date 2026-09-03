@@ -164,6 +164,24 @@ async function selectAll(config: Config, path: string): Promise<DbRow[]> {
     : [];
 }
 
+// R101: PostgREST's max-rows on this project is 1000. A larger `limit` is silently cut to
+// it and selectAll cannot tell, so a read that may exceed a page walks it in pages of
+// exactly that size. `path` carries a deterministic order and no limit/offset of its own.
+// Five full pages means "there may be more", and the caller says so rather than guessing.
+async function selectPaged(
+  config: Config,
+  path: string,
+  maxRows: number,
+): Promise<{ rows: DbRow[]; truncated: boolean }> {
+  const rows: DbRow[] = [];
+  for (let offset = 0; offset < maxRows; offset += PAGE_ROWS) {
+    const page = await selectAll(config, `${path}&limit=${PAGE_ROWS}&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < PAGE_ROWS) return { rows, truncated: false };
+  }
+  return { rows, truncated: true };
+}
+
 // Mirrors the ledger's RLS policy exactly: a teacher sharing an ACTIVE class with the
 // student, an org admin of an organization the student is an active member of, or a
 // platform admin. Nobody else can ask for a student's cognition.
@@ -647,6 +665,31 @@ const SCORE_COLUMNS =
   "," +
   PROBE_DIMENSIONS.join(",") +
   ",scaffold_level,evidence,signals,note,model,rubric_version,created_at";
+
+// R101: the whole-student read. Numbers and ids only — never `evidence`, `signals` or a
+// `note`. Those stay on the per-lesson `profile` read, beside the response they belong to:
+// a teacher who wants the quotes selects the lesson, and a cross-lesson payload never
+// carries a child's words it has no immediate reason to show.
+//
+// 5,000 rows is roughly a school year for a student judged ~25 times a day. Past it the
+// read keeps the NEWEST rows (the order is newest-first) and reports `truncated`, so the
+// current work is always in the numbers and the loss is labelled rather than silent.
+const STUDENT_VIEW_MAX_ROWS = 5000;
+// PostgREST's max-rows on this project; see selectPaged.
+const PAGE_ROWS = 1000;
+const STUDENT_VIEW_COLUMNS =
+  "id,lesson_id,session_id,created_at,scaffold_level," +
+  DIMENSIONS.join(",") +
+  "," +
+  PROBE_DIMENSIONS.join(",");
+const PROFILE_VIEW_COLUMNS =
+  "lesson_id,narrative,turns_scored,scaffold_earlier,scaffold_recent,updated_at," +
+  DIMENSIONS.join(",") +
+  "," +
+  PROBE_DIMENSIONS.join(",") +
+  ",probes_answered,unaided_count,share_unaided";
+const PROBE_VIEW_COLUMNS =
+  "lesson_id,idea_title,kind,status,retention,transfer,asked_at,answered_at";
 
 async function storedScores(config: Config, userId: string, lessonId: string): Promise<DbRow[]> {
   return await selectAll(
@@ -1383,6 +1426,60 @@ async function listLessons(config: Config, actorId: string, body: DbRow): Promis
   return json({ status: "ok", lessons: lessons.slice(0, 30) });
 }
 
+// R101: one student, every lesson, one read — the Thinking tab's whole feed.
+//
+// The scope (this class, this unit, this lesson) is NOT an argument. Authorization is on
+// the student — assertCanViewStudent asks "may this actor see this person?" — and a
+// teacher who may see a student may see all of that student's work, so the browser
+// filters the one payload it gets and switching scope costs no request.
+//
+// Three reads, independent, together. The ledger is read newest-first so that a capped
+// read keeps the current work; it is then reversed so the wire is chronological. A sweep
+// INSERT landing between two pages shifts the later page by the rows it added — with a
+// newest-first order that shows up as a duplicate, never a miss, and the id removes it.
+async function studentView(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const userId = cleanText(body.user_id);
+  if (!userId) throw new Error("user_id is required.");
+  await assertCanViewStudent(config, actorId, userId);
+
+  const [ledger, lessons, probes] = await Promise.all([
+    selectPaged(
+      config,
+      `cognition_turn_scores?user_id=eq.${enc(userId)}&rubric_version=eq.${RUBRIC_VERSION}` +
+        `&order=created_at.desc,id.desc&select=${STUDENT_VIEW_COLUMNS}`,
+      STUDENT_VIEW_MAX_ROWS,
+    ),
+    selectAll(
+      config,
+      `cognition_profiles?user_id=eq.${enc(userId)}&order=updated_at.desc&select=${PROFILE_VIEW_COLUMNS}&limit=500`,
+    ),
+    selectAll(
+      config,
+      `cognition_probes?user_id=eq.${enc(userId)}&order=asked_at.desc&select=${PROBE_VIEW_COLUMNS}&limit=200`,
+    ),
+  ]);
+
+  const seen = new Set<string>();
+  const rows: DbRow[] = [];
+  for (const row of ledger.rows) {
+    const id = cleanText(row.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    rows.push(row);
+  }
+  rows.reverse();
+
+  return json({
+    status: "ok",
+    user_id: userId,
+    rows,
+    lessons,
+    probes,
+    truncated: ledger.truncated,
+    read_at: new Date().toISOString(),
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
@@ -1416,6 +1513,7 @@ Deno.serve(async (req: Request) => {
     const actorId = String(actor.id);
     if (action === "score_lesson") return await scoreLesson(config, actorId, record);
     if (action === "profile") return await readProfile(config, actorId, record);
+    if (action === "student_view") return await studentView(config, actorId, record);
     if (action === "list_lessons") return await listLessons(config, actorId, record);
     if (action === "class_view") return await classView(config, actorId, record);
     return errorResponse("Unsupported cognition-scorer action.", 400);

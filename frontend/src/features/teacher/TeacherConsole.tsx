@@ -974,6 +974,8 @@ export function TeacherConsole() {
                       holdBusy={holdBusy}
                       onHoldSession={() => void holdSelectedSession()}
                       onResumeSession={() => void resumeSelectedSession()}
+                      classId={selectedClassId}
+                      classLinks={classLinksQuery.data}
                       tab={search.tab ?? "overview"}
                       onTabChange={(value) =>
                         navigate({
