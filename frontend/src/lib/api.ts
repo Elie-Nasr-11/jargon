@@ -61,7 +61,6 @@ import type {
   ActiveSession,
   AdminActorAccess,
   AdminOpsAction,
-  ClassDigest,
   AdminOpsResponse,
   AdminScopeResult,
   AdminSeedResponse,
@@ -1145,24 +1144,6 @@ export async function fetchActiveSessions(accessToken: string): Promise<ActiveSe
   const data = await invokeAdminOps({ accessToken, action: "list_active_sessions" });
   const sessions = data.data?.sessions;
   return Array.isArray(sessions) ? (sessions as ActiveSession[]) : [];
-}
-
-// R71: the weekly evidence digest. Teacher-scoped (authorized by class_memberships,
-// not admin access) and read-only — it computes over evidence already recorded and
-// stores nothing.
-export async function fetchClassDigest(input: {
-  accessToken: string;
-  classId: string;
-  days?: number;
-}): Promise<ClassDigest | null> {
-  const data = await invokeAdminOps({
-    accessToken: input.accessToken,
-    action: "teacher_class_digest",
-    classId: input.classId,
-    payload: input.days ? { days: input.days } : undefined,
-  });
-  const digest = data.data?.digest;
-  return digest ? (digest as ClassDigest) : null;
 }
 
 // R51 admin window: thin wrappers over the long-deployed admin-ops management

@@ -9,7 +9,6 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/20260624064345_platform_completion_sprint.sql"
 ADMIN_OPS = ROOT / "supabase/functions/admin-ops/index.ts"
-GOOGLE_CLASSROOM = ROOT / "supabase/functions/google-classroom/index.ts"
 VOICE_SESSION = ROOT / "supabase/functions/voice-session/index.ts"
 RESOURCE_PROCESSING = ROOT / "supabase/functions/resource-processing/index.ts"
 FRONTEND_TYPES = ROOT / "frontend/src/lib/types.ts"
@@ -20,15 +19,12 @@ class PlatformCompletionSprintTests(unittest.TestCase):
     def setUpClass(cls):
         cls.migration = MIGRATION.read_text()
         cls.admin_ops = ADMIN_OPS.read_text()
-        cls.google = GOOGLE_CLASSROOM.read_text()
         cls.voice = VOICE_SESSION.read_text()
         cls.resource_processing = RESOURCE_PROCESSING.read_text()
         cls.frontend_types = FRONTEND_TYPES.read_text()
 
     def test_platform_completion_tables_have_rls_and_no_anon_access(self):
         tables = [
-            "google_classroom_coursework_mappings",
-            "google_classroom_grade_passbacks",
             "admin_csv_import_batches",
             "admin_csv_import_rows",
             "admin_data_export_requests",
@@ -58,10 +54,6 @@ class PlatformCompletionSprintTests(unittest.TestCase):
                 self.assertIn(f'action === "{action}"', self.admin_ops)
                 self.assertIn(f'| "{action}"', self.frontend_types)
 
-    def test_google_classroom_has_diagnostics_and_write_gate(self):
-        self.assertIn('action === "diagnose"', self.google)
-        self.assertIn("missingGoogleSecrets", self.google)
-        self.assertIn("write sync is not enabled yet", self.google)
 
     def test_voice_diagnostics_are_env_configurable_without_raw_audio_storage(self):
         for env_name in [
@@ -73,16 +65,9 @@ class PlatformCompletionSprintTests(unittest.TestCase):
         self.assertIn('action === "diagnose"', self.voice)
         self.assertIn("raw_student_audio_stored: false", self.voice)
 
-    def test_resource_processing_creates_draft_curriculum_only_from_approved_chunks(self):
-        self.assertIn('action === "create_curriculum_import_draft"', self.resource_processing)
-        self.assertIn("status=eq.approved", self.resource_processing)
-        self.assertIn("curriculum_import_jobs", self.resource_processing)
-        self.assertIn("curriculum_import_suggestions", self.resource_processing)
-        self.assertNotRegex(
-            self.resource_processing,
-            re.compile(r"publication_status\\s*:\\s*[\"']published", re.IGNORECASE),
-        )
-
+    # R102: the chunk review + curriculum-draft actions were archived to
+    # archive/resource-chunk-pipeline/ (only the OCR path stayed live), so the pin
+    # that asserted create_curriculum_import_draft went with them.
 
 if __name__ == "__main__":
     unittest.main()

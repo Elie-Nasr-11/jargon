@@ -2214,133 +2214,8 @@ function parseStepDrafts(result: DbRow) {
 // A template is a by-value snapshot of a lesson's mode flow + policy; instantiation is a
 // fresh lesson fanned out through upsertStep, so a template never drifts with its source.
 
-async function saveTemplate(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const lessonId = cleanText(body.lesson_id);
-  if (!lessonId) throw new Error("lesson_id is required.");
-  const scope = await courseScopeForLesson(config, lessonId);
-  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
 
-  const lesson = await selectFirst(config, `lessons?id=eq.${enc(lessonId)}&select=*&limit=1`);
-  if (!lesson) throw new Error("Lesson was not found.");
 
-  const activities = await selectAll(
-    config,
-    `lesson_activities?lesson_id=eq.${enc(lessonId)}&order=position.asc&select=*`,
-  );
-  const activityIds = activities.map((a) => String(a.id)).filter(Boolean);
-  const quizzes = activityIds.length
-    ? await selectAll(
-        config,
-        `quiz_items?activity_id=in.(${activityIds.map(enc).join(",")})&status=neq.archived&select=*`,
-      )
-    : [];
-  const quizByActivity = new Map<string, DbRow>();
-  for (const q of quizzes) quizByActivity.set(String(q.activity_id), q);
-
-  const steps = activities.map((a, index) => {
-    const quiz = quizByActivity.get(String(a.id));
-    return {
-      v: 1,
-      position: Number(a.position) || index + 1,
-      title: cleanText(a.title),
-      // stage is a display label; activity_type is the legacy (mode=null) runtime kind.
-      // Snapshot both so a round-trip preserves them (upsertStep re-derives activity_type
-      // from mode for v4 steps and reads step.activity_type only for legacy steps).
-      stage: isStage(a.stage) ? a.stage : "practice",
-      activity_type: isLessonType(a.activity_type) ? a.activity_type : undefined,
-      mode: cleanMode(a.mode),
-      mode_type: cleanText(a.mode_type) || null,
-      prompt: cleanText(a.prompt),
-      response_mode: isResponseMode(a.response_mode) ? a.response_mode : "text",
-      starter_code: cleanText(a.starter_code),
-      expected_output: cleanText(a.expected_output) || null,
-      choices: parseChoices(a.choices),
-      rubric:
-        a.rubric && typeof a.rubric === "object" && !Array.isArray(a.rubric)
-          ? (a.rubric as DbRow)
-          : {},
-      skill_keys: cleanStringArray(a.skill_keys),
-      pass_score: Number(a.pass_score) > 0 ? Number(a.pass_score) : 1,
-      quiz: quiz
-        ? {
-            prompt: cleanText(quiz.prompt),
-            choices: parseChoices(quiz.choices),
-            correct_choice_ids: cleanStringArray(quiz.correct_choice_ids),
-          }
-        : null,
-    };
-  });
-
-  const milestone = await selectFirst(
-    config,
-    `milestones?lesson_id=eq.${enc(lessonId)}&order=position.asc&limit=1&select=objective,skill_keys`,
-  );
-  const meta = {
-    title: cleanText(lesson.title),
-    tutor_prompt: cleanText(lesson.tutor_prompt),
-    level: cleanText(lesson.level) || "Any level",
-    sample_code: cleanText(lesson.sample_code),
-    help_ceiling: cleanText(lesson.help_ceiling) || null,
-    require_attempt_first:
-      typeof lesson.require_attempt_first === "boolean"
-        ? lesson.require_attempt_first
-        : null,
-    final_answer_policy: cleanText(lesson.final_answer_policy) || null,
-    tutor_tone: cleanText(lesson.tutor_tone) || null,
-    tutor_pace: cleanText(lesson.tutor_pace) || null,
-    allow_live_artifacts: lesson.allow_live_artifacts === true,
-    grade_band: cleanText(lesson.grade_band) || null,
-    objective: cleanText(milestone?.objective),
-    skill_keys: cleanStringArray(milestone?.skill_keys),
-  };
-
-  const title = cleanText(body.title) || `${cleanText(lesson.title)} template`;
-  const inserted = await insertRow(config, "lesson_templates", {
-    organization_id: scope.organizationId,
-    title,
-    description: cleanText(body.description),
-    source_lesson_id: lessonId,
-    steps,
-    meta,
-    created_by: actorId,
-  });
-  return json({ status: "ok", template_id: inserted.id, title });
-}
-
-async function listTemplates(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const organizationId = cleanText(body.organization_id);
-  if (!organizationId) throw new Error("organization_id is required.");
-  await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
-  const rows = await selectAll(
-    config,
-    `lesson_templates?organization_id=eq.${enc(organizationId)}&status=eq.active&order=updated_at.desc&select=id,title,description,source_lesson_id,steps,created_at`,
-  );
-  const templates = rows.map((row) => ({
-    id: row.id,
-    title: cleanText(row.title),
-    description: cleanText(row.description),
-    source_lesson_id: row.source_lesson_id || null,
-    steps: Array.isArray(row.steps) ? row.steps : [],
-    created_at: row.created_at,
-  }));
-  return json({ status: "ok", templates });
-}
-
-async function archiveTemplate(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const templateId = cleanText(body.template_id);
-  if (!templateId) throw new Error("template_id is required.");
-  const template = await selectFirst(
-    config,
-    `lesson_templates?id=eq.${enc(templateId)}&select=id,organization_id&limit=1`,
-  );
-  if (!template) throw new Error("Template was not found.");
-  await assertCanAuthor(config, actorId, String(template.organization_id), cleanText(body.class_id));
-  await patchRows(config, `lesson_templates?id=eq.${enc(templateId)}`, {
-    status: "archived",
-    updated_at: new Date().toISOString(),
-  });
-  return json({ status: "ok", template_id: templateId });
-}
 
 // v4.0 Phase 3: set the full course scope for a class (replace semantics). An empty course_ids
 // list clears the scope (the class reverts to the full-catalog fallback). Auditable teacher/admin
@@ -2787,112 +2662,6 @@ async function duplicateCourse(config: Config, actorId: string, body: DbRow): Pr
   });
 }
 
-async function instantiateTemplate(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const templateId = cleanText(body.template_id);
-  const unitId = cleanText(body.unit_id);
-  if (!templateId) throw new Error("template_id is required.");
-  if (!unitId) throw new Error("unit_id is required.");
-  const scope = await unitScope(config, unitId);
-  await assertCanAuthor(config, actorId, scope.organizationId, cleanText(body.class_id));
-
-  const template = await selectFirst(
-    config,
-    `lesson_templates?id=eq.${enc(templateId)}&status=eq.active&select=*&limit=1`,
-  );
-  if (!template) throw new Error("Template was not found.");
-  // Org-shared, not cross-org: a template can only be instantiated inside its own org.
-  // Message includes "does not match" so the router maps it to a 4xx, not a 500.
-  if (String(template.organization_id) !== scope.organizationId) {
-    throw new Error("Template organization does not match this unit's organization.");
-  }
-
-  const meta = template.meta && typeof template.meta === "object" ? (template.meta as DbRow) : {};
-  const templateSteps = (Array.isArray(template.steps) ? template.steps : [])
-    .map((step) => (step && typeof step === "object" ? (step as DbRow) : null))
-    .filter((step): step is DbRow => step !== null)
-    .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
-
-  // Create the lesson + its milestone (no default activity — the template supplies steps).
-  const title = cleanText(body.title) || cleanText(meta.title) || "Untitled lesson";
-  const level = cleanText(meta.level) || "Any level";
-  const lessonId = await uniqueId(config, "lessons", safeId(unitId, title));
-  const milestoneId = `${lessonId}-milestone-1`;
-  const position = await nextLessonPosition(config);
-  const unitPosition = await nextPosition(config, "lessons", `unit_id=eq.${enc(unitId)}`, "unit_position");
-  const now = new Date().toISOString();
-
-  const HELP_CEILINGS = ["clarify", "hints", "guided", "worked_example", "feedback", "study"];
-  const FINAL_ANSWER_POLICIES = ["never", "after_attempt", "allowed"];
-  const policy: DbRow = {};
-  if (HELP_CEILINGS.includes(cleanText(meta.help_ceiling))) policy.help_ceiling = cleanText(meta.help_ceiling);
-  if (FINAL_ANSWER_POLICIES.includes(cleanText(meta.final_answer_policy))) {
-    policy.final_answer_policy = cleanText(meta.final_answer_policy);
-  }
-  if (typeof meta.require_attempt_first === "boolean") policy.require_attempt_first = meta.require_attempt_first;
-  if (cleanText(meta.tutor_tone)) policy.tutor_tone = cleanText(meta.tutor_tone);
-  if (cleanText(meta.tutor_pace)) policy.tutor_pace = cleanText(meta.tutor_pace);
-  if (cleanText(meta.grade_band)) policy.grade_band = cleanText(meta.grade_band);
-  if (typeof meta.allow_live_artifacts === "boolean") {
-    policy.allow_live_artifacts = meta.allow_live_artifacts;
-  }
-
-  await insertRow(config, "lessons", {
-    id: lessonId,
-    position,
-    unit_position: unitPosition,
-    title,
-    module: scope.unitTitle || "Lesson",
-    level,
-    tutor_prompt: cleanText(meta.tutor_prompt) || "Introduce this lesson and guide the learner step by step.",
-    sample_code: cleanText(meta.sample_code),
-    expected_output: null,
-    unit_id: unitId,
-    author_user_id: actorId,
-    publication_status: "draft",
-    curriculum_metadata: {
-      course_id: scope.courseId,
-      course_version_id: scope.courseVersionId,
-      class_id: cleanText(body.class_id) || null,
-      instantiated_from_template: templateId,
-    },
-    ...policy,
-  });
-  await upsertByConflict(config, "milestones", "id", {
-    id: milestoneId,
-    lesson_id: lessonId,
-    position: 1,
-    title,
-    objective: cleanText(meta.objective) || "Describe what the learner should be able to do.",
-    level,
-    skill_keys: cleanStringArray(meta.skill_keys),
-    expected_evidence: {},
-    completion_rules: { requires: ["activity_complete"], min_score: 1 },
-    allowed_response_modes: ["text"],
-    updated_at: now,
-  });
-  await patchRows(config, `lessons?id=eq.${enc(lessonId)}`, { milestone_id: milestoneId });
-
-  // Fan the snapshot out through upsertStep (positions land in template order).
-  for (const step of templateSteps) {
-    await upsertStep(config, actorId, {
-      lesson_id: lessonId,
-      class_id: cleanText(body.class_id),
-      step,
-    });
-  }
-
-  return json({
-    status: "ok",
-    node_type: "lesson",
-    id: lessonId,
-    lesson_id: lessonId,
-    unit_id: unitId,
-    milestone_id: milestoneId,
-    position,
-    unit_position: unitPosition,
-    steps: templateSteps.length,
-  });
-}
 
 // R56 "build from material": ONE grounded call drafts a whole lesson — meta, steps,
 // the wrap-up quiz, and the assignment brief — so a teacher's upload becomes a
@@ -3082,6 +2851,328 @@ function ownedByImport(row: DbRow | null, importKey: string): boolean {
   if (!row) return true; // nothing there yet — ours to create
   const existing = cleanText(row.import_key);
   return existing === importKey;
+}
+
+
+async function generateDraft(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const mode = cleanText(body.mode);
+  if (mode === "lesson_package") return await generateLessonPackage(config, actorId, body);
+  const prompt = cleanText(body.prompt);
+  const referenceText = clampText(cleanText(body.reference_text), 24000);
+  const feedback = cleanText(body.feedback);
+  const target = cleanText(body.target);
+  const hasCurrent = Boolean(body.current && typeof body.current === "object");
+  const isRefine = hasCurrent && Boolean(feedback);
+  const currentJson = hasCurrent ? clampText(JSON.stringify(body.current), 6000) : "";
+
+  if (mode === "course_outline") {
+    const courseId = cleanText(body.course_id);
+    let organizationId = cleanText(body.organization_id);
+    let contextText = "";
+    if (courseId) {
+      const ctx = await courseOutlineContext(config, courseId);
+      organizationId = ctx.organizationId;
+      contextText = ctx.text;
+    }
+    if (!organizationId) throw new Error("organization_id is required.");
+    await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+    // R57: material alone is enough to draft an outline (a chapter upload IS the brief);
+    // a brief alone still works. One of the two is required.
+    // R59: the outline must see the WHOLE chapter or it proposes a course for the
+    // part it happened to read. 111 pages is ~140k characters.
+    const outlineReference = clampText(cleanText(body.reference_text), 180000);
+    if (!isRefine && !prompt && !outlineReference) {
+      throw new Error("Add material (upload, paste, or a link) or a brief to generate from.");
+    }
+
+    const system =
+      "You are a curriculum designer. Return ONLY JSON of the form " +
+      '{"units":[{"title":string,"summary":string,' +
+      '"lessons":[{"title":string,"source_hint":string}]}]}. ' +
+      "Use 2-5 units and 2-6 short, student-facing lesson titles each; summary is one line " +
+      "on what the unit covers. Fit the existing curriculum context: do not duplicate " +
+      "existing units/lessons; match the level and style. " +
+      "WHEN REFERENCE MATERIAL IS PROVIDED: derive the whole outline from it, follow the " +
+      "material's own order, and cover it end to end — one lesson per teachable chunk, not " +
+      "a summary of the whole. Set each lesson's source_hint to a SHORT VERBATIM PHRASE " +
+      "(3-10 words) copied from the part of the material that lesson teaches, so the " +
+      "platform can find that passage again; use a distinctive phrase, never a heading you " +
+      "invented. With no material, omit source_hint.";
+    const parts: string[] = [];
+    if (contextText) parts.push(`Existing curriculum context:\n${contextText}`);
+    if (outlineReference) {
+      parts.push(`TEACHER'S MATERIAL — the source of truth for this outline:\n${outlineReference}`);
+    }
+    if (isRefine) {
+      parts.push(`Current draft outline (JSON):\n${currentJson}`);
+      parts.push(
+        `Revise the draft per this feedback${target ? ` (which targets ${target})` : ""}: ${feedback}\n` +
+          "Change only what the feedback asks; keep everything else identical. Return the full updated outline.",
+      );
+    } else if (prompt) {
+      parts.push(`Design a course outline for this brief:\n${clampText(prompt, 2000)}`);
+    } else {
+      parts.push("Design the course outline this material supports, covering it end to end.");
+    }
+    // An outline over a whole book is a bigger read than the default budget allows.
+    const result = await callModelJson(system, parts.join("\n\n"), {
+      model: artifactModel(),
+      maxTokens: 3000,
+      timeoutMs: 90000,
+    });
+    return json({
+      status: "ok",
+      mode,
+      outline: { units: parseOutlineUnits(result), grounded: Boolean(outlineReference) },
+    });
+  }
+
+  if (mode === "lesson_steps") {
+    const lessonId = cleanText(body.lesson_id);
+    if (!lessonId) throw new Error("lesson_id is required.");
+    const ctx = await lessonStepsContext(config, lessonId);
+    await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
+    if (!isRefine && !prompt) throw new Error("prompt is required.");
+
+    const system =
+      "You design a single lesson as an ordered list of steps. Every step has a learning MODE " +
+      "(the platform's pedagogical vocabulary). Return ONLY JSON of the form " +
+      '{"steps":[{"mode":"explanation"|"media"|"reflection"|"practice"|"assignment"|"inquiry"|"assessment"|"revision",' +
+      '"mode_type":string,"title":string,"prompt":string,' +
+      '"choices":[{"id":string,"text":string}],"correct_choice_id":string}]}. ' +
+      "mode_type is required only for practice ('code' for run-the-code steps, 'applied' for " +
+      "use-the-idea-in-words steps) and assessment ('mcq' or 'open_ended'). " +
+      "Include choices and correct_choice_id ONLY for assessment/mcq steps " +
+      "(2-4 choices with ids a,b,c,d). Use 3-6 steps. A good lesson opens with explanation or " +
+      "media, works the idea with reflection or practice, and ends with an assessment. " +
+      "Keep prompts concrete and age-appropriate. Fit the lesson context. " +
+      "If reference material is provided, ground the steps in it.";
+    const parts: string[] = [];
+    if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
+    if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
+    // Optional template scaffold: the template's mode flow is the skeleton; the AI keeps the
+    // same modes/order/mode_types and rewrites titles + prompts for THIS lesson's topic.
+    const templateId = cleanText(body.template_id);
+    if (templateId) {
+      const template = await selectFirst(
+        config,
+        `lesson_templates?id=eq.${enc(templateId)}&organization_id=eq.${enc(ctx.organizationId)}&status=eq.active&select=steps&limit=1`,
+      );
+      const skeleton = Array.isArray(template?.steps)
+        ? (template!.steps as unknown[]).map((step) => {
+            const row = step && typeof step === "object" ? (step as DbRow) : {};
+            return { mode: cleanText(row.mode), mode_type: cleanText(row.mode_type), title: cleanText(row.title) };
+          })
+        : [];
+      if (skeleton.length) {
+        parts.push(
+          "Follow this template's mode flow EXACTLY — keep the same modes, order, and mode_types; " +
+            `only rewrite each step's title and prompt for the new topic:\n${JSON.stringify(skeleton)}`,
+        );
+      }
+    }
+    if (isRefine) {
+      parts.push(`Current draft steps (JSON):\n${currentJson}`);
+      parts.push(
+        `Revise the draft per this feedback${target ? ` (which targets ${target})` : ""}: ${feedback}\n` +
+          "Change only what the feedback asks; keep everything else identical. Return the full updated steps array.",
+      );
+    } else {
+      parts.push(`Draft the steps for this lesson brief:\n${clampText(prompt, 2000)}`);
+    }
+    const result = await callModelJson(system, parts.join("\n\n"));
+    return json({ status: "ok", mode, steps: parseStepDrafts(result) });
+  }
+
+  // P7: generate an interactive artifact (html_sim / deck) from a teacher brief. Still a
+  // pure draft — NO DB write; the studio previews it and a separate approve step persists.
+  // R76: one generation path for every SHORT FIELD a teacher writes — a lesson title,
+  // an objective, a unit title, an assignment's instructions. The owner's rule was "at
+  // every building point there should be an ai assistant to help draft content"; before
+  // this, drafting existed only for whole lessons and whole step lists, so the small
+  // writing — which is most of the writing — had no help at all.
+  //
+  // It returns ONE string and nothing else. The teacher's field is filled with a draft
+  // they then edit; the server never writes it, so an assist can always be ignored.
+  if (mode === "text_field") {
+    const field = cleanText(body.field);
+    const allowed: Record<string, { label: string; guidance: string; max: number }> = {
+      lesson_title: {
+        label: "a lesson title",
+        guidance: "3-8 words, concrete, no colon-subtitle, names what the student will learn.",
+        max: 90,
+      },
+      lesson_objective: {
+        label: "a lesson objective",
+        guidance:
+          "One sentence starting with a verb, describing what the student can DO afterwards.",
+        max: 220,
+      },
+      unit_title: {
+        label: "a unit (chapter) title",
+        guidance: "3-8 words naming the through-line of its lessons.",
+        max: 90,
+      },
+      tutor_prompt: {
+        label: "a tutor prompt",
+        guidance:
+          "2-4 sentences telling the AI mentor how to carry THIS lesson — what to lead with, " +
+          "what to check, what to avoid. Address the mentor, not the student.",
+        max: 700,
+      },
+      assignment_instructions: {
+        label: "assignment instructions",
+        guidance:
+          "2-5 sentences a student reads: what to produce, what good looks like, any constraint.",
+        max: 700,
+      },
+      summary: {
+        label: "a short summary",
+        guidance: "2-3 sentences, plain language, no preamble.",
+        max: 500,
+      },
+    };
+    const spec = allowed[field];
+    if (!spec) throw new Error("field is not one this assistant drafts.");
+
+    // Authorization rides whatever the field is attached to; a lesson-scoped draft
+    // checks the lesson's own course scope exactly like every other authoring action.
+    const lessonId = cleanText(body.lesson_id);
+    // Lesson context is read ONCE and reused for both the access check and the prompt:
+    // a title drafted against the lesson's own steps beats one drafted against a bare
+    // instruction.
+    let lessonContext = "";
+    if (lessonId) {
+      const ctx = await lessonStepsContext(config, lessonId);
+      await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
+      lessonContext = ctx.text || "";
+    } else {
+      const organizationId = cleanText(body.organization_id);
+      if (!organizationId) throw new Error("lesson_id or organization_id is required.");
+      await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
+    }
+
+    const system =
+      `You draft ${spec.label} for a school lesson. ${spec.guidance} ` +
+      'Return ONLY JSON of the form {"text":string}. Write the field itself — no quotes ' +
+      "around it, no preamble, no explanation, no markdown. If reference material is " +
+      "given, ground the wording in it rather than inventing content.";
+    const parts: string[] = [];
+    if (lessonContext) parts.push(`Lesson context:\n${clampText(lessonContext, 4000)}`);
+    if (referenceText) parts.push(`Reference material:\n${clampText(referenceText, 8000)}`);
+    if (prompt) parts.push(`What the teacher asked for:\n${prompt}`);
+    if (currentJson) parts.push(`Current value (improve it):\n${currentJson}`);
+    if (feedback) parts.push(`Teacher feedback:\n${feedback}`);
+    if (!parts.length) throw new Error("Add a note, reference material, or open a lesson first.");
+
+    const result = await callModelJson(system, parts.join("\n\n"), { maxTokens: 600 });
+    const text = clampText(cleanText(result.text), spec.max);
+    if (!text) throw new Error("The assistant returned nothing usable — try again.");
+    return json({ status: "ok", draft: { field, text } });
+  }
+
+  if (mode === "artifact") {
+    const lessonId = cleanText(body.lesson_id);
+    if (!lessonId) throw new Error("lesson_id is required.");
+    const ctx = await lessonStepsContext(config, lessonId);
+    await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
+    const artifactKind =
+      body.artifact_kind === "deck" ? "deck" : body.artifact_kind === "html_sim" ? "html_sim" : "";
+    if (!artifactKind) throw new Error("artifact_kind must be 'html_sim' or 'deck'.");
+    const brief = clampText(cleanText(body.brief) || prompt, 2000);
+    if (!isRefine && !brief) throw new Error("brief is required.");
+
+    if (artifactKind === "deck") {
+      const system =
+        "You design a short slide DECK to teach a concept. Return ONLY JSON of the form " +
+        '{"deck":{"title":string,"slides":[Slide]}}. A Slide is one of: ' +
+        '{"layout":"title","title":string,"subtitle"?:string}, ' +
+        '{"layout":"bullets","title"?:string,"bullets":string[]}, ' +
+        '{"layout":"two_col","title"?:string,"left_title"?:string,"right_title"?:string,"left":string[],"right":string[]}, ' +
+        '{"layout":"quote","quote":string,"attribution"?:string}, ' +
+        '{"layout":"code","title"?:string,"code":string,"language"?:string,"caption"?:string}. ' +
+        "Every slide MAY include \"speaker_notes\":string — a natural read-aloud narration of that slide. " +
+        "Use 4-10 slides; open with a title slide. Bullets: at most 5 per slide, each at most ~12 words. " +
+        "Plain text only — NO markdown. Keep it age-appropriate and grounded in the lesson context and any reference material.";
+      const parts: string[] = [];
+      if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
+      if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
+      if (isRefine) {
+        parts.push(`Current draft deck (JSON):\n${currentJson}`);
+        parts.push(
+          `Revise the deck per this feedback: ${feedback}\nChange only what the feedback asks; return the full updated deck.`,
+        );
+      } else {
+        parts.push(`Design a slide deck for this brief:\n${brief}`);
+      }
+      const result = await callModelJson(system, parts.join("\n\n"), {
+        model: artifactModel(),
+        maxTokens: 4000,
+        timeoutMs: 60000,
+      });
+      const deck = validateDeck(result.deck);
+      if (!deck) throw new Error("Couldn't produce a valid deck. Try again with a clearer brief.");
+      return json({ status: "ok", mode, artifact_kind: "deck", deck });
+    }
+
+    // html_sim
+    const system =
+      "You build a small, self-contained INTERACTIVE learning activity as ONE HTML document. " +
+      'Return ONLY JSON of the form {"html":"<!DOCTYPE html>...the complete document..."}. ' +
+      "HARD RULES: the html is a SINGLE self-contained file — inline ALL CSS in <style> and ALL " +
+      "JavaScript in <script>. ZERO network: no fetch, no XMLHttpRequest, no WebSocket, no CDN " +
+      "links, no external <script src>/<link href>/<img src=http...>; draw with canvas or inline " +
+      "SVG and embed any image as a data: URI. Vanilla JS only (no frameworks, no imports). " +
+      "Support BOTH mouse and touch (pointer events). Do NOT use cookies, localStorage, " +
+      "sessionStorage, or indexedDB. The activity must TEACH the objective — the interactivity " +
+      "should expose the concept (a slider that changes a wave, a draggable that shows a force). " +
+      "Keep it visually clean and responsive; size to its content.";
+    const parts: string[] = [];
+    if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
+    if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
+    if (isRefine) {
+      const prevHtml =
+        body.current && typeof body.current === "object"
+          ? cleanText((body.current as DbRow).html)
+          : "";
+      // Show the whole prior doc on refine (a near-cap sim is ~24KB) so "return the FULL
+      // updated document" isn't working from a truncated copy.
+      if (prevHtml) parts.push(`Current activity HTML:\n${clampText(prevHtml, 28000)}`);
+      parts.push(
+        `Revise the activity per this feedback: ${feedback}\nReturn the FULL updated HTML document.`,
+      );
+    } else {
+      parts.push(`Build an interactive activity for this brief:\n${brief}`);
+    }
+    const userMsg = parts.join("\n\n");
+    // Budget both calls under the edge gateway's ~150s wall clock: 85s first pass + a
+    // shorter 55s repair (rare — only on a lint failure) = 140s worst case.
+    const model = artifactModel();
+    let result = await callModelJson(system, userMsg, {
+      model,
+      maxTokens: 6000,
+      timeoutMs: 85000,
+    });
+    let html = cleanText(result.html);
+    let lint = lintArtifactHtml(html);
+    // One server-side self-repair pass: feed the violations back so the model fixes them.
+    if (html && !lint.ok) {
+      const repair =
+        `${userMsg}\n\nThe previous version failed these safety checks: ${lint.violations.join(", ")}. ` +
+        "Rebuild it WITHOUT any of those — no network calls, no external resources, no storage APIs, " +
+        "no nested iframes. Return the full corrected HTML document.";
+      result = await callModelJson(system, repair, { model, maxTokens: 6000, timeoutMs: 55000 });
+      const repaired = cleanText(result.html);
+      if (repaired) {
+        html = repaired;
+        lint = lintArtifactHtml(html);
+      }
+    }
+    if (!html) throw new Error("Couldn't produce the activity. Try again with a clearer brief.");
+    return json({ status: "ok", mode, artifact_kind: "html_sim", artifact_html: html, lint });
+  }
+
+  throw new Error("Unsupported generate mode.");
 }
 
 async function importCurriculum(
@@ -3462,327 +3553,6 @@ async function importCurriculum(
   return json({ status: "ok", unit_id: unitId, course_id: courseId, report });
 }
 
-async function generateDraft(config: Config, actorId: string, body: DbRow): Promise<Response> {
-  const mode = cleanText(body.mode);
-  if (mode === "lesson_package") return await generateLessonPackage(config, actorId, body);
-  const prompt = cleanText(body.prompt);
-  const referenceText = clampText(cleanText(body.reference_text), 24000);
-  const feedback = cleanText(body.feedback);
-  const target = cleanText(body.target);
-  const hasCurrent = Boolean(body.current && typeof body.current === "object");
-  const isRefine = hasCurrent && Boolean(feedback);
-  const currentJson = hasCurrent ? clampText(JSON.stringify(body.current), 6000) : "";
-
-  if (mode === "course_outline") {
-    const courseId = cleanText(body.course_id);
-    let organizationId = cleanText(body.organization_id);
-    let contextText = "";
-    if (courseId) {
-      const ctx = await courseOutlineContext(config, courseId);
-      organizationId = ctx.organizationId;
-      contextText = ctx.text;
-    }
-    if (!organizationId) throw new Error("organization_id is required.");
-    await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
-    // R57: material alone is enough to draft an outline (a chapter upload IS the brief);
-    // a brief alone still works. One of the two is required.
-    // R59: the outline must see the WHOLE chapter or it proposes a course for the
-    // part it happened to read. 111 pages is ~140k characters.
-    const outlineReference = clampText(cleanText(body.reference_text), 180000);
-    if (!isRefine && !prompt && !outlineReference) {
-      throw new Error("Add material (upload, paste, or a link) or a brief to generate from.");
-    }
-
-    const system =
-      "You are a curriculum designer. Return ONLY JSON of the form " +
-      '{"units":[{"title":string,"summary":string,' +
-      '"lessons":[{"title":string,"source_hint":string}]}]}. ' +
-      "Use 2-5 units and 2-6 short, student-facing lesson titles each; summary is one line " +
-      "on what the unit covers. Fit the existing curriculum context: do not duplicate " +
-      "existing units/lessons; match the level and style. " +
-      "WHEN REFERENCE MATERIAL IS PROVIDED: derive the whole outline from it, follow the " +
-      "material's own order, and cover it end to end — one lesson per teachable chunk, not " +
-      "a summary of the whole. Set each lesson's source_hint to a SHORT VERBATIM PHRASE " +
-      "(3-10 words) copied from the part of the material that lesson teaches, so the " +
-      "platform can find that passage again; use a distinctive phrase, never a heading you " +
-      "invented. With no material, omit source_hint.";
-    const parts: string[] = [];
-    if (contextText) parts.push(`Existing curriculum context:\n${contextText}`);
-    if (outlineReference) {
-      parts.push(`TEACHER'S MATERIAL — the source of truth for this outline:\n${outlineReference}`);
-    }
-    if (isRefine) {
-      parts.push(`Current draft outline (JSON):\n${currentJson}`);
-      parts.push(
-        `Revise the draft per this feedback${target ? ` (which targets ${target})` : ""}: ${feedback}\n` +
-          "Change only what the feedback asks; keep everything else identical. Return the full updated outline.",
-      );
-    } else if (prompt) {
-      parts.push(`Design a course outline for this brief:\n${clampText(prompt, 2000)}`);
-    } else {
-      parts.push("Design the course outline this material supports, covering it end to end.");
-    }
-    // An outline over a whole book is a bigger read than the default budget allows.
-    const result = await callModelJson(system, parts.join("\n\n"), {
-      model: artifactModel(),
-      maxTokens: 3000,
-      timeoutMs: 90000,
-    });
-    return json({
-      status: "ok",
-      mode,
-      outline: { units: parseOutlineUnits(result), grounded: Boolean(outlineReference) },
-    });
-  }
-
-  if (mode === "lesson_steps") {
-    const lessonId = cleanText(body.lesson_id);
-    if (!lessonId) throw new Error("lesson_id is required.");
-    const ctx = await lessonStepsContext(config, lessonId);
-    await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
-    if (!isRefine && !prompt) throw new Error("prompt is required.");
-
-    const system =
-      "You design a single lesson as an ordered list of steps. Every step has a learning MODE " +
-      "(the platform's pedagogical vocabulary). Return ONLY JSON of the form " +
-      '{"steps":[{"mode":"explanation"|"media"|"reflection"|"practice"|"assignment"|"inquiry"|"assessment"|"revision",' +
-      '"mode_type":string,"title":string,"prompt":string,' +
-      '"choices":[{"id":string,"text":string}],"correct_choice_id":string}]}. ' +
-      "mode_type is required only for practice ('code' for run-the-code steps, 'applied' for " +
-      "use-the-idea-in-words steps) and assessment ('mcq' or 'open_ended'). " +
-      "Include choices and correct_choice_id ONLY for assessment/mcq steps " +
-      "(2-4 choices with ids a,b,c,d). Use 3-6 steps. A good lesson opens with explanation or " +
-      "media, works the idea with reflection or practice, and ends with an assessment. " +
-      "Keep prompts concrete and age-appropriate. Fit the lesson context. " +
-      "If reference material is provided, ground the steps in it.";
-    const parts: string[] = [];
-    if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
-    if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
-    // Optional template scaffold: the template's mode flow is the skeleton; the AI keeps the
-    // same modes/order/mode_types and rewrites titles + prompts for THIS lesson's topic.
-    const templateId = cleanText(body.template_id);
-    if (templateId) {
-      const template = await selectFirst(
-        config,
-        `lesson_templates?id=eq.${enc(templateId)}&organization_id=eq.${enc(ctx.organizationId)}&status=eq.active&select=steps&limit=1`,
-      );
-      const skeleton = Array.isArray(template?.steps)
-        ? (template!.steps as unknown[]).map((step) => {
-            const row = step && typeof step === "object" ? (step as DbRow) : {};
-            return { mode: cleanText(row.mode), mode_type: cleanText(row.mode_type), title: cleanText(row.title) };
-          })
-        : [];
-      if (skeleton.length) {
-        parts.push(
-          "Follow this template's mode flow EXACTLY — keep the same modes, order, and mode_types; " +
-            `only rewrite each step's title and prompt for the new topic:\n${JSON.stringify(skeleton)}`,
-        );
-      }
-    }
-    if (isRefine) {
-      parts.push(`Current draft steps (JSON):\n${currentJson}`);
-      parts.push(
-        `Revise the draft per this feedback${target ? ` (which targets ${target})` : ""}: ${feedback}\n` +
-          "Change only what the feedback asks; keep everything else identical. Return the full updated steps array.",
-      );
-    } else {
-      parts.push(`Draft the steps for this lesson brief:\n${clampText(prompt, 2000)}`);
-    }
-    const result = await callModelJson(system, parts.join("\n\n"));
-    return json({ status: "ok", mode, steps: parseStepDrafts(result) });
-  }
-
-  // P7: generate an interactive artifact (html_sim / deck) from a teacher brief. Still a
-  // pure draft — NO DB write; the studio previews it and a separate approve step persists.
-  // R76: one generation path for every SHORT FIELD a teacher writes — a lesson title,
-  // an objective, a unit title, an assignment's instructions. The owner's rule was "at
-  // every building point there should be an ai assistant to help draft content"; before
-  // this, drafting existed only for whole lessons and whole step lists, so the small
-  // writing — which is most of the writing — had no help at all.
-  //
-  // It returns ONE string and nothing else. The teacher's field is filled with a draft
-  // they then edit; the server never writes it, so an assist can always be ignored.
-  if (mode === "text_field") {
-    const field = cleanText(body.field);
-    const allowed: Record<string, { label: string; guidance: string; max: number }> = {
-      lesson_title: {
-        label: "a lesson title",
-        guidance: "3-8 words, concrete, no colon-subtitle, names what the student will learn.",
-        max: 90,
-      },
-      lesson_objective: {
-        label: "a lesson objective",
-        guidance:
-          "One sentence starting with a verb, describing what the student can DO afterwards.",
-        max: 220,
-      },
-      unit_title: {
-        label: "a unit (chapter) title",
-        guidance: "3-8 words naming the through-line of its lessons.",
-        max: 90,
-      },
-      tutor_prompt: {
-        label: "a tutor prompt",
-        guidance:
-          "2-4 sentences telling the AI mentor how to carry THIS lesson — what to lead with, " +
-          "what to check, what to avoid. Address the mentor, not the student.",
-        max: 700,
-      },
-      assignment_instructions: {
-        label: "assignment instructions",
-        guidance:
-          "2-5 sentences a student reads: what to produce, what good looks like, any constraint.",
-        max: 700,
-      },
-      summary: {
-        label: "a short summary",
-        guidance: "2-3 sentences, plain language, no preamble.",
-        max: 500,
-      },
-    };
-    const spec = allowed[field];
-    if (!spec) throw new Error("field is not one this assistant drafts.");
-
-    // Authorization rides whatever the field is attached to; a lesson-scoped draft
-    // checks the lesson's own course scope exactly like every other authoring action.
-    const lessonId = cleanText(body.lesson_id);
-    // Lesson context is read ONCE and reused for both the access check and the prompt:
-    // a title drafted against the lesson's own steps beats one drafted against a bare
-    // instruction.
-    let lessonContext = "";
-    if (lessonId) {
-      const ctx = await lessonStepsContext(config, lessonId);
-      await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
-      lessonContext = ctx.text || "";
-    } else {
-      const organizationId = cleanText(body.organization_id);
-      if (!organizationId) throw new Error("lesson_id or organization_id is required.");
-      await assertCanAuthor(config, actorId, organizationId, cleanText(body.class_id));
-    }
-
-    const system =
-      `You draft ${spec.label} for a school lesson. ${spec.guidance} ` +
-      'Return ONLY JSON of the form {"text":string}. Write the field itself — no quotes ' +
-      "around it, no preamble, no explanation, no markdown. If reference material is " +
-      "given, ground the wording in it rather than inventing content.";
-    const parts: string[] = [];
-    if (lessonContext) parts.push(`Lesson context:\n${clampText(lessonContext, 4000)}`);
-    if (referenceText) parts.push(`Reference material:\n${clampText(referenceText, 8000)}`);
-    if (prompt) parts.push(`What the teacher asked for:\n${prompt}`);
-    if (currentJson) parts.push(`Current value (improve it):\n${currentJson}`);
-    if (feedback) parts.push(`Teacher feedback:\n${feedback}`);
-    if (!parts.length) throw new Error("Add a note, reference material, or open a lesson first.");
-
-    const result = await callModelJson(system, parts.join("\n\n"), { maxTokens: 600 });
-    const text = clampText(cleanText(result.text), spec.max);
-    if (!text) throw new Error("The assistant returned nothing usable — try again.");
-    return json({ status: "ok", draft: { field, text } });
-  }
-
-  if (mode === "artifact") {
-    const lessonId = cleanText(body.lesson_id);
-    if (!lessonId) throw new Error("lesson_id is required.");
-    const ctx = await lessonStepsContext(config, lessonId);
-    await assertCanAuthor(config, actorId, ctx.organizationId, cleanText(body.class_id));
-    const artifactKind =
-      body.artifact_kind === "deck" ? "deck" : body.artifact_kind === "html_sim" ? "html_sim" : "";
-    if (!artifactKind) throw new Error("artifact_kind must be 'html_sim' or 'deck'.");
-    const brief = clampText(cleanText(body.brief) || prompt, 2000);
-    if (!isRefine && !brief) throw new Error("brief is required.");
-
-    if (artifactKind === "deck") {
-      const system =
-        "You design a short slide DECK to teach a concept. Return ONLY JSON of the form " +
-        '{"deck":{"title":string,"slides":[Slide]}}. A Slide is one of: ' +
-        '{"layout":"title","title":string,"subtitle"?:string}, ' +
-        '{"layout":"bullets","title"?:string,"bullets":string[]}, ' +
-        '{"layout":"two_col","title"?:string,"left_title"?:string,"right_title"?:string,"left":string[],"right":string[]}, ' +
-        '{"layout":"quote","quote":string,"attribution"?:string}, ' +
-        '{"layout":"code","title"?:string,"code":string,"language"?:string,"caption"?:string}. ' +
-        "Every slide MAY include \"speaker_notes\":string — a natural read-aloud narration of that slide. " +
-        "Use 4-10 slides; open with a title slide. Bullets: at most 5 per slide, each at most ~12 words. " +
-        "Plain text only — NO markdown. Keep it age-appropriate and grounded in the lesson context and any reference material.";
-      const parts: string[] = [];
-      if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
-      if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
-      if (isRefine) {
-        parts.push(`Current draft deck (JSON):\n${currentJson}`);
-        parts.push(
-          `Revise the deck per this feedback: ${feedback}\nChange only what the feedback asks; return the full updated deck.`,
-        );
-      } else {
-        parts.push(`Design a slide deck for this brief:\n${brief}`);
-      }
-      const result = await callModelJson(system, parts.join("\n\n"), {
-        model: artifactModel(),
-        maxTokens: 4000,
-        timeoutMs: 60000,
-      });
-      const deck = validateDeck(result.deck);
-      if (!deck) throw new Error("Couldn't produce a valid deck. Try again with a clearer brief.");
-      return json({ status: "ok", mode, artifact_kind: "deck", deck });
-    }
-
-    // html_sim
-    const system =
-      "You build a small, self-contained INTERACTIVE learning activity as ONE HTML document. " +
-      'Return ONLY JSON of the form {"html":"<!DOCTYPE html>...the complete document..."}. ' +
-      "HARD RULES: the html is a SINGLE self-contained file — inline ALL CSS in <style> and ALL " +
-      "JavaScript in <script>. ZERO network: no fetch, no XMLHttpRequest, no WebSocket, no CDN " +
-      "links, no external <script src>/<link href>/<img src=http...>; draw with canvas or inline " +
-      "SVG and embed any image as a data: URI. Vanilla JS only (no frameworks, no imports). " +
-      "Support BOTH mouse and touch (pointer events). Do NOT use cookies, localStorage, " +
-      "sessionStorage, or indexedDB. The activity must TEACH the objective — the interactivity " +
-      "should expose the concept (a slider that changes a wave, a draggable that shows a force). " +
-      "Keep it visually clean and responsive; size to its content.";
-    const parts: string[] = [];
-    if (ctx.text) parts.push(`Lesson context:\n${ctx.text}`);
-    if (referenceText) parts.push(`Reference material to draw on:\n${referenceText}`);
-    if (isRefine) {
-      const prevHtml =
-        body.current && typeof body.current === "object"
-          ? cleanText((body.current as DbRow).html)
-          : "";
-      // Show the whole prior doc on refine (a near-cap sim is ~24KB) so "return the FULL
-      // updated document" isn't working from a truncated copy.
-      if (prevHtml) parts.push(`Current activity HTML:\n${clampText(prevHtml, 28000)}`);
-      parts.push(
-        `Revise the activity per this feedback: ${feedback}\nReturn the FULL updated HTML document.`,
-      );
-    } else {
-      parts.push(`Build an interactive activity for this brief:\n${brief}`);
-    }
-    const userMsg = parts.join("\n\n");
-    // Budget both calls under the edge gateway's ~150s wall clock: 85s first pass + a
-    // shorter 55s repair (rare — only on a lint failure) = 140s worst case.
-    const model = artifactModel();
-    let result = await callModelJson(system, userMsg, {
-      model,
-      maxTokens: 6000,
-      timeoutMs: 85000,
-    });
-    let html = cleanText(result.html);
-    let lint = lintArtifactHtml(html);
-    // One server-side self-repair pass: feed the violations back so the model fixes them.
-    if (html && !lint.ok) {
-      const repair =
-        `${userMsg}\n\nThe previous version failed these safety checks: ${lint.violations.join(", ")}. ` +
-        "Rebuild it WITHOUT any of those — no network calls, no external resources, no storage APIs, " +
-        "no nested iframes. Return the full corrected HTML document.";
-      result = await callModelJson(system, repair, { model, maxTokens: 6000, timeoutMs: 55000 });
-      const repaired = cleanText(result.html);
-      if (repaired) {
-        html = repaired;
-        lint = lintArtifactHtml(html);
-      }
-    }
-    if (!html) throw new Error("Couldn't produce the activity. Try again with a clearer brief.");
-    return json({ status: "ok", mode, artifact_kind: "html_sim", artifact_html: html, lint });
-  }
-
-  throw new Error("Unsupported generate mode.");
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
@@ -3855,10 +3625,6 @@ Deno.serve(async (req: Request) => {
     if (action === "upsert_step") return await upsertStep(config, actorId, record);
     if (action === "reorder_steps") return await reorderSteps(config, actorId, record);
     if (action === "delete_step") return await deleteStep(config, actorId, record);
-    if (action === "save_template") return await saveTemplate(config, actorId, record);
-    if (action === "list_templates") return await listTemplates(config, actorId, record);
-    if (action === "instantiate_template") return await instantiateTemplate(config, actorId, record);
-    if (action === "archive_template") return await archiveTemplate(config, actorId, record);
     if (action === "set_class_courses") return await setClassCourses(config, actorId, record);
     if (action === "duplicate_course") return await duplicateCourse(config, actorId, record);
     if (action === "list_enrollable_students") return await listEnrollableStudents(config, actorId, record);
@@ -4148,11 +3914,11 @@ async function reviewKnowledge(config: Config, actorId: string, body: DbRow): Pr
   return json({ status: "ok" });
 }
 
-    if (action === "import_curriculum") return await importCurriculum(config, actorId, record);
     if (action === "generate") return await generateDraft(config, actorId, record);
     if (action === "extract_knowledge") return await extractKnowledge(config, actorId, record);
     if (action === "list_knowledge") return await listKnowledge(config, actorId, record);
     if (action === "review_knowledge") return await reviewKnowledge(config, actorId, record);
+    if (action === "import_curriculum") return await importCurriculum(config, actorId, record);
     return errorResponse("Unsupported curriculum-admin action.", 400);
   } catch (error) {
     const message = errorMessage(error);

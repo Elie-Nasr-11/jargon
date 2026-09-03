@@ -6,6 +6,75 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-03 (R102: the trim, and the archive that remembers)
+
+Status: Finished
+Task: act on the feature audit — keep everything thin, cut the weekly digest, keep the OCR
+path and archive the rest, annotated well enough to bring any of it back knowingly.
+
+Summary:
+
+WHAT LEFT, AND WHERE IT WENT. A new `archive/` tree holds 4,745 lines across five folders,
+each with the code and a NOTES.md: what it did, why it left, what still exists that it
+depends on, what changed underneath it since, and numbered restore steps. Canvas LMS (2,046
+lines, 16 actions) and Google Classroom (1,189 lines, 10 actions) went whole — neither had a
+single caller and all eleven of their tables are empty. Eight of the thirteen
+resource-processing actions went. The five curriculum template actions went. The weekly
+digest went, with its card, its handler, its fetcher, its types and its test.
+
+NO TABLES WERE DROPPED. Every archived feature's tables stay, empty, so a restore is
+code-only — no migration, no backfill. That is the whole reason the archive is cheap. The
+canvas/classroom migrations are still in the deploy list, so a fresh environment still gets
+the schema. Dropping any of it is a separate, deliberate, irreversible step nobody has asked
+for.
+
+TWO CORRECTIONS THE WORK FORCED, and both are worth carrying forward.
+
+1. "Keep only the OCR" was not possible as stated. `ocr_pdf_pages` READS
+   `resource_page_assets` — written by `save_pdf_page_assets`, fed by the browser's PDF page
+   renderer — and WRITES `resource_text_chunks`, which only `list_resource_chunks` reads
+   back. Keeping the single named action would have preserved a function that can never
+   execute and whose output nothing can read. Three actions stayed: that minimal runnable
+   chain. The NOTES lead with the diagram.
+
+2. "No frontend caller" is not "no caller". The audit flagged `import_curriculum` as dead.
+   It is the book importer, driven from `scripts/import-curriculum.mjs` and
+   `tools/book-import/` — the path that put both IT Frontiers books into production. It was
+   archived and restored inside the same release; its own tests (R58, R61) caught it, not
+   the audit. Every other archived action was then re-checked against `scripts/`, `tools/`,
+   the other edge functions and cron, and all of them held up. docs/FEATURE_INVENTORY.md now
+   carries this correction at the top.
+
+A PIN MOVED, for the ninth release running, and for the usual reason. R48's
+`allow_live_artifacts` pin listed three code shapes; two of them lived inside the template
+handlers that were archived, and the live lesson-write path was never at risk. It now
+asserts the rule instead of the shapes.
+
+Files changed: archive/** (new: README + 5 folders, 16 files), supabase/functions/canvas and
+google-classroom (moved out whole), resource-processing/index.ts (-457 lines, 5 actions
+left), curriculum-admin/index.ts (-231 net: 4 template handlers out, importCurriculum back
+in), admin-ops/index.ts (-233, the digest), .github/workflows/deploy-backend.yml, frontend
+ClassDigestCard (moved) + TodayScreen + api.ts + types.ts, six test modules re-expressed,
+docs/FEATURE_INVENTORY.md + DECISIONS.md.
+
+Tests run: python 1537 OK / 4 skipped (was 1561 — the digest's own 24 pins went to the
+archive with it) · tsc 0 · eslint src 0 errors (36 pre-existing warnings) · vite build green
+· deno harnesses flow, room and thinking all green · deno check clean on
+resource-processing and curriculum-admin, and admin-ops unchanged at its 2 pre-existing
+errors (TS2769 + TS2339, verified identical at HEAD before the edit).
+
+Remaining concerns:
+- The two archived integrations' OAuth client secrets are still set as env vars on the
+  Supabase project. Nothing reads them now. Removing them is an owner-side action worth
+  taking — the credential you do not hold cannot leak.
+- The three orphan production functions (key-probe-oneoff, ops-probe-r49, deploy-probe-r90)
+  are still deployed; they have no source in this repo and were not part of this release.
+- 26 empty tables from archived and never-built features remain. Deliberate.
+- Not deployed yet: this needs a merge to main for the backend functions to redeploy.
+
+Suggested next task: R103 (§19's cognitive-load move) and R104 (docs + the brain-map
+decision), both unchanged by this release.
+
 ## Claude -> Codex / Human - 2026-09-03 (R101: the Thinking tab just shows)
 
 Status: Finished
