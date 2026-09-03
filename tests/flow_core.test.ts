@@ -17,6 +17,7 @@ import {
   emptyStepState,
   isSkipRequest,
   learnerSteer,
+  pickProbe,
   requirementsFor,
   stepDone,
   turnDirective,
@@ -1112,4 +1113,212 @@ Deno.test("R91: the scaffold trend reads the direction of help over time", () =>
     null,
     "no trend without two halves to compare",
   );
+});
+
+
+// ---------------------------------------------------------------------------
+// R100: the delayed unaided ask (§10 transfer, §11 retention, §20).
+//
+// pickProbe only CHOOSES which idea to ask about; whether to ask at all is the handler's,
+// because it needs reads a pure function cannot do. These are the promises the choosing
+// makes — and each one, broken, produces a question that measures nothing: an idea the
+// student has never met, one they were taught ten minutes ago, or a different idea every
+// time the database returns rows in a different order.
+
+const HOUR = 3_600_000;
+const NOW = Date.parse("2026-09-03T12:00:00.000Z");
+const ago = (hours: number) => new Date(NOW - hours * HOUR).toISOString();
+
+const idea = (key: string, title = key) => ({ key, title });
+const evidence = (key: string, hoursAgo: number, score: number, attempts = 2) => ({
+  idea_key: key,
+  score,
+  attempts,
+  last_evidence_at: ago(hoursAgo),
+});
+
+const probeInput = (over: Record<string, unknown> = {}) => ({
+  mastery: [evidence("photosynthesis", 48, 0.5)],
+  ideas: [idea("photosynthesis", "How plants eat light")],
+  lessonIdeaKeys: [] as string[],
+  sessionStartedAt: ago(1),
+  now: NOW,
+  ...over,
+});
+
+Deno.test("R100: an idea with no evidence is never probed", () => {
+  eq(
+    pickProbe(probeInput({ mastery: [evidence("photosynthesis", 48, 0.5, 0)] })),
+    null,
+    "no attempts means nothing to remember — that is a first lesson, not a recall check",
+  );
+});
+
+Deno.test("R100: an idea met inside this very session is never probed", () => {
+  eq(
+    pickProbe(
+      probeInput({ mastery: [evidence("photosynthesis", 0.5, 0.5)], sessionStartedAt: ago(1) }),
+    ),
+    null,
+    "evidence from this sitting is not delayed retrieval, it is a comprehension check",
+  );
+});
+
+Deno.test("R100: an idea younger than the gap is never probed", () => {
+  eq(
+    pickProbe(probeInput({ mastery: [evidence("photosynthesis", 3, 0.5)], sessionStartedAt: null })),
+    null,
+    "three hours is not a delay",
+  );
+  const ok = pickProbe(
+    probeInput({ mastery: [evidence("photosynthesis", 30, 0.5)], sessionStartedAt: null }),
+  );
+  eq(ok?.idea_key, "photosynthesis", "past the gap it is fair game");
+});
+
+Deno.test("R100: an idea with no published title is never probed", () => {
+  eq(
+    pickProbe(probeInput({ ideas: [] })),
+    null,
+    "a probe names the idea out loud, so an untitled key cannot be asked",
+  );
+});
+
+Deno.test("R100: mastery decides which QUESTION gets asked", () => {
+  eq(
+    pickProbe(probeInput({ mastery: [evidence("photosynthesis", 48, 0.4)] }))?.kind,
+    "retention",
+    "a fading idea is asked what they remember",
+  );
+  eq(
+    pickProbe(probeInput({ mastery: [evidence("photosynthesis", 48, 0.95)] }))?.kind,
+    "transfer",
+    "an idea they own is asked where else it applies",
+  );
+});
+
+Deno.test("R100: fading beats mastered, and related beats unrelated", () => {
+  const pick = pickProbe(
+    probeInput({
+      mastery: [evidence("solid", 48, 0.95), evidence("fading", 48, 0.4)],
+      ideas: [idea("solid"), idea("fading")],
+    }),
+  );
+  eq(pick?.idea_key, "fading", "a delayed check is most informative where knowledge is going");
+
+  const related = pickProbe(
+    probeInput({
+      mastery: [evidence("far", 48, 0.45), evidence("near", 48, 0.45)],
+      ideas: [idea("far"), idea("near")],
+      lessonIdeaKeys: ["near"],
+    }),
+  );
+  eq(related?.idea_key, "near", "at equal strength, ask about what today is about");
+});
+
+Deno.test("R100: the same inputs always choose the same idea", () => {
+  const rows = [
+    evidence("alpha", 48, 0.5),
+    evidence("beta", 48, 0.5),
+    evidence("gamma", 48, 0.5),
+  ];
+  const ideas = [idea("alpha"), idea("beta"), idea("gamma")];
+  const forward = pickProbe(probeInput({ mastery: rows, ideas }));
+  const backward = pickProbe(probeInput({ mastery: [...rows].reverse(), ideas }));
+  eq(
+    forward?.idea_key,
+    backward?.idea_key,
+    "row order is a database detail; it must not decide what a child is asked",
+  );
+});
+
+Deno.test("R100: nothing to ask about is a valid answer", () => {
+  eq(pickProbe(probeInput({ mastery: [] })), null, "no evidence anywhere means no probe");
+});
+
+Deno.test("R100: a failed delayed check outranks the in-lesson medians", () => {
+  // Reasoning is the only dimension the lesson itself flagged, and retrieval looks fine
+  // in the room — but they could not retrieve it a day later, so retrieval leads.
+  const steer = learnerSteer(profile({ reasoning: 2, retention: 1 }));
+  eq(
+    steer!.moves[0].startsWith("RETRIEVAL FIRST"),
+    true,
+    "a failed delayed check IS a retrieval finding, whatever the in-lesson median says",
+  );
+  eq(steer!.moves.length <= 2, true, "the two-move cap is not negotiable");
+  eq(
+    learnerSteer(profile({ reasoning: 2 }))!.moves[0].startsWith("MAKE THEM REASON"),
+    true,
+    "without a failed check the weakest in-lesson dimension still leads",
+  );
+});
+
+Deno.test("R100: nobody is called mastered on evidence a day old that failed", () => {
+  const strong = { retrieval: 4, reasoning: 4, independence: 4 };
+  eq(
+    learnerSteer(profile({ ...strong }))!.moves[0].startsWith("FADE AND TRANSFER"),
+    true,
+    "strong in-lesson work still fades when nothing contradicts it",
+  );
+  for (const [label, over] of [
+    ["retention", { retention: 1 }],
+    ["transfer", { transfer: 1 }],
+  ] as const) {
+    const steer = learnerSteer(profile({ ...strong, ...over }))!;
+    eq(
+      steer.moves.some((m) => m.startsWith("FADE AND TRANSFER")),
+      false,
+      `a failed ${label} check is the §14 case: supported proficiency is not proficiency`,
+    );
+    // Blocking the fade is not enough. A measurement that changes nothing is the exact
+    // failure §19 exists to prevent, so the mentor is told what to do instead.
+    eq(
+      steer.moves.some((m) => m.startsWith("CONSOLIDATE, DO NOT FADE")),
+      true,
+      `a failed ${label} check must produce a move, not silence`,
+    );
+    eq(steer.moves.length <= 2, true, "the two-move cap still holds");
+  }
+});
+
+Deno.test("R100: a probe turn asks and does not teach", () => {
+  const directive = turnDirective({
+    currentStage: "teach",
+    answer: null,
+    presentedBefore: false,
+    stepStateBefore: emptyStepState("a1"),
+    draftState: emptyStepState("a1"),
+    draftFlow: { stage: "teach", responseMode: "text", nextAction: "reply", choices: [] },
+    requirements: requirementsFor({ response_mode: "text" }),
+    activityMode: "text",
+    stepMode: null,
+    stepModeType: "",
+    gradedUnderstanding: null,
+    gradedCode: null,
+    runtimeTimedOut: false,
+    assessment: null,
+    attachedResources: [],
+    routedKind: null,
+    inRevisit: false,
+    navAction: null,
+    studentMode: null,
+    modeOfferAccept: null,
+    brainHints: {
+      recallIdea: null,
+      compress: false,
+      practiceTarget: null,
+      practiceStretch: null,
+      figure: null,
+      practiceBank: null,
+    },
+    probeAsk: { kind: "retention" as const, title: "How plants eat light" },
+  } as never);
+  eq(directive.key, "probe_opener", "the probe owns the whole reply");
+  eq(
+    directive.key === "present_step" || directive.key === "brief",
+    false,
+    "presentsThisTurn accepts only those two keys — a probe turn must not present the step",
+  );
+  eq(directive.text.includes("EXACTLY ONE question"), true, "one ask, as always");
+  eq(directive.text.includes("no hint"), true, "unaided is the whole point of the measurement");
 });

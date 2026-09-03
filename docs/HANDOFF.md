@@ -6,6 +6,85 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-03 (R100: the delayed unaided ask)
+
+Status: Finished
+Task: build the mechanism the rubric has been missing — §10 transfer, §11 retention, §20 —
+and the §14 numbers that depend on it.
+
+Summary:
+
+THE RUBRIC REFUSES TO LET THESE BE INFERRED. Transfer "should generally be assessed
+through a separate task rather than inferred from the original response"; retention
+"through delayed independent retrieval". Until now nothing in the product ever asked a
+student to produce something with NO help, LATER — so §10 and §11 were unmeasurable and
+§14's central claim ("a learner who performs well only when substantial AI support is
+available should not be classified as independently proficient") had nothing to compare
+against.
+
+The owner's call was that the ask lives inside the next lesson session rather than on a
+new surface. The mentor opens with one question about an idea the student met on a
+previous day, before any teaching. Four rules make it a measurement rather than a
+nuisance, and the schema enforces the ones it can:
+  * ONE PER SESSION — `unique (session_id)`, not a convention the handler remembers.
+  * ONE PER DAY — sessions are cheap to start; being quizzed at the top of each is a
+    nuisance, so a probe younger than the gap suppresses the next.
+  * ONLY GENUINELY DELAYED — the idea's last evidence must predate this session AND be
+    older than the gap, or "delayed retrieval" is a rephrased comprehension check.
+  * DECLINING IS NOT FAILING — a skip expires the probe. The rubric measures what a
+    student produced; declining to try is an absence, not a production of zero quality.
+
+WHAT IT OWNS. `probe_opener` is a directive key, not a room fact, precisely because
+`presentsThisTurn` accepts only `present_step` and `brief` — so a probe turn structurally
+cannot also present the step, and a reply that taught and then asked what they remembered
+would be measuring its own teaching.
+
+THE RESULT CHANGES SOMETHING, which is the whole point. The scored probe feeds back into
+`student_idea_mastery` through the same EMA chat uses (≥3 pass, ≤1 fail, 2 neutral — a
+partial recall counts the attempt without moving the score, because the rubric's
+"developing" band should not be forced to pick a side). And §19 will no longer call a
+student mastered on evidence a delayed check contradicted.
+
+A PROPERTY TEST CAUGHT A REAL GAP MID-BUILD. Blocking the FADE move on a failed check left
+the mentor with NO move at all — a measurement that changes nothing, which is exactly the
+failure R91 exists to prevent. That produced "CONSOLIDATE, DO NOT FADE": keep the help
+where it is and spend the session making it stick.
+
+Files changed: supabase/functions/chat/index.ts (pickProbe, the probe_opener directive,
+the handler's gates, the answer mark, both writes, the steer), cognition-scorer/index.ts
+(probeOf, the admission, the PROBE prefix, the two conditional anchors, PROBE_DIMENSIONS,
+§14 in buildProfile, closeProbes), a new migration, the deploy list, api.ts,
+cognition/labels.ts, CognitionPanel.tsx, tests/flow_core.test.ts (+11 properties),
+tests/test_r100_probe.py (new, 33 pins).
+
+Tests run: python 1539 OK / 4 skipped (was 1506) · deno flow properties 43/43 (was 32) ·
+deno check chat 7 (unchanged), scorer clean · tsc 0 · eslint src 0 errors · build green.
+Schema applied to production and verified: 15 columns, 3 policies, the six new profile
+columns, the two turn-score columns, and the redefined queue view.
+
+THREE OLD PINS MOVED, and one of them deserved the thought it got:
+- test_r90's write-safety pin enumerates the tables the scorer may write. It now includes
+  `cognition_probes` (its own scoring outcome) and `student_idea_mastery` — the one table
+  in that set the scorer does NOT own. That is deliberate and narrow: a delayed unaided
+  check is the strongest evidence there is about what a student knows now, so it has to
+  reach the brain. The pin says so in place, and names the guard: test_r100_probe reads
+  MASTERY_EMA_ALPHA and MASTERY_PRIOR out of BOTH files and fails if they drift.
+- two payload pins were quoting the exact ternary that builds a student turn's payload.
+  Re-expressed as the rule (the turn records its declared mode).
+
+Remaining concerns:
+- The probe INSERT is backgrounded, so a student who answers within milliseconds of the
+  question could beat the row. Not realistic (they have to read and type), and the failure
+  mode is a lost probe rather than a broken lesson — but it is a race, and it is logged.
+- Nothing has exercised this against a real student yet: the queue is empty because no
+  lesson work has happened since the demo build. The live rig check is the next thing to
+  run once someone uses it.
+- The opening reply's restraint rests on prompt text. Three live openings should be read
+  for leaked content before this is called done.
+
+Suggested next task: R101 — §16's trajectories across lessons and §14 in the room, which
+is what turns single probes into the pattern the rubric actually asks for.
+
 ## Claude -> Codex / Human - 2026-09-03 (R99: what the judge is told, and what the teacher is shown)
 
 Status: Finished

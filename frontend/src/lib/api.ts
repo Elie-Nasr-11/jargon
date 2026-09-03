@@ -4246,6 +4246,15 @@ export type CognitionProfile = CognitionDims & {
   narrative: string;
   turns_scored: number;
   updated_at: string;
+  // R100 (§10/§11): what a delayed unaided question found. Null until one has been
+  // asked and scored, which is the honest reading of "we have not checked yet".
+  retention?: number | null;
+  transfer?: number | null;
+  probes_answered?: number;
+  // §14: how much of their work came with no help before it. Count AND share, because
+  // "2 of 3" and "67%" are different claims and a reader needs the denominator.
+  unaided_count?: number;
+  share_unaided?: number | null;
 };
 
 export type CognitionResponse = {

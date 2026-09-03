@@ -56,6 +56,12 @@ const DIMENSIONS = [
   "metacognition",
 ] as const;
 
+// R100: §10 and §11 are scored ONLY on a probe answer, so they are not part of DIMENSIONS
+// — the eight are what every response gets, and a rollup that averaged these two in with
+// them would report a retention median built from two observations beside eight built
+// from dozens. They ride the same row and the same profile, counted separately.
+const PROBE_DIMENSIONS = ["retention", "transfer"] as const;
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -282,6 +288,11 @@ async function isSweepCaller(config: Config, req: Request): Promise<boolean> {
 
 // Three judged responses is the floor: below it a single navigation turn or one bad
 // answer would swing the whole reading.
+// §14's two populations. S0-S1 is the rubric's own definition of unaided ("percentage of
+// tasks completed at S0-S1"); S3+ is where the tutor has supplied actual content, which
+// is the comparison that makes "supported versus unsupported mastery" mean something.
+const UNAIDED_AT_OR_BELOW = 1;
+const SUPPORTED_AT_OR_ABOVE = 3;
 const STEER_FLOOR = 3;
 // A dimension at or below 2 is weak; at or above 3 is proficient.
 const WEAK_AT_OR_BELOW = 2;
@@ -307,6 +318,10 @@ const STEER_PRIORITY = [
 // ---------------------------------------------------------------------------
 
 const MIN_CONSTRUCTED_CHARS = 25;
+// R100: mastery arithmetic, duplicated from chat because the two functions cannot import
+// each other. tests/test_r100_probe.py reads both files and fails if they drift.
+const MASTERY_EMA_ALPHA = 0.3;
+const MASTERY_PRIOR = 0.5;
 
 function studentText(turn: DbRow): string {
   const payload = turn.payload && typeof turn.payload === "object" ? (turn.payload as DbRow) : {};
@@ -314,6 +329,23 @@ function studentText(turn: DbRow): string {
   const code = cleanText(payload.code);
   if (code) return text ? `${text}\n\nCODE:\n${code}` : `CODE:\n${code}`;
   return text;
+}
+
+/**
+ * R100: the mark chat writes on the student's answer to a delayed unaided question.
+ *
+ * Nothing else in the transcript distinguishes one. Scored as an ordinary response it
+ * would read as a poor answer to a question nobody can see, and its scaffold level would
+ * be computed from mentor turns that belong to a different sitting.
+ */
+function probeOf(turn: DbRow): { idea_key: string; kind: string } | null {
+  const payload = turn.payload && typeof turn.payload === "object" ? (turn.payload as DbRow) : {};
+  const probe = payload.probe;
+  if (!probe || typeof probe !== "object") return null;
+  const row = probe as DbRow;
+  const kind = cleanText(row.kind);
+  if (kind !== "retention" && kind !== "transfer") return null;
+  return { idea_key: cleanText(row.idea_key), kind };
 }
 
 function isConstructedResponse(turn: DbRow): boolean {
@@ -353,6 +385,11 @@ Then score these dimensions, each 0-4, or null when this response gives no evide
 - independence: how much of the cognitive content originated with the student given the assistance above. 0 reproduces supplied content; 2 meaningful additional reasoning on heavy scaffolding; 4 substantive response with no meaningful content supplied beforehand.
 - metacognition: monitoring their own thinking. 0 no evidence of it either way; 1 bare (un)certainty; 2 names an uncertainty/error/gap; 3 explains why an answer may be wrong or revises from evidence; 4 evaluates and independently repairs their own reasoning.
 
+ONLY FOR A RESPONSE MARKED PROBE, also score the dimension its kind names — and leave BOTH null on every other response, because neither can be inferred from an ordinary answer:
+- retention (§11, delayed independent retrieval): 0 cannot retrieve the essential knowledge; 1 isolated elements, and only with substantial support; 2 the central knowledge with meaningful gaps; 3 retrieves most of what matters, independently; 4 durable — retrieves, explains and uses it after the delay without support.
+- transfer (§10, applying it somewhere new): 0 cannot reproduce the idea independently; 1 handles a highly similar case; 2 near transfer — applies it when surface features change; 3 extended transfer — applies the principle in a meaningfully different context; 4 generative — recognizes, generalizes or uses the principle in a novel situation.
+Not remembering is a real answer and scores honestly; it is never a reason to lower the other dimensions further than the response itself warrants.
+
 RULES.
 - Grammar, spelling and accent NEVER lower any dimension except expression, and even expression is about communication, not correctness cosmetics. Strong reasoning in broken sentences is strong reasoning.
 - Normalize every judgment to the student's grade band, the subject, and the response modality given in the context. A short, mathematically precise explanation is not weaker than a long humanities paragraph.
@@ -364,7 +401,7 @@ RULES.
 - narrative: across everything you have seen of this student on this lesson (including the earlier scored work in the context), write 2-4 sentences for the teacher: what they now understand, what they confuse or lean on the tutor for, whether their independence is rising or falling, and ONE concrete next move (e.g. "ready to progress after one more retrieval-practice pass without hints"). No scores, no percentages, no filler.
 
 Return ONLY JSON:
-{"turns":[{"turn_id":string,"scaffold_level":0-5,"dims":{"retrieval":int|null,"organization":int|null,"reasoning":int|null,"elaboration":int|null,"vocabulary":int|null,"expression":int|null,"independence":int|null,"metacognition":int|null},"evidence":{"<dimension>":"short quote",...,"ai_supplied":string,"student_originated":string,"attribution":{"ai_supplied":{"concepts":[string],"reasoning":[string],"vocabulary":[string],"examples":[string],"sentence_structure":[string]},"student_originated":{"concepts":[string],"reasoning":[string],"vocabulary":[string],"examples":[string],"sentence_structure":[string]}}},"signals":{"propositions":int,"subject_terms":int,"causal_links":int,"comparisons":int,"conditionals":int,"examples":int,"self_corrections":int,"concepts_introduced":int,"ai_traceable_share":number,"hints_before":int},"note":string}],"narrative":string}`;
+{"turns":[{"turn_id":string,"scaffold_level":0-5,"dims":{"retrieval":int|null,"organization":int|null,"reasoning":int|null,"elaboration":int|null,"vocabulary":int|null,"expression":int|null,"independence":int|null,"metacognition":int|null,"retention":int|null,"transfer":int|null},"evidence":{"<dimension>":"short quote",...,"ai_supplied":string,"student_originated":string,"attribution":{"ai_supplied":{"concepts":[string],"reasoning":[string],"vocabulary":[string],"examples":[string],"sentence_structure":[string]},"student_originated":{"concepts":[string],"reasoning":[string],"vocabulary":[string],"examples":[string],"sentence_structure":[string]}}},"signals":{"propositions":int,"subject_terms":int,"causal_links":int,"comparisons":int,"conditionals":int,"examples":int,"self_corrections":int,"concepts_introduced":int,"ai_traceable_share":number,"hints_before":int},"note":string}],"narrative":string}`;
 
 function scorerModel(): string {
   return (
@@ -556,12 +593,59 @@ function buildProfile(rows: DbRow[]): DbRow {
     profile.scaffold_recent = scaffolds[0];
   }
   profile.turns_scored = chronological.length;
+
+  // R100 / §11 + §10: the two delayed dimensions, over a shorter window than the eight.
+  // They arrive once a day at most, so a ten-deep median would be reporting a term's
+  // worth of history as if it were current.
+  for (const dim of PROBE_DIMENSIONS) {
+    const values = chronological
+      .map((row) => row[dim])
+      .filter((v): v is number => typeof v === "number")
+      .slice(-5);
+    profile[dim] = median(values);
+  }
+  profile.probes_answered = chronological.filter((row) =>
+    PROBE_DIMENSIONS.some((dim) => typeof row[dim] === "number"),
+  ).length;
+
+  // §14, cognitive independence. The rubric asks for "percentage of tasks completed at
+  // S0-S1" and for "supported versus unsupported mastery" — a learner who performs well
+  // only WITH help is not independently proficient, and the only way to see that is to
+  // compare the two populations rather than average them together.
+  //
+  // Both the count and the share are stored: "2 of 3" and "67%" are different claims,
+  // and a teacher shown only the second cannot tell which one they are reading.
+  const unaided = chronological.filter(
+    (row) => Number(row.scaffold_level) <= UNAIDED_AT_OR_BELOW,
+  );
+  const supported = chronological.filter(
+    (row) => Number(row.scaffold_level) >= SUPPORTED_AT_OR_ABOVE,
+  );
+  profile.unaided_count = unaided.length;
+  profile.share_unaided = chronological.length
+    ? Number((unaided.length / chronological.length).toFixed(2))
+    : null;
+  const medianOver = (rows: DbRow[]) => {
+    const split: DbRow = {};
+    for (const dim of DIMENSIONS) {
+      split[dim] = median(
+        rows.map((row) => row[dim]).filter((v): v is number => typeof v === "number"),
+      );
+    }
+    return split;
+  };
+  profile.split = {
+    independent: medianOver(unaided),
+    supported: medianOver(supported),
+  };
   return profile;
 }
 
 const SCORE_COLUMNS =
   "id,turn_id,session_id,lesson_id,user_id,stage,objective," +
   DIMENSIONS.join(",") +
+  "," +
+  PROBE_DIMENSIONS.join(",") +
   ",scaffold_level,evidence,signals,note,model,rubric_version,created_at";
 
 async function storedScores(config: Config, userId: string, lessonId: string): Promise<DbRow[]> {
@@ -576,6 +660,84 @@ async function storedProfile(config: Config, userId: string, lessonId: string): 
     config,
     `cognition_profiles?user_id=eq.${enc(userId)}&lesson_id=eq.${enc(lessonId)}&select=*&limit=1`,
   );
+}
+
+/**
+ * A probe answer, scored, becomes evidence about the idea it probed.
+ *
+ * Mapping a 0-4 judgment onto the mastery EMA's pass/fail/neutral: 3 or 4 is a pass (they
+ * produced it after the delay), 0 or 1 a fail, and 2 counts the attempt without moving
+ * the score — a partial recall is genuinely ambiguous evidence, and the rubric's own
+ * "developing" band should not be forced to pick a side.
+ *
+ * The scorer holds the service role, so this is the one place mastery is written without
+ * a student's JWT. It uses the same conflict key and the same arithmetic as chat, because
+ * a second way of computing the same number is a second number.
+ */
+async function closeProbes(config: Config, userId: string, inserts: DbRow[]): Promise<void> {
+  const scored = inserts.filter((row) =>
+    PROBE_DIMENSIONS.some((dim) => typeof row[dim] === "number"),
+  );
+  if (!scored.length) return;
+
+  const byTurn = new Map(scored.map((row) => [cleanText(row.turn_id), row]));
+  const probes = await selectAll(
+    config,
+    `cognition_probes?user_id=eq.${enc(userId)}&status=eq.answered&scored_at=is.null` +
+      `&answer_turn_id=in.(${[...byTurn.keys()].map(enc).join(",")})` +
+      `&select=id,idea_key,answer_turn_id&limit=20`,
+  ).catch(() => [] as DbRow[]);
+  if (!probes.length) return;
+
+  const nowIso = new Date().toISOString();
+  for (const probe of probes) {
+    const row = byTurn.get(cleanText(probe.answer_turn_id));
+    if (!row) continue;
+    const retention = typeof row.retention === "number" ? row.retention : null;
+    const transfer = typeof row.transfer === "number" ? row.transfer : null;
+    const value = retention ?? transfer;
+    if (value === null) continue;
+
+    await serviceFetch(config, `/rest/v1/cognition_probes?id=eq.${enc(cleanText(probe.id))}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ retention, transfer, scored_at: nowIso }),
+    }).catch(() => {});
+
+    const result = value >= 3 ? "pass" : value <= 1 ? "fail" : "neutral";
+    const ideaKey = cleanText(probe.idea_key);
+    if (!ideaKey) continue;
+    const existing = await selectFirst(
+      config,
+      `student_idea_mastery?user_id=eq.${enc(userId)}&idea_key=eq.${enc(ideaKey)}` +
+        `&select=score,attempts&limit=1`,
+    ).catch(() => null);
+    const prev =
+      existing && typeof existing.score === "number"
+        ? Math.max(0, Math.min(1, existing.score))
+        : MASTERY_PRIOR;
+    const target = result === "pass" ? 1 : 0;
+    const next = result === "neutral" ? prev : prev + MASTERY_EMA_ALPHA * (target - prev);
+    await serviceFetch(
+      config,
+      "/rest/v1/student_idea_mastery?on_conflict=user_id,idea_key",
+      {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify([
+          {
+            user_id: userId,
+            idea_key: ideaKey,
+            score: Math.round(next * 1000) / 1000,
+            attempts: (Number(existing?.attempts) || 0) + 1,
+            last_result: result,
+            last_evidence_at: nowIso,
+            updated_at: nowIso,
+          },
+        ]),
+      },
+    ).catch(() => {});
+  }
 }
 
 async function lessonFraming(config: Config, userId: string, lessonId: string) {
@@ -642,7 +804,10 @@ async function runScoring(
   turns.forEach((turn, index) => {
     if (cleanText(turn.role) !== "student") return;
     if (scoredTurnIds.has(cleanText(turn.id))) return;
-    if (!isConstructedResponse(turn)) return;
+    // A probe answer is admitted at any length. "The part where the water splits" is
+    // three words below the constructed-response floor and is exactly what §11 measures;
+    // the floor exists to stop spending model calls on "ok", not to discard recall.
+    if (!isConstructedResponse(turn) && !probeOf(turn)) return;
     candidates.push({ turn, index });
   });
 
@@ -701,12 +866,21 @@ async function runScoring(
       turn.payload && typeof turn.payload === "object"
         ? cleanText((turn.payload as DbRow).input_modality)
         : "";
+    // A probe answer says what it is, because the transcript above it belongs to a
+    // DIFFERENT sitting: the mentor turns the window collected are from before the
+    // student left, and reading them as "the assistance immediately before" would
+    // invent scaffolding that no longer applied when the question was asked.
+    const probe = probeOf(turn);
     sections.push(
       `RESPONSE turn_id=${cleanText(turn.id)}` +
         (cleanText(turn.stage) ? ` stage=${cleanText(turn.stage)}` : "") +
         (modality ? ` modality=${modality}` : "") +
-        ` tutor_turns_since_last_attempt=${hintsBefore}\n` +
-        (before.length ? `${before.join("\n")}\n` : "(no tutor turn before this — S0)\n") +
+        ` tutor_turns_since_last_attempt=${probe ? 0 : hintsBefore}\n` +
+        (probe
+          ? `PROBE kind=${probe.kind} idea="${probe.idea_key}" — this is a DELAYED UNAIDED question asked at the very start of today's session, before any teaching. The tutor supplied no content with it (S1). Score retention (or transfer, per kind) as well as the usual dimensions, and ignore the tutor turns above: they are from a previous sitting.\n`
+          : before.length
+            ? `${before.join("\n")}\n`
+            : "(no tutor turn before this — S0)\n") +
         `STUDENT: ${clampText(studentText(turn), 1600)}`,
     );
   }
@@ -744,6 +918,12 @@ async function runScoring(
       created_at: now,
     };
     for (const dim of DIMENSIONS) insert[dim] = cleanDim(dims[dim]);
+    // Only the kind that was actually asked. A judge scoring both on a retention probe
+    // would be inventing a transfer observation nobody made.
+    const probed = probeOf(turn);
+    for (const dim of PROBE_DIMENSIONS) {
+      insert[dim] = probed && probed.kind === dim ? cleanDim(dims[dim]) : null;
+    }
     inserts.push(insert);
   }
   if (!inserts.length) throw new Error("The scoring model returned nothing usable. Try again.");
@@ -756,6 +936,19 @@ async function runScoring(
 
   const allRows = await storedScores(config, userId, lessonId);
   const profile = buildProfile(allRows);
+  // R100: close out the probes this batch just answered, and let the result move the
+  // student's mastery of that idea.
+  //
+  // The write-back is the point. Without it a probe would be a measurement the system
+  // takes and then ignores: the student would be asked what they remember, get it wrong,
+  // and the brain would go on believing the idea was solid because the last evidence was
+  // a graded step from three weeks ago. Delayed retrieval is the strongest evidence
+  // there is about what someone knows now, so it feeds the same EMA as everything else.
+  await closeProbes(config, userId, inserts).catch((err) => {
+    // Scores are already written; a failure here costs the write-back, not the run.
+    console.error("probe_close_failed", errorMessage(err));
+  });
+
   profile.user_id = userId;
   profile.lesson_id = lessonId;
   profile.narrative = clampText(cleanText(verdict.narrative), 1200);
