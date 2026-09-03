@@ -4,13 +4,18 @@
  * The rubric's whole point rendered: never "63%". A teacher reads WHAT this student's
  * own thinking produced — eight dimensions at 0-4, how much tutor assistance sat under
  * each response (S0-S5), whether that assistance is falling (the §14 trajectory), and
- * a narrative in sentences: what they understand, what they confuse, the one next move.
+ * a reading in sentences: what they understand, what they confuse, the one next move.
  *
- * Scoring runs on demand and is idempotent: "Read the thinking" judges only responses
- * not yet judged, so pressing it twice costs one model call, not two.
+ * R101: it shows; it does not ask. There is no button that judges — the sweep reads new
+ * work every fifteen minutes and finishes a lesson's tail two hours after the student
+ * leaves it. One read brings every judged response of this student as numbers and ids,
+ * and every scope a teacher can pick (Everything, a class, a unit, a lesson) is a filter
+ * over that one payload in the browser, so switching costs no request. The quotes that
+ * ground a score stay on the per-lesson read, fetched only when a lesson is selected.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Brain, Loader2, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Brain } from "lucide-react";
 // R93: one home for the dimension vocabulary — this panel and the class room view
 // render the same eight names, and two copies of a label list drift.
 import { DIMENSION_LABELS, PROBE_LABELS } from "@/features/teacher/cognition/labels";
@@ -21,31 +26,71 @@ import {
   signalsLine,
   traceableShareLabel,
 } from "@/features/teacher/cognition/evidence";
+import {
+  ALL_SCOPE,
+  dependencyPattern,
+  lessonLines,
+  movement,
+  patternSentence,
+  probeTally,
+  resolveScope,
+  rowsInScope,
+  scopeKey,
+  scopeOptions,
+  scopeSentence,
+  sittings,
+  smoothed,
+  sparklineLabel,
+  summarize,
+  truncationNote,
+  type Movement,
+  type SeriesKey,
+} from "@/features/teacher/cognition/thinking";
 import { EmptyInline, Panel } from "@/features/teacher/console/chrome";
-import { formatDateTime, lessonName } from "@/features/teacher/classShared";
+import { formatDateTime } from "@/features/teacher/classShared";
 import { countOf } from "@/lib/format";
 import {
   fetchCognitionProfile,
+  fetchStudentThinking,
   getSession,
-  scoreCognitionLesson,
-  type CognitionDims,
-  type CognitionResponse,
+  type CognitionProfile,
   type CognitionTurnScore,
+  type ThinkingProbe,
+  type ThinkingRow,
 } from "@/lib/api";
-import type { LearningSession, Lesson } from "@/lib/types";
+import type {
+  LearningSession,
+  Lesson,
+  TeacherClassMembership,
+  TeacherClassSummary,
+} from "@/lib/types";
+
+const NO_ROWS: ThinkingRow[] = [];
+const NO_LESSONS: CognitionProfile[] = [];
+const NO_PROBES: ThinkingProbe[] = [];
+
+const level = (value: number) => `${value} of 4`;
 
 function DimensionRow({
   label,
   value,
   pending = false,
+  series,
+  moved,
 }: {
   label: string;
   value: number | null;
   /** Nothing has been asked yet — different from "asked and scored nothing". */
   pending?: boolean;
+  /** The line across their sittings, from thinking.ts — a null is a hole. */
+  series?: Array<number | null>;
+  moved?: Movement;
 }) {
+  const drawn = series?.some((point) => point !== null) ?? false;
   return (
-    <div className="flex items-center gap-3">
+    // R98's rule: a row with fixed-width children must be allowed to wrap, or the one
+    // flexible child gives up its space. On a phone the line takes its own row.
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
       <span className="w-40 shrink-0 text-meta text-muted-foreground">{label}</span>
       <span
         className="flex items-center gap-1"
@@ -60,10 +105,96 @@ function DimensionRow({
           />
         ))}
       </span>
-      <span className="text-meta font-medium text-foreground">
+      <span className="w-14 text-meta font-medium text-foreground">
         {value !== null ? `${value}/4` : pending ? "Pending" : "—"}
       </span>
+      {drawn && series ? (
+        <span className="flex basis-full items-center gap-2 text-primary sm:ml-auto sm:basis-auto">
+          <Sparkline
+            values={series}
+            max={4}
+            label={sparklineLabel(label, moved ?? null, value, level)}
+          />
+          {moved ? (
+            <span
+              className={`font-mono text-[10px] ${
+                moved.direction === "up"
+                  ? "text-success"
+                  : moved.direction === "down"
+                    ? "text-warning"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {moved.first} → {moved.now}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * A line across their sittings, as one inline SVG. No chart library: R82 made the app
+ * start fast and a chart package is most of a font's weight for eighty pixels.
+ *
+ * A run of consecutive points is one polyline; a run of one is a dot; a null is a hole
+ * and never an interpolated slope. Colour comes from the parent — one hue, no gradient.
+ */
+function Sparkline({
+  values,
+  max,
+  label,
+}: {
+  values: Array<number | null>;
+  max: number;
+  label: string;
+}) {
+  const n = values.length;
+  const x = (index: number) => (n <= 1 ? 40 : 2 + (index * 76) / (n - 1));
+  const y = (value: number) => 2 + (1 - Math.min(Math.max(value, 0), max) / max) * 12;
+  const runs: Array<Array<[number, number]>> = [];
+  let run: Array<[number, number]> = [];
+  values.forEach((value, index) => {
+    if (value === null) {
+      if (run.length) runs.push(run);
+      run = [];
+      return;
+    }
+    run.push([x(index), y(value)]);
+  });
+  if (run.length) runs.push(run);
+  if (!runs.length) return null;
+  return (
+    <svg
+      role="img"
+      aria-label={label}
+      viewBox="0 0 80 16"
+      className="h-4 w-20 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {runs.map((points, index) =>
+        points.length === 1 ? (
+          <circle
+            key={index}
+            cx={points[0][0]}
+            cy={points[0][1]}
+            r={1.5}
+            fill="currentColor"
+            stroke="none"
+          />
+        ) : (
+          <polyline
+            key={index}
+            points={points.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(" ")}
+          />
+        ),
+      )}
+    </svg>
   );
 }
 
@@ -178,161 +309,202 @@ export function CognitionPanel({
   studentId,
   sessions,
   lessonsById,
+  classId,
+  classes,
+  memberships,
+  classLinks,
 }: {
   studentId: string;
   sessions: LearningSession[];
   lessonsById: Map<string, Lesson>;
+  /** The class the teacher came from — listed first among the scopes. */
+  classId: string | null;
+  classes: TeacherClassSummary[];
+  /** This student's memberships. */
+  memberships: TeacherClassMembership[];
+  /** Which courses each class links; undefined until the query resolves. */
+  classLinks: Array<{ class_id: string; course_id: string }> | undefined;
 }) {
-  // Lessons this student has actually worked in, most recent first.
-  const lessonIds = useMemo(() => {
-    const ordered = [...sessions].sort((a, b) =>
-      String(b.updated_at || "").localeCompare(String(a.updated_at || "")),
-    );
-    const seen = new Set<string>();
-    const ids: string[] = [];
-    for (const session of ordered) {
-      if (!session.lesson_id || seen.has(session.lesson_id)) continue;
-      seen.add(session.lesson_id);
-      ids.push(session.lesson_id);
-    }
-    return ids;
-  }, [sessions]);
-
-  const [lessonId, setLessonId] = useState(lessonIds[0] ?? "");
-  useEffect(() => {
-    if (lessonIds.length && !lessonIds.includes(lessonId)) setLessonId(lessonIds[0]);
-  }, [lessonIds, lessonId]);
-
-  const [data, setData] = useState<CognitionResponse | null>(null);
-  const [busy, setBusy] = useState<"load" | "score" | null>(null);
-  const [error, setError] = useState("");
-
-  // Stored truth on open/lesson-change — cheap, no judging.
-  useEffect(() => {
-    if (!lessonId) return;
-    let cancelled = false;
-    setBusy("load");
-    setError("");
-    void (async () => {
-      try {
-        const session = await getSession();
-        if (!session) throw new Error("Sign in again to read this.");
-        const response = await fetchCognitionProfile({
-          accessToken: session.access_token,
-          userId: studentId,
-          lessonId,
-        });
-        if (!cancelled) setData(response);
-      } catch (err) {
-        if (!cancelled) setError((err as Error).message || "Could not load.");
-      } finally {
-        if (!cancelled) setBusy(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [studentId, lessonId]);
-
-  const score = useCallback(async () => {
-    if (!lessonId || busy) return;
-    setBusy("score");
-    setError("");
-    try {
+  // One read per student. The tab is mounted with the student (WorkspacePanel
+  // force-mounts), so this fires when they are opened and the tab itself is instant;
+  // the dashboard's 30-second refetch never touches it.
+  const thinking = useQuery({
+    queryKey: ["studentThinking", studentId],
+    queryFn: async () => {
       const session = await getSession();
       if (!session) throw new Error("Sign in again to read this.");
-      const response = await scoreCognitionLesson({
+      return fetchStudentThinking({ accessToken: session.access_token, userId: studentId });
+    },
+    staleTime: 60_000,
+  });
+  const rows = thinking.data?.rows ?? NO_ROWS;
+  const lessons = thinking.data?.lessons ?? NO_LESSONS;
+  const probes = thinking.data?.probes ?? NO_PROBES;
+
+  const [scope, setScope] = useState(ALL_SCOPE);
+  useEffect(() => {
+    setScope(ALL_SCOPE);
+  }, [studentId]);
+
+  const groups = useMemo(
+    () =>
+      scopeOptions({
+        rows,
+        lessonsById,
+        classes,
+        memberships,
+        classLinks,
+        currentClassId: classId,
+      }),
+    [rows, lessonsById, classes, memberships, classLinks, classId],
+  );
+  // A key that emptied or vanished lands on Everything rather than on a blank panel.
+  const option = resolveScope(groups, scope);
+  const scoped = useMemo(() => rowsInScope(rows, option), [rows, option]);
+  const summary = useMemo(() => summarize(scoped), [scoped]);
+  const points = useMemo(() => sittings(scoped), [scoped]);
+  const pattern = useMemo(() => dependencyPattern(scoped), [scoped]);
+  const tally = useMemo(() => probeTally(probes, option), [probes, option]);
+  const lines = useMemo(
+    () => lessonLines(rows, option, lessonsById, lessons),
+    [rows, option, lessonsById, lessons],
+  );
+  const lineFor = (key: SeriesKey) => smoothed(points, key);
+
+  // Lesson scope only: the per-response list with its evidence — the one read that
+  // carries quotes, fetched when a lesson is chosen and not before.
+  const lessonId = option.kind === "lesson" ? option.id : null;
+  const lessonRead = useQuery({
+    queryKey: ["cognitionProfile", studentId, lessonId],
+    queryFn: async () => {
+      const session = await getSession();
+      if (!session) throw new Error("Sign in again to read this.");
+      return fetchCognitionProfile({
         accessToken: session.access_token,
         userId: studentId,
-        lessonId,
+        lessonId: lessonId as string,
       });
-      setData(response);
-    } catch (err) {
-      setError((err as Error).message || "Scoring failed.");
-    } finally {
-      setBusy(null);
-    }
-  }, [studentId, lessonId, busy]);
-
-  const profile = data?.profile ?? null;
-  const turns = data?.turns ?? [];
-  const scaffoldTrend =
-    profile && profile.scaffold_recent !== null && profile.scaffold_earlier !== null
-      ? profile.scaffold_recent < profile.scaffold_earlier
-        ? "falling"
-        : profile.scaffold_recent > profile.scaffold_earlier
-          ? "rising"
-          : "steady"
-      : null;
+    },
+    enabled: Boolean(lessonId),
+    staleTime: 60_000,
+  });
+  const turns: CognitionTurnScore[] = lessonRead.data?.turns ?? [];
+  const storedLesson = lessonId
+    ? (lessons.find((lesson) => lesson.lesson_id === lessonId) ?? null)
+    : null;
+  const reading = lessonId
+    ? storedLesson?.narrative || lessonRead.data?.profile?.narrative || ""
+    : scopeSentence(summary, option.kind === "all" ? null : option.label);
+  const patternText = patternSentence(pattern);
+  const note = truncationNote(Boolean(thinking.data?.truncated), rows.length);
+  const lastRead = lessons.reduce(
+    (latest, lesson) =>
+      String(lesson.updated_at || "") > latest ? String(lesson.updated_at) : latest,
+    "",
+  );
+  const error = thinking.error ? (thinking.error as Error).message || "Could not load." : "";
+  const hasWork = sessions.length > 0 || rows.length > 0;
+  const trendTone =
+    summary.scaffold_trend === "falling"
+      ? "text-success"
+      : summary.scaffold_trend === "rising"
+        ? "text-warning"
+        : "text-muted-foreground";
+  const scaffoldLine = lineFor("scaffold");
 
   return (
     <div className="mt-5 grid gap-4">
       <Panel title="How they think" icon={<Brain className="h-4 w-4" strokeWidth={1.6} />}>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <select
-            value={lessonId}
-            onChange={(event) => setLessonId(event.target.value)}
-            aria-label="Lesson"
-            className="rounded-control border border-border bg-depth-field px-2.5 py-1.5 text-meta text-foreground"
+            value={option.key}
+            onChange={(event) => setScope(event.target.value)}
+            aria-label="Scope"
+            className="jargon-input w-full sm:w-auto"
           >
-            {lessonIds.map((id) => (
-              <option key={id} value={id}>
-                {lessonName(lessonsById, id)}
-              </option>
-            ))}
+            <option value={groups.all.key}>
+              Everything · {countOf(groups.all.responses, "response")}
+            </option>
+            {groups.classes.length ? (
+              <optgroup label="Classes">
+                {groups.classes.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label} · {item.responses}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {groups.units.length ? (
+              <optgroup label="Units">
+                {groups.units.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label} · {item.responses}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {groups.lessons.length ? (
+              <optgroup label="Lessons">
+                {groups.lessons.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label} · {item.responses}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
           </select>
-          <button
-            type="button"
-            onClick={() => void score()}
-            disabled={!lessonId || busy !== null}
-            className="btn btn-primary btn-sm"
-          >
-            {busy === "score" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.8} />
-            )}
-            {busy === "score" ? "Reading the thinking…" : "Read the thinking"}
-          </button>
-          {typeof data?.remaining === "number" && data.remaining > 0 ? (
-            <span className="text-meta text-muted-foreground">
-              {data.remaining} more to read — press again.
-            </span>
-          ) : null}
+          <span className="text-meta text-muted-foreground">
+            Reads itself every fifteen minutes
+            {lastRead ? <> · last read {formatDateTime(lastRead)}</> : <> · nothing read yet</>}
+          </span>
         </div>
 
+        {note ? <p className="mb-3 text-meta text-muted-foreground">{note}</p> : null}
         {error ? <p className="text-meta text-danger">{error}</p> : null}
-        {busy === "score" ? (
-          <p className="mb-3 text-meta text-muted-foreground">
-            Jargon is reading this student's responses against the lesson and the help they were
-            given. A first pass takes a minute or two.
-          </p>
+        {thinking.isPending ? (
+          <p className="text-meta text-muted-foreground">Reading their thinking…</p>
         ) : null}
 
-        {!lessonIds.length ? (
+        {!thinking.isPending && !hasWork ? (
           <EmptyInline
             title="No lesson work yet"
             body="Nothing to read until this student has worked in a lesson."
           />
-        ) : !profile && busy !== "score" ? (
+        ) : !thinking.isPending && !error && rows.length === 0 ? (
           <EmptyInline
             title="Nothing read yet"
-            body="Jargon reads new work on its own every fifteen minutes. Read the thinking now if you would rather not wait."
+            body="Jargon reads new work on its own every fifteen minutes, and a lesson's last few responses two hours after the student leaves it."
           />
         ) : null}
 
-        {profile ? (
+        {rows.length ? (
           <div className="grid gap-4">
-            {profile.narrative ? (
-              // The rubric's deliverable: sentences a teacher acts on, not a number.
+            {reading ? (
+              // The rubric's deliverable: sentences a teacher acts on, not a number. A
+              // lesson keeps the judge's own narrative; every other scope is built from
+              // the numbers, so it is exact and never stale.
               <p className="rounded-card border border-primary/25 bg-primary/[0.04] px-4 py-3 font-serif text-body leading-relaxed text-foreground">
-                {profile.narrative}
+                {reading}
+              </p>
+            ) : null}
+
+            {patternText ? (
+              // §14 read across lessons: called only at three lessons and two concurring
+              // signals, and it says which. A reading for the teacher — it steers nothing.
+              <p className="rounded-card border border-warning/40 bg-warning/[0.06] px-4 py-3 text-body leading-relaxed text-foreground">
+                {patternText}
               </p>
             ) : null}
 
             <div className="grid gap-1.5">
               {DIMENSION_LABELS.map(({ key, label }) => (
-                <DimensionRow key={key} label={label} value={profile[key]} />
+                <DimensionRow
+                  key={key}
+                  label={label}
+                  value={summary.dims[key]}
+                  series={lineFor(key)}
+                  moved={movement(points, key)}
+                />
               ))}
               {/* R100 (§10/§11): what a delayed unaided question found. Kept apart from
                   the eight by a hairline, because these come from a different KIND of
@@ -345,45 +517,95 @@ export function CognitionPanel({
                   <DimensionRow
                     key={key}
                     label={label}
-                    value={typeof profile[key] === "number" ? (profile[key] as number) : null}
-                    pending={!profile.probes_answered}
+                    value={summary[key]}
+                    pending={summary.probes_answered === 0}
+                    series={lineFor(key)}
+                    moved={movement(points, key)}
                   />
                 ))}
               </div>
+              {points.length > 1 ? (
+                <p className="text-meta text-muted-foreground">
+                  Lines are by sitting — each point is one session, the running middle of the last
+                  five.
+                </p>
+              ) : null}
             </div>
 
             <p className="text-meta text-muted-foreground">
-              {countOf(profile.turns_scored, "response")} judged.
-              {typeof profile.unaided_count === "number" && profile.turns_scored ? (
-                <>
-                  {" "}
-                  {profile.unaided_count} of {profile.turns_scored} came with no help before them.
-                </>
-              ) : null}
-              {scaffoldTrend ? (
+              {countOf(summary.turns_scored, "response")} judged across{" "}
+              {countOf(summary.lessons, "lesson")} in {countOf(summary.sittings, "sitting")}.{" "}
+              {summary.unaided_count} of {summary.turns_scored} came with no help before them.
+              {summary.scaffold_trend &&
+              summary.scaffold_earlier !== null &&
+              summary.scaffold_recent !== null ? (
                 <>
                   {" "}
                   Tutor assistance under them:{" "}
                   <span className="font-medium text-foreground">
-                    S{profile.scaffold_earlier} → S{profile.scaffold_recent}
+                    S{summary.scaffold_earlier} → S{summary.scaffold_recent}
                   </span>{" "}
-                  <span
-                    className={
-                      scaffoldTrend === "falling"
-                        ? "text-success"
-                        : scaffoldTrend === "rising"
-                          ? "text-warning"
-                          : "text-muted-foreground"
-                    }
-                  >
-                    ({scaffoldTrend}
-                    {scaffoldTrend === "falling" ? " — the direction you want" : ""})
+                  <span className={trendTone}>
+                    ({summary.scaffold_trend}
+                    {summary.scaffold_trend === "falling" ? " — the direction you want" : ""})
                   </span>
+                  {scaffoldLine.some((point) => point !== null) ? (
+                    <span className="ml-2 inline-flex align-middle text-muted-foreground">
+                      <Sparkline
+                        values={scaffoldLine}
+                        max={5}
+                        label={sparklineLabel(
+                          "Tutor assistance",
+                          movement(points, "scaffold"),
+                          summary.scaffold_recent,
+                          (value) => `S${value}`,
+                        )}
+                      />
+                    </span>
+                  ) : null}
+                </>
+              ) : null}
+              {tally.asked ? (
+                <>
+                  {" "}
+                  Delayed checks: {tally.asked} asked · {tally.answered} answered · {tally.skipped}{" "}
+                  skipped{tally.waiting ? ` · ${tally.waiting} waiting` : ""}.
                 </>
               ) : null}
             </p>
 
-            {turns.length ? (
+            {!lessonId && lines.length ? (
+              <div className="grid gap-2">
+                <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  Lessons in this scope
+                </div>
+                {lines.map((item) => (
+                  <button
+                    key={item.lesson_id}
+                    type="button"
+                    onClick={() => setScope(scopeKey("lesson", item.lesson_id))}
+                    className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-card border border-border bg-depth-sub px-3 py-2 text-left transition-colors hover:bg-muted"
+                  >
+                    <span className="min-w-0 flex-1 text-meta text-foreground">
+                      {item.title}
+                      {item.unit_title ? (
+                        <span className="text-muted-foreground"> · {item.unit_title}</span>
+                      ) : null}
+                    </span>
+                    <span className="text-meta text-muted-foreground">
+                      {countOf(item.responses, "response")}
+                      {item.scaffold_recent !== null ? ` · S${item.scaffold_recent}` : ""}
+                      {item.last_read ? ` · ${formatDateTime(item.last_read)}` : ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {lessonId && lessonRead.isPending ? (
+              <p className="text-meta text-muted-foreground">Reading the responses…</p>
+            ) : null}
+            {lessonId && turns.length ? (
               <div className="grid gap-2">
                 <div className="text-overline font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Response by response

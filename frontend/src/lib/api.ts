@@ -4208,8 +4208,9 @@ export function warmStudentSurfaces(classId?: string | null): void {
 // --- R90: the cognition ledger (docs/COGNITION.md) ---------------------------------
 // The scorer judges constructed responses against the Independent Cognitive
 // Production Rubric, in the context of the assistance given immediately before each
-// one. The console asks for a lesson to be scored (idempotent — judged turns stay
-// judged) and renders dimensions + the teacher narrative. Never a single percentage.
+// one. Scoring runs itself (R92's sweep; R101 finishes lesson tails) — the console only
+// reads stored truth and renders dimensions + the teacher narrative. Never a single
+// percentage.
 
 export type CognitionDims = {
   retrieval: number | null;
@@ -4283,20 +4284,6 @@ async function callCognitionScorer(
   return data;
 }
 
-/** Judge any not-yet-scored constructed responses, then return the fresh profile.
- *  A scoring pass reads the whole run through the judge model — allow it minutes. */
-export function scoreCognitionLesson(input: {
-  accessToken: string;
-  userId: string;
-  lessonId: string;
-}): Promise<CognitionResponse> {
-  return callCognitionScorer(
-    input.accessToken,
-    { action: "score_lesson", user_id: input.userId, lesson_id: input.lessonId },
-    150000,
-  );
-}
-
 /** The stored profile + scored responses, no new judging. */
 export function fetchCognitionProfile(input: {
   accessToken: string;
@@ -4308,6 +4295,68 @@ export function fetchCognitionProfile(input: {
     user_id: input.userId,
     lesson_id: input.lessonId,
   });
+}
+
+// --- R101: the whole student, one read ---------------------------------------------
+// The Thinking tab shows; it does not ask. Nothing in the frontend can trigger a judge
+// call any more — the sweep reads new work every fifteen minutes and finishes a lesson's
+// tail two hours after the student leaves it. This read is stored truth only, and it is
+// numbers and ids only: the quotes that ground a score stay on the per-lesson read.
+
+/** One judged response as the whole-student view sees it — no evidence, no note. */
+export type ThinkingRow = CognitionDims & {
+  id: string;
+  lesson_id: string;
+  session_id: string;
+  created_at: string;
+  scaffold_level: number;
+  retention: number | null;
+  transfer: number | null;
+};
+
+/** A delayed unaided question (R100), so a skipped one is visible as itself. */
+export type ThinkingProbe = {
+  lesson_id: string;
+  idea_title: string;
+  kind: "retention" | "transfer";
+  status: "asked" | "answered" | "expired";
+  retention: number | null;
+  transfer: number | null;
+  asked_at: string;
+  answered_at: string | null;
+};
+
+export type StudentThinkingResponse = {
+  status?: string;
+  error?: string;
+  user_id?: string;
+  rows?: ThinkingRow[];
+  lessons?: CognitionProfile[];
+  probes?: ThinkingProbe[];
+  /** The newest rows were kept and older work dropped; the panel says so. */
+  truncated?: boolean;
+  read_at?: string;
+};
+
+/** Every judged response of one student as numbers and ids — never a quote. Stored truth only. */
+export async function fetchStudentThinking(input: {
+  accessToken: string;
+  userId: string;
+}): Promise<StudentThinkingResponse> {
+  const response = await fetchWithTimeout(
+    functionUrl("cognition-scorer"),
+    {
+      method: "POST",
+      headers: authHeaders(input.accessToken),
+      body: JSON.stringify({ action: "student_view", user_id: input.userId }),
+    },
+    30000,
+  );
+  const data = (await response.json()) as StudentThinkingResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Could not read this student's thinking.");
+  }
+  return data;
 }
 
 // --- R93: the whole room -----------------------------------------------------------

@@ -243,9 +243,14 @@ class TheTeacherCanSeeIt(unittest.TestCase):
         self.assertIn('"Pending"', PANEL)
 
     def test_the_unaided_share_is_shown_with_its_denominator(self) -> None:
-        """"2 of 3" and "67%" are different claims."""
+        """"2 of 3" and "67%" are different claims.
+
+        Stated as the rule it always meant — the count is printed in one expression with
+        its denominator — rather than as the name of the object that held them (R101
+        moved the statistic one scope out, and the pin on `profile.` broke).
+        """
         self.assertIn("unaided_count", PANEL)
-        self.assertIn("profile.turns_scored", PANEL)
+        self.assertRegex(without_comments(PANEL), r"unaided_count\}\s+of\s+\{[\w.]+\.turns_scored\}")
 
 
 class TheMigrationRuns(unittest.TestCase):
