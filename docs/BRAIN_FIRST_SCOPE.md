@@ -1,6 +1,10 @@
 # Brain-First: the consolidation scope
 
 Status: PROPOSED (owner brainstorm, 2026-08-03). Decisions pending at the bottom.
+**Measured against production 2026-09-03 — see "What the brain actually is today" at the
+end before planning anything from this document.** The gap between what this file
+describes and what exists is large, and it is the reason a decision was deferred rather
+than taken.
 
 The owner's framing, verbatim in spirit: the platform is **content-agnostic** — none of
 the current catalog is final — and **the brain should inform everything**: it is the
@@ -128,3 +132,53 @@ real content arrives.
    Continue, or acts as pressing Continue?
 4. Practice question source: fully mentor-generated from brain context, or
    teacher-authorable question banks with mentor fallback?
+
+---
+
+## 9. What the brain actually is today (measured 2026-09-03, R104)
+
+This file describes a fine-grained concept graph that informs everything. Six weeks of
+building later, here is what is actually in production. The numbers are the point; the
+plan above is not wrong, but nothing in it should be started without reading these first.
+
+| | count |
+|---|---|
+| ideas, all | 189 |
+| ideas, published | 132 |
+| of those, **minted one-per-lesson** by R97 (`lesson-<id>`) | 90 |
+| of those, hand-authored | 42 |
+| `student_idea_mastery` rows | 953 |
+| students with any mastery | 198 |
+| **distinct ideas with ANY evidence, school-wide** | **17** |
+| ...of which are hand-authored ideas | 5 (of 42) |
+| ideas one student has evidence on: min / **median** / max | 1 / **5** / 9 |
+
+Three things follow, and they are what the brain-map decision turned on:
+
+1. **It is lesson-grained, not concept-grained.** 948 of the 953 mastery rows sit on
+   ideas that R97 minted from a lesson's own milestone objective — one per lesson, a
+   floor so that mastery had something to accrue against. That is not the graph this
+   document describes; it is a lesson list wearing a graph's clothes. Anything here that
+   assumes ideas link concepts *across* lessons is assuming something not yet true.
+2. **The map draws mostly other people's lessons.** `fetchIdeas` (`lib/api.ts`) is
+   **unscoped** — every published idea, `.limit(300)`, no class, course or student
+   filter — and `BrainGraph` renders `ideas.slice(0, 90)`. So a student sees ~90 nodes of
+   which ~5 are theirs. It is also the HERO of the student home (StudentHome.tsx),
+   420px tall, always rendered, not behind a click: the most prominent thing a student
+   sees is ~94% lessons they may never open.
+3. **Nobody knows whether it is used.** There is no client event table anywhere in this
+   repository and `BrainGraph` records nothing. "Is the map worth its space" cannot be
+   answered from data today, only from a judgement.
+
+**The decision, 2026-09-03: leave it alone this release.** Three fixes were costed —
+scope `fetchIdeas` to the student's own classes (~half a day, no schema change), add
+telemetry first, or demote it below the fold — and the owner chose to ship none of them
+while the school is starting. The numbers are recorded here so revisiting is a read
+rather than a re-investigation.
+
+**When to revisit, concretely.** The two conditions that would change the answer:
+- the ideas stop being lesson-grained (hand-authored ideas carrying real evidence, not 5
+  of 42), which is what makes a *graph* worth drawing at all; or
+- a term of real usage arrives and the map is still ~5 lit nodes in 90, at which point
+  scoping is a half-day fix and the empty-state is the only design question.
+Re-run the counts above first; they are one query over `ideas` and `student_idea_mastery`.

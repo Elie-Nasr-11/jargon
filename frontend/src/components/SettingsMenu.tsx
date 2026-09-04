@@ -15,7 +15,7 @@ import type { MentorConfig, VoiceSettings } from "@/lib/jargon-store";
 type StudentModal = "mentor";
 
 // SettingsMenu is the teacher/admin console-header settings menu (Appearance / Campus Live /
-// Log out). It still accepts optional student mentor/voice props so a Profile + Mentor modal can
+// Sign out). It still accepts optional student mentor/voice props so a Profile + Mentor modal can
 // be rendered, but the student chat now uses the right-hand nav drawer (StudentNav) instead of
 // this gear.
 export function SettingsMenu({
@@ -198,7 +198,7 @@ export function SettingsMenu({
         }}
         className="flex w-full items-center gap-2.5 rounded-md px-2 py-3 text-left text-body text-foreground transition-colors hover:bg-muted sm:py-2"
       >
-        <LogOut className="h-[15px] w-[15px]" strokeWidth={1.5} /> Log out
+        <LogOut className="h-[15px] w-[15px]" strokeWidth={1.5} /> Sign out
       </button>
     </>
   );

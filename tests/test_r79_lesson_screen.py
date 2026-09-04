@@ -208,9 +208,31 @@ class LexiconTests(unittest.TestCase):
         # The brief blocks UI work until the word list is written down (step 0).
         self.assertTrue(LEXICON.is_file())
         text = LEXICON.read_text(encoding="utf-8")
-        for word in ("Course", "Unit", "Lesson", "Step", "Material", "Work", "Evidence"):
+        for word in (
+            "Course", "Unit", "Lesson", "Step", "Material", "Work", "Evidence",
+            # R104: the two the chrome uses on every screen and the lexicon did not own.
+            "Appearance", "Sign out",
+        ):
             with self.subTest(word=word):
                 self.assertIn(f"**{word}**", text)
+
+    def test_one_door_has_one_name(self):
+        # R104. "Sign out" (both sidebars) and "Log out" (the settings menu) were two
+        # names for the same door, differing by screen — the exact thing this file's
+        # retired-words table exists to stop. The lexicon now owns the word, so the
+        # rule is enforced everywhere the chrome renders it, not just on one screen.
+        chrome = "\n".join(
+            (SRC / path).read_text(encoding="utf-8")
+            for path in (
+                "components/SettingsMenu.tsx",
+                "features/teacher/shell/TeacherSidebar.tsx",
+                "student/StudentSidebar.tsx",
+            )
+        )
+        self.assertIn("Sign out", chrome)
+        # The lucide icon is named LogOut; the words a person reads are not.
+        self.assertNotIn("Log out", chrome)
+        self.assertNotIn("Logout<", chrome)
 
     def test_no_retired_word_appears_in_the_lesson_screen(self):
         copy = "\n".join(
