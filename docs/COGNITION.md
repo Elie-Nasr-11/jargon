@@ -4,10 +4,36 @@ How the Independent Cognitive Production Rubric (owner brief, 2026-08-31) became
 code. The rubric's own text is the authority on WHAT is measured; this file is the
 authority on where each part lives, why it is shaped that way, and what it refuses to do.
 
-Built across R90–R94. This describes the system as it stands; the release-by-release
-story is in `docs/HANDOFF.md`, and the decisions in `docs/DECISIONS.md`. The one part of
-the history worth keeping here — the diagnoses that turned out to be wrong — is at the
-bottom, because it is the best evidence for how the thing actually behaves.
+Built across R90–R104, and **finished**: every section of the rubric that can be measured
+without a surface that does not exist is live, including all eight of §19's steering rules.
+The coverage table below says which release closed each one and where it lives. This
+describes the system as it stands; the release-by-release story is in `docs/HANDOFF.md`,
+and the decisions in `docs/DECISIONS.md`. The one part of the history worth keeping here —
+the diagnoses that turned out to be wrong — is at the bottom, because it is the best
+evidence for how the thing actually behaves.
+
+## Where each section of the rubric lives
+
+| § | what it asks for | where it is | shipped |
+|---|---|---|---|
+| **§1** | judge a response in the context of the assistance immediately before it | `lessonFraming` + the judge prompt; independence is capped when the answer echoes the mentor | R90 |
+| **§2–§9** | the eight dimensions, with 0–4 anchors for each | `DIMENSIONS`, `JUDGE_SYSTEM`'s full anchor text | R90, anchors R99 |
+| **§8** | attribution — what was AI-supplied vs student-originated | `evidence.attribution`, five categories per side, rendered as two columns | R99 |
+| **§10** | transfer, assessed by a *separate task* rather than inferred | the in-session probe; `transfer` scored only on a probe answer | R100 |
+| **§11** | retention, by *delayed independent retrieval* | the same probe, ≥20h after the idea's last evidence | R100 |
+| **§12** | quantitative signals stored as underlay, never determining a score | `textSignals` computes four in code and spreads them OVER the judge's, so code wins the counting | R99 |
+| **§13** | the S0–S5 assistance ladder | `scaffold_level`, read off what the mentor actually said | R90 |
+| **§14** | cognitive independence; supported vs unsupported mastery | `unaided_count` / `share_unaided` / `split` on the profile; the count beside every student in the room; a guard on mastery in both the mentor and the room | R100, R101, **R101b** |
+| **§15** | never one composite number | no column, wire type or screen holds one; the room's summary carries no dimension value at all | R90, held since |
+| **§16** | longitudinal trajectories | the Thinking tab's line by sitting, "first → now", and the cross-lesson dependency pattern | R101 |
+| **§17** | normalize to grade band, subject and modality | `SUBJECT:` and `PRIOR ASSISTANCE ON THIS LESSON:` in the framing | R99 |
+| **§18** | expression is its own dimension; mechanics never lower a cognitive one | the anchor text, and the steer that asks for a reformulation rather than a rewrite | R90, R91 |
+| **§19** | the measurement must change how the mentor responds | `learnerSteer`, at most two moves — **all eight rules** | R91, R100, **R103** |
+| **§20** | the delayed unaided ask | the probe opener, one per session, one per day | R100 |
+
+The one part not built is inside §12: **latency, revisions and speaking duration**. They
+need client-side events the product does not emit, and they are not faked. Everything else
+the rubric asks for is running.
 
 ## The point
 
@@ -354,6 +380,26 @@ Live probing found things review and 1454 offline pins did not.
   `Bearer ` and 401'd silently every fifteen minutes. Caught by checking before scheduling.
 - **"1 student … are weak."** Subject-verb agreement in a sentence a teacher reads. It
   looks like a broken product, not a broken sentence.
+- **The idea-mastery table held zero rows for its entire life, and three things hid it.**
+  The worst one here, because nothing failed loudly. `chat` called the four-argument
+  `upsertRows` with three, so every write went out as `?on_conflict=undefined`, PostgREST
+  rejected it, and **a bare `catch {}` swallowed the rejection**. `deno check` had been
+  reporting it as a TS2554 the whole time — inside the "8 pre-existing errors" nobody
+  re-read — and the belief that the deploy pipeline enforced `deno check` was simply not
+  true. Fixing the call alone would have changed almost nothing: **973 of 992 graded
+  attempts sat on lessons with no authored ideas**, so there was nothing to write against;
+  and the EMA seeded from 0, so a first correct answer scored 0.3 and read as "to refresh".
+  Three faults, each hiding the next. The lessons, in order of how much they cost: a
+  swallowed write is worse than a failed one; a type error you have decided to tolerate is
+  a type error you will not read; and a feature can be "shipped" for weeks while its table
+  is empty, because nothing on any screen says "zero rows" out loud. (R97 — the table now
+  holds 953 rows across 198 students.)
+- **A 41-second green deploy.** Run #171 succeeded in less time than a deploy takes, which
+  is exactly the shape of a workflow that ran nothing. It had not: the migration replay is
+  deliberately skipped on function-only pushes (R50b), and the CLI no-ops on an unchanged
+  bundle hash, so only the two changed functions were pushed. Worth writing down because
+  the instinct to check was right even though the answer was fine — the versions and the
+  deployed source are what settle it, not the green tick.
 
 ## Verification
 

@@ -6,6 +6,92 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-04 (R104: the rubric is finished, and the brain map is measured)
+
+Status: Finished
+Task: the roadmap's last item — COGNITION.md up to the finished rubric, the mastery write
+that never wrote into "the wrong diagnoses", the two words LEXICON was missing, and the
+deferred brain-map decision put back to the owner with live numbers.
+
+Summary:
+
+THE RUBRIC IS COMPLETE. Every section §1–§20 is live, including all eight of §19's
+steering rules, except the part of §12 that needs client-side events the product does not
+emit — latency, revisions and speaking duration — which are not faked. COGNITION.md now
+opens with a table: which § asks for what, where it lives, and which release closed it. "Is
+X built" is a lookup now, not an archaeology.
+
+THE BRAIN MAP, MEASURED AND THEN LEFT ALONE. The decision deferred since the brain-first
+plan was put back to the owner with numbers rather than a recommendation dressed as one:
+  * 132 published ideas; **17 have any evidence at all, school-wide**; the median student
+    has evidence on 5, the busiest on 9.
+  * 948 of the 953 mastery rows sit on ideas R97 minted one-per-lesson. Only 5 of the 42
+    hand-authored ideas have ever been touched. The brain is LESSON-grained, not
+    concept-grained — a lesson list wearing a graph's clothes.
+  * `fetchIdeas` is unscoped (every published idea, `.limit(300)`); `BrainGraph` draws
+    `.slice(0, 90)`. A student sees ~90 nodes of which ~5 are theirs.
+  * It is the HERO of the student home, 420px, always rendered — so the most prominent
+    thing a student sees is ~94% lessons they may never open.
+  * No telemetry exists: no client event table in the repo, nothing recorded by the
+    component. Whether anyone uses it cannot be answered from data.
+Three fixes were costed (scope it to the student's classes, ~half a day and no schema
+change; build telemetry first; demote it below the fold). The owner chose NONE this
+release: the school is starting, and a half-day on the least-evidenced surface is a
+half-day not spent on the ones a teacher opens daily. The numbers, and the two conditions
+that would change the answer, are now `docs/BRAIN_FIRST_SCOPE.md` §9 — revisiting is a read
+rather than a re-investigation. That file's header now warns that the gap between what it
+plans and what exists is large.
+
+THE WRONG DIAGNOSES GAINED THE WORST ONE. The idea-mastery table held zero rows for its
+entire life and three faults hid each other: a three-argument call to a four-argument
+`upsertRows` sent `?on_conflict=undefined`, PostgREST rejected it, and a bare `catch {}`
+swallowed the rejection — while `deno check` reported it as a TS2554 the whole time, inside
+the "8 pre-existing errors" nobody re-read. Fixing the call alone would have changed almost
+nothing (973 of 992 graded attempts sat on lessons with no authored ideas) and the EMA
+seeded from 0. The lessons are now written where the other wrong diagnoses are: a swallowed
+write is worse than a failed one, a type error you have decided to tolerate is one you will
+not read, and a feature can be "shipped" for weeks while its table is empty. The 41-second
+green deploy from R101b is beside it, for the same reason — the instinct to check a
+suspiciously fast success was right even though the answer was fine.
+
+ONE DOOR HAD TWO NAMES. "Sign out" in both sidebars, "Log out" in the settings menu —
+differing by screen, which is exactly what LEXICON's retired table exists to stop. LEXICON
+now owns **Appearance** (with "Mode" explicitly reserved: it means the mentor's register)
+and **Sign out**, the settings menu was fixed, and a new pin enforces it across all three
+chrome files rather than one screen.
+
+Files changed: docs/COGNITION.md (the §1–§20 coverage table, two new wrong diagnoses),
+docs/BRAIN_FIRST_SCOPE.md (§9 and a header warning), docs/LEXICON.md (two words, two
+retirements), docs/DECISIONS.md, frontend/src/components/SettingsMenu.tsx (one word),
+tests/test_r79_lesson_screen.py (the lexicon pin, plus the new one-door rule).
+
+Tests run: python 1580 OK / 4 skipped (was 1579). tsc 0; vite build green. No backend
+change, so no deploy and no migration.
+
+Remaining concerns:
+
+- **Nothing here was verified live, because nothing here runs.** R104 is documentation and
+  one word of UI copy. The measurements behind it were read from production; the claims
+  they support are in the docs, not in code.
+- **The brain map's problem is unchanged and now written down.** A student still sees ~90
+  nodes of which ~5 are theirs, on the most prominent surface in the product. That is the
+  owner's accepted trade for this release, not a solved problem.
+- **`docs/BRAIN_FIRST_PLAN.md` (298 lines) still describes a build that has not started**
+  and now partly rests on assumptions §9 contradicts. It was left as-is: rewriting a plan
+  nobody is executing is the kind of tidying that costs a day and changes nothing.
+
+MEASURING THE POPULATION BEFORE DESIGNING A RULE ABOUT IT is three-for-three across this
+run: R103 rejected a twelve-word threshold that would have fired on 40% of the school,
+R101b did not build a chip that could not have fired on anyone, and R104 did not ship a fix
+to a surface whose usage nobody can measure. The query is cheap and it has changed the
+answer every single time. Worth making the habit explicit for whoever picks this up.
+
+Suggested next task: the roadmap is closed. What is left is not a release but three things
+the owner has to decide or observe — raise the sweep's per-tick limit (2, max 10; 2/tick
+caps at 192 pairs/day against 198 students) before the school is at full use; open a scored
+student's Thinking tab on desktop and on a phone and say what it looks like; and wait for a
+real student to trigger R100's probe, which has never fired.
+
 ## Claude -> Codex / Human - 2026-09-03 (R101b: §14 in the room)
 
 Status: Finished

@@ -2,6 +2,51 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-09-04: the rubric is finished, and the brain map is left alone on purpose
+
+R104 closes the roadmap that began at R90. Two decisions in it.
+
+**The rubric is complete.** Every section the Independent Cognitive Production Rubric asks
+for is live — §1 through §20, including all eight of §19's steering rules — except the
+part of §12 that needs client-side events the product does not emit (latency, revisions,
+speaking duration), which are not faked. `docs/COGNITION.md` now opens with a table saying
+which release closed each section and where it lives, so "is X built" is a lookup rather
+than an archaeology.
+
+**The brain map: leave it alone this release.** The decision deferred since the brain-first
+plan, put back to the owner with live numbers rather than a recommendation dressed as one.
+What was measured on production:
+
+- 132 published ideas; **17 have any evidence at all, school-wide**; the median student has
+  evidence on **5**, the busiest on 9.
+- **948 of the 953 mastery rows sit on ideas R97 minted one-per-lesson.** Only 5 of the 42
+  hand-authored ideas have ever been touched. The brain is lesson-grained, not
+  concept-grained — a lesson list wearing a graph's clothes.
+- `fetchIdeas` is **unscoped** (every published idea, `.limit(300)`) and `BrainGraph` draws
+  `.slice(0, 90)`, so a student sees ~90 nodes of which ~5 are theirs.
+- It is the **hero** of the student home, 420px, always rendered — so the most prominent
+  thing a student sees is ~94% lessons they may never open.
+- There is **no telemetry**: no client event table exists in the repo and the component
+  records nothing. Whether anyone uses it cannot be answered from data.
+
+Three fixes were costed — scope it to the student's own classes (~half a day, no schema
+change), build telemetry first, or demote it below the fold. The owner chose **none of
+them, this release**: the school is starting, and a half-day spent on the least-evidenced
+surface is a half-day not spent on the ones a teacher opens daily. The numbers and the two
+conditions that would change the answer are written into `docs/BRAIN_FIRST_SCOPE.md` §9, so
+revisiting is a read rather than a re-investigation.
+
+**A word the chrome used two ways.** "Sign out" in both sidebars, "Log out" in the settings
+menu — one door, two names, differing by screen, which is the exact thing LEXICON's retired
+table exists to stop. The lexicon now owns **Appearance** and **Sign out**, and a pin
+enforces the second across all three chrome files rather than one screen.
+
+**Measuring the population before designing a rule about it** is now three-for-three: R103
+rejected a twelve-word threshold that would have fired on 40% of the school, R101b did not
+build a chip that could not have fired on anyone, and R104 did not ship a brain-map fix on
+a surface whose usage nobody can measure. The measurement is cheap and it has changed the
+answer every time.
+
 ## 2026-09-03 (last): §14 beside every student, and the chip that was not built
 
 The room said what to DO about each student. It did not say what the saying rested on — a

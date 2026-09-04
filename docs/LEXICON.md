@@ -44,6 +44,8 @@ that does not map to a node should not exist.
 | **Evidence** | Anything derived from student work: mastery, ideas, vocabulary, digests. | Analytics, data, insights. |
 | **Publish** | Make a lesson visible to students. | Assign, release, share. |
 | **Draft** | Not yet published. A state, never a verb in the UI. | A proposal from the assistant — that is "proposed". |
+| **Appearance** | The dark/light control, in every menu that has one. | Theme, mode, display, dark mode. "Mode" is taken — it means the mentor's register (lesson / practice / discuss). |
+| **Sign out** | Ending the session. Two words, lower-case s on "out". | Log out, logout, sign-off, exit. |
 
 ## Retired words
 
@@ -57,6 +59,8 @@ that does not map to a node should not exist.
 | **Seeding** | A database word bundling demo logins, class creation and roster import. | Name the job being done. |
 | **Reference material** | A second name for material, scoped to one panel. | Material. |
 | **Activity** (in the UI) | The database name for a step. | Step. (`lesson_activities` stays as the table name.) |
+| **Dark mode** | Named one of the two states as if it were the feature. | **Appearance**, whose value is Dark or Light. |
+| **Log out** | A second name for the same door, differing by screen. | **Sign out** — and it pairs with "Sign in", which is what the door says. |
 | **Students** (as a room name) | Named the people but not the job; the room also held grades, sections and enrolment. R83 renamed it. | **People** — who is in the class, in what section, how each is doing. |
 
 ## The class's four screens (R83)
