@@ -79,10 +79,22 @@ grant select on public.cognition_sweep_runs to authenticated;
 create index if not exists cognition_sweep_runs_started_idx
   on public.cognition_sweep_runs (started_at desc);
 
--- 4. The schedule itself. pg_cron runs in UTC; every 15 minutes with a batch of 2 is
---    up to 8 pairs an hour, which drains a backlog in a morning and keeps a live
---    lesson's profile fresh enough for §19 to steer on. The secret is READ at fire
---    time, so it is never stored in the job command.
+-- 4. The schedule itself. pg_cron runs in UTC; the secret is READ at fire time, so it is
+--    never stored in the job command.
+--
+--    THE BATCH IS 10, AND THE BUDGET IS THE REAL CEILING (raised from 2 on 2026-09-04).
+--    `limit` is an upper bound, not a target: sweep() walks the queue SEQUENTIALLY and
+--    starts another pair only while `elapsed + slowestPairMs <= SWEEP_BUDGET_MS`
+--    (130s, inside this call's 150s timeout). So the batch size cannot make a tick
+--    overrun, cannot fan out concurrent judge calls, and cannot cost anything when the
+--    queue is short — a tick with two pairs waiting still does two.
+--
+--    Measured before the change, over the 16 runs that had work: 26.1 seconds per pair
+--    (average run 44.1s, slowest 93.7s). At that rate the 130s budget fits about FIVE
+--    pairs, so 10 buys roughly 5/tick = 20/hour = ~480/day, up from 192. It does not
+--    buy 10/tick, and raising this number further buys nothing at all: the next lever
+--    is the schedule (*/15 -> */10 or */5), which multiplies budgets instead of
+--    sharing one. Re-measure with the query in docs/COGNITION.md before touching either.
 create extension if not exists pg_cron;
 
 select cron.schedule(
@@ -91,7 +103,7 @@ select cron.schedule(
   $$
   select net.http_post(
     url := 'https://qztpieiizmiayzjhezwh.supabase.co/functions/v1/cognition-scorer',
-    body := '{"action":"sweep","limit":2}'::jsonb,
+    body := '{"action":"sweep","limit":10}'::jsonb,
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       -- The ANON key here is public (it ships in the frontend bundle); it only
