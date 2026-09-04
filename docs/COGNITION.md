@@ -436,6 +436,35 @@ Live probing found things review and 1454 offline pins did not.
   `share_unaided` read and the guard on mastery. Neither guard can fire on today's
   population, which is stated above rather than discovered later.
 
+## Sweep capacity, and the number that actually limits it
+
+The cron asks for a batch of **10** (raised from 2 on 2026-09-04). That is an upper
+bound, not a target, and the distinction is the whole point: `sweep()` walks the queue
+**sequentially** and starts another pair only while
+`elapsed + slowestPairMs <= SWEEP_BUDGET_MS` (130s, inside the call's 150s timeout). So a
+bigger batch cannot make a tick overrun, cannot fan out concurrent judge calls, and costs
+nothing when the queue is short — a tick with two pairs waiting still does two.
+
+**Measured over the 16 runs that had work, before the change: 26.1 seconds per pair**
+(average run 44.1s, slowest 93.7s). At that rate the 130s budget fits about **five** pairs,
+so the change buys roughly 5/tick → 20/hour → **~480 pairs a day, up from 192**. It does
+*not* buy ten a tick, and raising the number again buys nothing: the batch stopped being
+the constraint the moment it passed what the budget allows.
+
+The next lever, if 480/day is not enough, is the **schedule** (`*/15` → `*/10` or `*/5`),
+which multiplies budgets rather than sharing one. `SWEEP_BUDGET_MS` itself is the worst
+lever — its 20s of headroom under the gateway's 150s cut is what stops a tick being killed
+mid-write.
+
+Re-measure before touching either:
+
+```sql
+select count(*) as runs, sum(pairs_seen) as pairs,
+       round((sum(extract(epoch from (finished_at - started_at)))
+              / nullif(sum(pairs_seen), 0))::numeric, 1) as avg_seconds_per_pair
+from cognition_sweep_runs where finished_at is not null and pairs_seen > 0;
+```
+
 ## Operational state
 
 Everything in this document is live as of 2026-09-03.
@@ -443,7 +472,7 @@ Everything in this document is live as of 2026-09-03.
 | piece | status |
 |---|---|
 | `cognition-scorer` | live (**v17** — R101b's §14 counts and `not_held`; R103's `load_flag` before it) |
-| the ledger + sweep tables, `cognition-sweep` cron, the two-hour tail rule | live, firing every 15 minutes |
+| the ledger + sweep tables, `cognition-sweep` cron, the two-hour tail rule | live, firing every 15 minutes, **batch 10** |
 | the teacher console (Thinking tab without a button, room panel) | live |
 | `chat` — §19 steering, R100's probe opener, R103's BREAK IT DOWN, R101b's §14 guard | **live (v123)** |
 | `curriculum-admin` — R85 provider switch, R89 shared-book fix, R102's restored importer | **live (v45)** |

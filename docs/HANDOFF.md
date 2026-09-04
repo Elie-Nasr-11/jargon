@@ -6,6 +6,65 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## Claude -> Codex / Human - 2026-09-04 (the sweep's batch: 2 -> 10)
+
+Status: Finished
+Task: the owner's call, taken after R104 flagged it — raise the cognition sweep's per-tick
+batch before the school is at full use.
+
+Summary:
+
+DONE, LIVE AND IN THE REPO. The pg_cron job now posts `{"action":"sweep","limit":10}`. The
+live change was made with `cron.alter_job` rewriting the job's OWN command
+(`replace(command, '"limit":2', '"limit":10')`), so the public anon key and the sweep-key
+subquery embedded in it were never read, retyped or printed — verified afterwards that both
+are still intact, the job is still active on `*/15`, and the command grew by exactly one
+character. The migration carries the same number so a fresh environment gets it too.
+
+IT IS SAFE BY CONSTRUCTION, WHICH IS WHY IT NEEDED NO OTHER CHANGE. `sweep()` walks the
+queue SEQUENTIALLY and starts another pair only while
+`elapsed + slowestPairMs <= SWEEP_BUDGET_MS`. So a bigger batch cannot make a tick overrun,
+cannot fan out concurrent judge calls, and costs nothing when the queue is short — a tick
+with two pairs waiting still does two. `limit` is an upper bound, never a target.
+
+AND IT DOES NOT BUY TEN A TICK. Measured over the 16 runs that had work: **26.1 seconds per
+pair** (average run 44.1s, slowest 93.7s). At that rate the 130s budget fits about FIVE
+pairs, so this buys roughly 5/tick = 20/hour = **~480 pairs a day, up from 192**. Raising
+the number again buys nothing — the batch stopped being the constraint the moment it passed
+what the budget allows. Worth stating plainly because the flagged figure that prompted this
+("2 pairs per 15 min = 192/day against 198 students x 3 lessons") implied a 5x fix, and it
+is a 2.5x one.
+
+THE NEXT LEVER, IF 480/DAY IS NOT ENOUGH, IS THE SCHEDULE (`*/15` -> `*/10` or `*/5`), which
+multiplies budgets instead of sharing one. `SWEEP_BUDGET_MS` is the worst lever: its 20s of
+headroom under the gateway's 150s cut is what stops a tick being killed mid-write.
+
+Files changed: supabase/migrations/20260831140000_r92_cognition_sweep.sql (the body and a
+rewritten comment carrying the measurement), tests/test_r92_cognition_sweep.py (a new pin),
+docs/COGNITION.md (a "Sweep capacity" section with the re-measure query).
+
+A NEW PIN, and it states a rule the old ones did not: the cron's `limit` must not exceed the
+function's `SWEEP_BATCH_MAX`. A schedule asking for 25 would be silently clamped to 10, and
+the migration would then be documenting a throughput that never happens.
+
+Tests run: python 1581 OK / 4 skipped (was 1580). No function change, so no deploy; the
+migration replays idempotently on the next push that touches supabase/migrations/.
+
+Remaining concerns:
+
+- **The 26.1s/pair figure is from 27 pairs.** It is enough to say "ten is not ten" and not
+  enough to promise five. Re-measure once the school is at volume; the query is in
+  COGNITION.md.
+- **Nothing has exercised the new batch yet.** The queue is empty, so the next tick will do
+  what the last one did: nothing. The first real test is the first backlog.
+- **480/day is still short of 198 students x 3 lessons.** Not every student works every day
+  and a pair only surfaces at five responses, a probe, or a two-hour tail — so the real
+  demand is well below 594 — but the headroom is not large, and the schedule lever is the
+  one to reach for.
+
+Suggested next task: unchanged — the roadmap is closed. Open a scored student's Thinking tab
+on desktop and on a phone; and R100's probe still needs a real student to fire.
+
 ## Claude -> Codex / Human - 2026-09-04 (R104: the rubric is finished, and the brain map is measured)
 
 Status: Finished
