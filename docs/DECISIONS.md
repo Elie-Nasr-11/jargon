@@ -2,6 +2,19 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-09-04: a test that builds its own input cannot see a missing column (R105)
+
+`chat` loaded the student's cognition profile with an explicit column list that omitted the two
+columns added this week (`load_flag`, `share_unaided`). `learnerSteer` read both. Every property
+test passed, because every property test hands `learnerSteer` a profile it constructed itself.
+Two §19 guards were live in the room and inert in the mentor for a day and a half.
+
+- **The rule, pinned at the seam:** every profile field the steer reads must be in the select;
+  every field the select asks for must exist on the table. Neither half is a shape.
+- **The general lesson:** when a function's input comes from a query, a unit test that fabricates
+  the input tests the function and not the contract. The contract needs its own pin — one that
+  reads the query.
+
 ## 2026-09-04: the rubric is finished, and the brain map is left alone on purpose
 
 R104 closes the roadmap that began at R90. Two decisions in it.

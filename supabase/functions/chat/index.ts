@@ -5184,7 +5184,7 @@ async function loadContext(
       // input — absent (nothing scored yet) simply means no §19 steering this turn.
       loadFirst(
         config,
-        `cognition_profiles?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&limit=1&select=retrieval,organization,reasoning,elaboration,vocabulary,expression,independence,metacognition,scaffold_earlier,scaffold_recent,turns_scored,retention,transfer,probes_answered`,
+        `cognition_profiles?user_id=eq.${encodeURIComponent(userId)}&lesson_id=eq.${encodeURIComponent(lessonId)}&limit=1&select=retrieval,organization,reasoning,elaboration,vocabulary,expression,independence,metacognition,scaffold_earlier,scaffold_recent,turns_scored,retention,transfer,probes_answered,share_unaided,load_flag`,
       ).catch(() => null),
       // R100: has this session already asked its one probe (a reload must not ask a
       // second), and when was this student's last probe of any kind (the one-a-day gap).

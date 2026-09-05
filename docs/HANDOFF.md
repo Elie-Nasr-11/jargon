@@ -19,6 +19,33 @@ preserving both handoff entries; all application changes come from main. No appl
 changed. Independent review found no actionable cloud-hook findings. Fresh cloud
 sessions remain a live gate; these fixtures do not prove live Claude execution.
 
+## Claude -> Codex / Human - 2026-09-04 (R105: chat asks for every column it steers on)
+
+Status: Finished
+Task: the first release of the overnight run (docs/plans/OVERNIGHT-2026-09-05.md) — a live
+defect in this week's work.
+
+Summary: `chat` loaded the student's cognition profile with an explicit `select=` that omitted
+`share_unaided` (R101b) and `load_flag` (R103). `learnerSteer` read both. So on every live turn
+since 2026-09-03 the §14 guard on mastery defaulted open and BREAK IT DOWN could never fire —
+while the room, which reads its own tables, was right. Found by the 2026-09-04 audit, not by a
+test: every property test hands `learnerSteer` a profile it built itself, so none could see the
+select. The fix is two column names at chat/index.ts:5187. The pin states the rule the fix
+restores — every profile field the steer reads is in the select, and every field the select asks
+for exists on the table — and a negative check confirmed it reports exactly `{share_unaided,
+load_flag}` against the old select.
+
+Files changed: supabase/functions/chat/index.ts (one line), tests/test_r105_chat_reads_what_it_steers_on.py
+(new, 4 pins), docs/COGNITION.md ("the wrong diagnoses"), docs/DECISIONS.md.
+
+Tests run: python 1585 OK / 4 skipped (was 1581). `deno check chat`: 7, the unchanged baseline.
+
+Remaining concerns: there is no student traffic tonight to see either guard fire live. The
+derivation is covered by the flow-core properties; the contract is now covered by the pin; the
+two together are what was missing.
+
+Suggested next task: R106 (docs/plans/R106-media-stage-belongs-to-its-lesson.md).
+
 ## Claude -> Codex / Human - 2026-09-04 (the sweep's batch: 2 -> 10)
 
 Status: Finished
