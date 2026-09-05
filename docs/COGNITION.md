@@ -394,6 +394,15 @@ Live probing found things review and 1454 offline pins did not.
   a type error you will not read; and a feature can be "shipped" for weeks while its table
   is empty, because nothing on any screen says "zero rows" out loud. (R97 — the table now
   holds 953 rows across 198 students.)
+- **Two §19 guards shipped inert on the mentor side, and every test was green.** The scorer
+  wrote `load_flag` (R103) and `share_unaided` (R101b); `learnerSteer` read both; the profile it
+  was handed came from a `select=` in `chat` that named neither. So BREAK IT DOWN could never
+  fire on a live turn and the §14 guard on mastery always defaulted open, from 2026-09-03 until
+  the 2026-09-04 audit noticed. The property tests passed the whole time because they construct
+  the profile themselves — **a test that builds its own input cannot see a missing column.** The
+  pin now reads the select against the reads (`tests/test_r105_chat_reads_what_it_steers_on.py`),
+  so the next column added to `buildProfile` and read by `learnerSteer` fails the suite until
+  chat asks for it. The room side was right throughout; only the mentor was blind. (R105.)
 - **A 41-second green deploy.** Run #171 succeeded in less time than a deploy takes, which
   is exactly the shape of a workflow that ran nothing. It had not: the migration replay is
   deliberately skipped on function-only pushes (R50b), and the CLI no-ops on an unchanged
