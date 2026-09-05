@@ -13,10 +13,558 @@ Scope: `.claude` lifecycle hooks only; copy the reviewed dashboard implementatio
 at `56a3197` after production protocol 2 verification. Preserve all runtime code.
 Verification: 11 hook transport tests passed against this repository's copies;
 three canonical hashes match and secret/diff checks pass. Application checks ran
-from a clean HEAD archive because checkout fixture reads stalled: 1,539 unit tests
-ran (1,530 passed, 9 skipped), and all 136 examples passed. No application source
+from a clean merged-tree archive because checkout fixture reads stalled: 1,581 unit tests
+ran (1,572 passed, 9 skipped), and all 136 examples passed. Current main was merged,
+preserving both handoff entries; all application changes come from main. No application source
 changed. Independent review found no actionable cloud-hook findings. Fresh cloud
 sessions remain a live gate; these fixtures do not prove live Claude execution.
+
+## Claude -> Codex / Human - 2026-09-04 (the sweep's batch: 2 -> 10)
+
+Status: Finished
+Task: the owner's call, taken after R104 flagged it — raise the cognition sweep's per-tick
+batch before the school is at full use.
+
+Summary:
+
+DONE, LIVE AND IN THE REPO. The pg_cron job now posts `{"action":"sweep","limit":10}`. The
+live change was made with `cron.alter_job` rewriting the job's OWN command
+(`replace(command, '"limit":2', '"limit":10')`), so the public anon key and the sweep-key
+subquery embedded in it were never read, retyped or printed — verified afterwards that both
+are still intact, the job is still active on `*/15`, and the command grew by exactly one
+character. The migration carries the same number so a fresh environment gets it too.
+
+IT IS SAFE BY CONSTRUCTION, WHICH IS WHY IT NEEDED NO OTHER CHANGE. `sweep()` walks the
+queue SEQUENTIALLY and starts another pair only while
+`elapsed + slowestPairMs <= SWEEP_BUDGET_MS`. So a bigger batch cannot make a tick overrun,
+cannot fan out concurrent judge calls, and costs nothing when the queue is short — a tick
+with two pairs waiting still does two. `limit` is an upper bound, never a target.
+
+AND IT DOES NOT BUY TEN A TICK. Measured over the 16 runs that had work: **26.1 seconds per
+pair** (average run 44.1s, slowest 93.7s). At that rate the 130s budget fits about FIVE
+pairs, so this buys roughly 5/tick = 20/hour = **~480 pairs a day, up from 192**. Raising
+the number again buys nothing — the batch stopped being the constraint the moment it passed
+what the budget allows. Worth stating plainly because the flagged figure that prompted this
+("2 pairs per 15 min = 192/day against 198 students x 3 lessons") implied a 5x fix, and it
+is a 2.5x one.
+
+THE NEXT LEVER, IF 480/DAY IS NOT ENOUGH, IS THE SCHEDULE (`*/15` -> `*/10` or `*/5`), which
+multiplies budgets instead of sharing one. `SWEEP_BUDGET_MS` is the worst lever: its 20s of
+headroom under the gateway's 150s cut is what stops a tick being killed mid-write.
+
+Files changed: supabase/migrations/20260831140000_r92_cognition_sweep.sql (the body and a
+rewritten comment carrying the measurement), tests/test_r92_cognition_sweep.py (a new pin),
+docs/COGNITION.md (a "Sweep capacity" section with the re-measure query).
+
+A NEW PIN, and it states a rule the old ones did not: the cron's `limit` must not exceed the
+function's `SWEEP_BATCH_MAX`. A schedule asking for 25 would be silently clamped to 10, and
+the migration would then be documenting a throughput that never happens.
+
+Tests run: python 1581 OK / 4 skipped (was 1580). No function change, so no deploy; the
+migration replays idempotently on the next push that touches supabase/migrations/.
+
+Remaining concerns:
+
+- **The 26.1s/pair figure is from 27 pairs.** It is enough to say "ten is not ten" and not
+  enough to promise five. Re-measure once the school is at volume; the query is in
+  COGNITION.md.
+- **Nothing has exercised the new batch yet.** The queue is empty, so the next tick will do
+  what the last one did: nothing. The first real test is the first backlog.
+- **480/day is still short of 198 students x 3 lessons.** Not every student works every day
+  and a pair only surfaces at five responses, a probe, or a two-hour tail — so the real
+  demand is well below 594 — but the headroom is not large, and the schedule lever is the
+  one to reach for.
+
+Suggested next task: unchanged — the roadmap is closed. Open a scored student's Thinking tab
+on desktop and on a phone; and R100's probe still needs a real student to fire.
+
+## Claude -> Codex / Human - 2026-09-04 (R104: the rubric is finished, and the brain map is measured)
+
+Status: Finished
+Task: the roadmap's last item — COGNITION.md up to the finished rubric, the mastery write
+that never wrote into "the wrong diagnoses", the two words LEXICON was missing, and the
+deferred brain-map decision put back to the owner with live numbers.
+
+Summary:
+
+THE RUBRIC IS COMPLETE. Every section §1–§20 is live, including all eight of §19's
+steering rules, except the part of §12 that needs client-side events the product does not
+emit — latency, revisions and speaking duration — which are not faked. COGNITION.md now
+opens with a table: which § asks for what, where it lives, and which release closed it. "Is
+X built" is a lookup now, not an archaeology.
+
+THE BRAIN MAP, MEASURED AND THEN LEFT ALONE. The decision deferred since the brain-first
+plan was put back to the owner with numbers rather than a recommendation dressed as one:
+  * 132 published ideas; **17 have any evidence at all, school-wide**; the median student
+    has evidence on 5, the busiest on 9.
+  * 948 of the 953 mastery rows sit on ideas R97 minted one-per-lesson. Only 5 of the 42
+    hand-authored ideas have ever been touched. The brain is LESSON-grained, not
+    concept-grained — a lesson list wearing a graph's clothes.
+  * `fetchIdeas` is unscoped (every published idea, `.limit(300)`); `BrainGraph` draws
+    `.slice(0, 90)`. A student sees ~90 nodes of which ~5 are theirs.
+  * It is the HERO of the student home, 420px, always rendered — so the most prominent
+    thing a student sees is ~94% lessons they may never open.
+  * No telemetry exists: no client event table in the repo, nothing recorded by the
+    component. Whether anyone uses it cannot be answered from data.
+Three fixes were costed (scope it to the student's classes, ~half a day and no schema
+change; build telemetry first; demote it below the fold). The owner chose NONE this
+release: the school is starting, and a half-day on the least-evidenced surface is a
+half-day not spent on the ones a teacher opens daily. The numbers, and the two conditions
+that would change the answer, are now `docs/BRAIN_FIRST_SCOPE.md` §9 — revisiting is a read
+rather than a re-investigation. That file's header now warns that the gap between what it
+plans and what exists is large.
+
+THE WRONG DIAGNOSES GAINED THE WORST ONE. The idea-mastery table held zero rows for its
+entire life and three faults hid each other: a three-argument call to a four-argument
+`upsertRows` sent `?on_conflict=undefined`, PostgREST rejected it, and a bare `catch {}`
+swallowed the rejection — while `deno check` reported it as a TS2554 the whole time, inside
+the "8 pre-existing errors" nobody re-read. Fixing the call alone would have changed almost
+nothing (973 of 992 graded attempts sat on lessons with no authored ideas) and the EMA
+seeded from 0. The lessons are now written where the other wrong diagnoses are: a swallowed
+write is worse than a failed one, a type error you have decided to tolerate is one you will
+not read, and a feature can be "shipped" for weeks while its table is empty. The 41-second
+green deploy from R101b is beside it, for the same reason — the instinct to check a
+suspiciously fast success was right even though the answer was fine.
+
+ONE DOOR HAD TWO NAMES. "Sign out" in both sidebars, "Log out" in the settings menu —
+differing by screen, which is exactly what LEXICON's retired table exists to stop. LEXICON
+now owns **Appearance** (with "Mode" explicitly reserved: it means the mentor's register)
+and **Sign out**, the settings menu was fixed, and a new pin enforces it across all three
+chrome files rather than one screen.
+
+Files changed: docs/COGNITION.md (the §1–§20 coverage table, two new wrong diagnoses),
+docs/BRAIN_FIRST_SCOPE.md (§9 and a header warning), docs/LEXICON.md (two words, two
+retirements), docs/DECISIONS.md, frontend/src/components/SettingsMenu.tsx (one word),
+tests/test_r79_lesson_screen.py (the lexicon pin, plus the new one-door rule).
+
+Tests run: python 1580 OK / 4 skipped (was 1579). tsc 0; vite build green. No backend
+change, so no deploy and no migration.
+
+Remaining concerns:
+
+- **Nothing here was verified live, because nothing here runs.** R104 is documentation and
+  one word of UI copy. The measurements behind it were read from production; the claims
+  they support are in the docs, not in code.
+- **The brain map's problem is unchanged and now written down.** A student still sees ~90
+  nodes of which ~5 are theirs, on the most prominent surface in the product. That is the
+  owner's accepted trade for this release, not a solved problem.
+- **`docs/BRAIN_FIRST_PLAN.md` (298 lines) still describes a build that has not started**
+  and now partly rests on assumptions §9 contradicts. It was left as-is: rewriting a plan
+  nobody is executing is the kind of tidying that costs a day and changes nothing.
+
+MEASURING THE POPULATION BEFORE DESIGNING A RULE ABOUT IT is three-for-three across this
+run: R103 rejected a twelve-word threshold that would have fired on 40% of the school,
+R101b did not build a chip that could not have fired on anyone, and R104 did not ship a fix
+to a surface whose usage nobody can measure. The query is cheap and it has changed the
+answer every single time. Worth making the habit explicit for whoever picks this up.
+
+Suggested next task: the roadmap is closed. What is left is not a release but three things
+the owner has to decide or observe — raise the sweep's per-tick limit (2, max 10; 2/tick
+caps at 192 pairs/day against 198 students) before the school is at full use; open a scored
+student's Thinking tab on desktop and on a phone and say what it looks like; and wait for a
+real student to trigger R100's probe, which has never fired.
+
+## Claude -> Codex / Human - 2026-09-03 (R101b: §14 in the room)
+
+Status: Finished
+Task: put §14's independence evidence and the delayed-check counts into the class view, and
+close the places where the room and the mentor would say different things about one child.
+
+Summary:
+
+THE RELEASE WAS PLANNED AS A CHIP AND THE LIVE DATA KILLED IT. It was to be a positive
+"looks strong, but only with help" marker. Measured on production BEFORE building anything:
+zero of the nineteen profiles are mastery-shaped, and zero of the fifteen eligible have no
+weak dimension. Every read student today is Leaning on the tutor (5) or needs (10);
+`mastered` and `steady` are EMPTY GROUPS in production. A chip gated on "looks strong"
+could not have fired on anyone — an unfalsifiable rule, which is what R103's twelve-word
+threshold nearly shipped from the other direction. Measuring the population before
+designing a rule about it is now two-for-two, and it is worth making a habit.
+
+SO §14 BECAME A NUMBER, NOT A GROUP. Every read student's chip carries the count of their
+answers that had no help before them, over its own denominator — `2/14`, amber below a
+quarter, with the sentence and "never checked a day later" in the tooltip. Never a
+percentage: "2 of 14" and "14%" are different claims and the second hides what decides how
+much the first is worth. The share is one fraction over one denominator across every
+lesson, not a mean of per-lesson shares, which would weight a three-response lesson like a
+thirty-response one. `probes_answered` reads zero for the whole school; rendering nothing
+would have looked like "fine", when it means nobody has ever asked these students cold.
+
+TWO GUARDS, AND BOTH CLOSED DISAGREEMENTS THAT ALREADY EXISTED IN CODE.
+1. §11. Since R100, `chat` has told the mentor CONSOLIDATE, DO NOT FADE for a student
+   strong in the lesson whose delayed check found nothing — while this view went on calling
+   them "ready for harder ground". That is exactly the contradiction R93 says is worse than
+   having no room view. The room now has the matching group, "It did not stick", ranked
+   immediately before the reading it corrects.
+2. §14. Mastery, in BOTH files, now additionally requires having been seen working alone.
+   One number, `MASTERY_MIN_SHARE_UNAIDED`, cross-pinned across chat, cognition-scorer and
+   room.ts so the chip and the mentor cannot disagree about who is on which side of it.
+
+A GUARD IS WHERE AN UNCALIBRATED NUMBER BELONGS. That threshold has never had a student to
+withhold from, so it is unmeasured — and it can only ever take away an optimistic label,
+never assert something about a child. That asymmetry is the whole reason it shipped and the
+chip did not. Absent evidence does not block, matching R100's posture for retention and
+transfer: it fires on evidence of low independence, never on its silence.
+
+R93's RULE HELD, LITERALLY: retention and transfer are read in `rollUpStudent` to decide
+whether the reading held, and deliberately NOT returned on RoomStudent. They are dimension
+values and no dimension value may reach the room. A pin asserts both halves.
+
+A PIN MOVED, for the eleventh release running, and it was a shape again. R93's mastery pin
+sliced between the branch's `else if (` and its assignment, expecting three dimension names
+inline; lifting the condition into a named predicate broke it. It was pinning where the
+code sat rather than what it read, and now reads everything from the top of the rollup to
+the assignment.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (MASTERY_MIN_SHARE_UNAIDED and
+the two probe thresholds, class_view selects the §14 and probe columns, rollUpStudent
+aggregates and gains not_held plus the mastery guard), supabase/functions/chat/index.ts
+(the §14 guard on mastery), frontend lib/api.ts + cognition/room.ts (MOSTLY_SUPPORTED_BELOW,
+mostlySupported, unaidedLabel, independenceNote, the not_held group, refreshed steady copy)
++ cognition/ClassRoomPanel.tsx (the chip and its tooltip), tests/room_view.test.ts (+5),
+tests/flow_core.test.ts (+5), tests/test_r101b_room_independence.py (new, 15 pins),
+tests/test_r93_class_room.py (re-expressed), docs/COGNITION.md + DECISIONS.md.
+
+Tests run: python 1579 OK / 4 skipped (was 1564). Deno: flow-core 55, room 32, thinking 20.
+tsc 0; eslint src 0 errors (36 pre-existing warnings); vite build green. `deno check`:
+cognition-scorer CLEAN, chat 7 — the unchanged pre-existing baseline.
+
+Live, after the merge (deploy run #171 green): NO MIGRATION — every column this reads
+(`unaided_count`, `probes_answered`, `retention`, `transfer`) arrived with R100, so CI
+correctly skipped the replay (R50b's rule: function-only pushes do not replay) and the
+deploy carried no schema risk. The deployed builds were read back rather than assumed:
+`cognition-scorer` **v17** carries `strongOnTheThree`, the `not_held` group,
+`seenWorkingAlone`, the §14 columns in the class-view select and `not_held: 0` in the room
+summary; `chat` **v123** carries `MASTERY_MIN_SHARE_UNAIDED`, the `share_unaided` read and
+the guard on mastery. Only the two changed functions bumped version; the CLI no-ops on an
+unchanged bundle hash, which is why the run took 41 seconds and not three minutes.
+
+Remaining concerns:
+
+- **Neither guard can fire today, by construction.** No student is mastery-shaped, so
+  nothing has ever met the rest of the rule for either to withhold from, and no probe has
+  ever been answered. They are correctness against the day the population changes, not
+  features. The visible half — the `2/14` chip and the "never checked" note — works now and
+  is the only part a teacher will see this week.
+- **MASTERY_MIN_SHARE_UNAIDED is unmeasured.** A quarter is a judgement, not a measurement,
+  because there is nobody to measure it against. Re-derive it the first time a real student
+  clears the three dimensions; the query is share_unaided over cognition_profiles.
+- **share_unaided is bimodal on production** — median 0.23, p25 0.05, p75 1.00, two students
+  at exactly 0. Whatever the threshold becomes, it is separating two clusters, not cutting
+  a smooth distribution.
+- **Not done:** the Thinking tab still does not show R103's load flag (noted last release,
+  still true), and the room's `2/14` has not been seen at 390px by anyone.
+
+Suggested next task: R104 (docs rewrite + the brain-map decision, which needs the owner's
+call and is now the last item on the roadmap).
+
+## Claude -> Codex / Human - 2026-09-03 (R103: §19's eighth rule, cognitive load)
+
+Status: Finished
+Task: ship the last unshipped rubric rule — "if cognitive load appears excessive, break the
+task into smaller steps". Seven of §19's eight steered the mentor before this.
+
+Summary:
+
+WHY IT COULD NOT BE READ OFF THE EIGHT DIMENSIONS. Overload and weakness produce the same
+dimension scores and need opposite responses. A student who finds the work hard produces
+weak answers; an OVERLOADED student produces almost nothing while the tutor carries the
+turn. The only thing separating them is how much came back — so the flag needs both halves
+over the last six judged responses: more than half heavily scaffolded (S3+, §14's own
+"supported" line) AND more than half short. Either alone is a different student, and the
+conjunction is pinned; an `||` there would flag every heavily-scaffolded child in the
+school.
+
+THE LIVE CORPUS MOVED A THRESHOLD, AND THAT IS THE PART WORTH KEEPING. The draft said
+twelve words. Measured against the 132 judged responses on production, the median response
+is ELEVEN words — twelve put "short" above the middle of the distribution and would have
+fired on 6 of the 15 eligible (student, lesson) pairs. A rule that fires on 40% of a school
+describes the corpus rather than finding anything in it. Eight words (one clause, no room
+for a "because") sits at the 25th percentile, fires on nobody today, and leaves three pairs
+one response away from it — `camp-math-l1` and `camp-hist-l1` at heavy 5/6, short 3/6. A
+python pin now asserts the RULE — short must be shorter than typical — against the median
+COGNITION.md records, so the number and its justification cannot be moved apart. This was
+found by querying the ledger before shipping, not by a test.
+
+THE ROOM NEEDED THE GROUP, IT IS NOT DECORATION. Without one, an overloaded student lands
+under "needs: elaboration" — and their elaboration IS weak, because the task is too big.
+Reteaching it is the wrong instruction, so the group is what stops the view giving bad
+advice. A student who is BOTH carried and overloaded is grouped as "Leaning on the tutor",
+which is also the order learnerSteer pushes the two moves in, so the room never names a
+different first move than the one the mentor is making.
+
+TWO PINS MOVED, for the tenth release running, and both were shapes:
+1. R93's group-order pin listed the five groups in order and failed for the sixth existing.
+   It now asserts the rule: alarms before teachable before opportunity, unread last.
+2. R91's "no move names the measurement" pin sliced the whole STEER_MOVES block INCLUDING
+   comments, and failed because the new move's comment says it is "not keyed on a
+   dimension". It now reads the string literals — which is the only text a student could
+   ever be shown — and additionally forbids digits in every move, which the old version
+   never checked.
+
+Also added, unasked but in the same spirit: tests/test_r93_room_view.py now asserts that
+every Deno.test in room_view.test.ts actually ran, matching the Pillar-4 harness. A green
+suite that silently filtered half its properties was possible there and is not now.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (LOAD_* constants, buildProfile
+derives load_flag/load_signals, wordsOf, class_view selects load_flag and groups on it),
+supabase/functions/chat/index.ts (STEER_MOVES.load, learnerSteer reads the flag, mastered
+requires !loaded), supabase/migrations/20261105000000_r103_cognitive_load.sql (new) +
+.github/workflows/deploy-backend.yml, frontend lib/api.ts + cognition/room.ts (the
+"Overloaded" group, its rank and the headline), tests/flow_core.test.ts (+7),
+tests/room_view.test.ts (+4), tests/test_r103_cognitive_load.py (new, 27 pins),
+tests/test_r91_cognition_steer.py + tests/test_r93_class_room.py + tests/test_r93_room_view.py
+(re-expressed), docs/COGNITION.md + DECISIONS.md.
+
+Tests run: python 1564 OK / 4 skipped (Flask, pre-existing) — was 1537. Deno: flow-core 50,
+room 27, thinking 20. tsc 0 errors; eslint src 0 errors (36 pre-existing warnings); vite
+build green. `deno check`: cognition-scorer CLEAN, chat 7 errors — identical to the
+pre-existing baseline, none in or near the changed lines.
+
+Live, after the merge (deploy run #170 green, tests #418 green, live smoke #54 green):
+the migration was applied by hand as R97/R100/R101 were, both columns exist with their
+not-overloaded defaults across all 19 profiles, and `notify pgrst, 'reload schema'` was
+issued so the first sweep after the DDL cannot fail with PGRST204 on the profile upsert —
+that write is uncaught, so a stale schema cache would have stopped scoring outright. The
+deployed builds were then READ BACK rather than assumed: `cognition-scorer` **v16** carries
+the eight-word threshold, `buildProfile`'s two writes, `wordsOf`, the `load` group and
+`load_flag` in the class-view select; `chat` **v122** carries BREAK IT DOWN,
+`profile.load_flag === true` and the `!loaded` guard on mastery.
+
+Remaining concerns:
+
+- **The rule has never fired on a real student.** By construction: it fires on nobody in
+  today's 132 rows. That is the calibration working, but it means the end-to-end path
+  (flag -> steer -> room group) is proven only by property tests and the SQL counterfactual,
+  not by a live case. The first genuinely overloaded student will be the real test, and the
+  numbers to re-run are in COGNITION.md.
+- **The threshold is calibrated on 132 responses from a handful of students.** That is
+  enough to reject twelve and not enough to be confident in eight. Re-measure once the
+  school is at volume; the query is a percentile over `signals->>'words'`.
+- **Not done deliberately:** the Thinking tab does not show the flag. The room is where §19
+  groups live and where the wrong-advice problem was; putting a per-lesson overload marker
+  on the student view is a small follow-up (LessonLine gains a boolean) if the owner wants it.
+
+Suggested next task: R101b (§14 in the room — the watch marker and later-recall counts in
+class_view), then R104 (docs rewrite + the brain-map decision, which needs the owner's call).
+
+## Claude -> Codex / Human - 2026-09-03 (archive docs: Canvas and Classroom stay deployed)
+
+Status: Finished
+Task: record the owner's decision — "lets not remove the google and canvas" — in the archive
+docs, which said the opposite.
+
+Summary: archiving the source of the two LMS integrations and dropping them from the deploy
+workflow stopped them being *updated*. It did not undeploy them. Both still answer requests
+at their function URLs (canvas v17, google-classroom v18), verified against the live function
+list, and their OAuth secrets are still set on the project. The archive docs had drifted from
+that in three places: `archive/README.md` told the reader that "nothing reads them" and that
+removing the env vars was "worth doing for its own sake"; the Canvas NOTES said "consider
+removing them"; the Classroom NOTES called its registered redirect URI "inert" and said it
+"should be cleaned up". All three now say what is true — the functions are live on purpose,
+the env vars are deliberately kept, and restoring either one is cheaper than the general
+restore steps because the function is already deployed. The README also names the only path
+to deleting a deployed function (a manual-dispatch workflow, since the account access token
+lives only as a repository secret) for whoever revisits the trade.
+
+Files changed: archive/README.md, archive/canvas-lms/NOTES.md,
+archive/google-classroom/NOTES.md.
+
+Tests run: none — documentation only, and no test reads these files.
+
+Remaining concerns: the trade the owner accepted is that anyone with a function URL and a
+valid JWT can still reach both integrations. Their tables are empty and their actions all
+require an authenticated caller, so the exposure is the code path, not data.
+
+Suggested next task: R103 (§19's cognitive-load rule), which is the next unshipped item on
+the roadmap.
+
+## Claude -> Codex / Human - 2026-09-03 (R102: the trim, and the archive that remembers)
+
+Status: Finished
+Task: act on the feature audit — keep everything thin, cut the weekly digest, keep the OCR
+path and archive the rest, annotated well enough to bring any of it back knowingly.
+
+Summary:
+
+WHAT LEFT, AND WHERE IT WENT. A new `archive/` tree holds 4,745 lines across five folders,
+each with the code and a NOTES.md: what it did, why it left, what still exists that it
+depends on, what changed underneath it since, and numbered restore steps. Canvas LMS (2,046
+lines, 16 actions) and Google Classroom (1,189 lines, 10 actions) went whole — neither had a
+single caller and all eleven of their tables are empty. Eight of the thirteen
+resource-processing actions went. The five curriculum template actions went. The weekly
+digest went, with its card, its handler, its fetcher, its types and its test.
+
+NO TABLES WERE DROPPED. Every archived feature's tables stay, empty, so a restore is
+code-only — no migration, no backfill. That is the whole reason the archive is cheap. The
+canvas/classroom migrations are still in the deploy list, so a fresh environment still gets
+the schema. Dropping any of it is a separate, deliberate, irreversible step nobody has asked
+for.
+
+TWO CORRECTIONS THE WORK FORCED, and both are worth carrying forward.
+
+1. "Keep only the OCR" was not possible as stated. `ocr_pdf_pages` READS
+   `resource_page_assets` — written by `save_pdf_page_assets`, fed by the browser's PDF page
+   renderer — and WRITES `resource_text_chunks`, which only `list_resource_chunks` reads
+   back. Keeping the single named action would have preserved a function that can never
+   execute and whose output nothing can read. Three actions stayed: that minimal runnable
+   chain. The NOTES lead with the diagram.
+
+2. "No frontend caller" is not "no caller". The audit flagged `import_curriculum` as dead.
+   It is the book importer, driven from `scripts/import-curriculum.mjs` and
+   `tools/book-import/` — the path that put both IT Frontiers books into production. It was
+   archived and restored inside the same release; its own tests (R58, R61) caught it, not
+   the audit. Every other archived action was then re-checked against `scripts/`, `tools/`,
+   the other edge functions and cron, and all of them held up. docs/FEATURE_INVENTORY.md now
+   carries this correction at the top.
+
+A PIN MOVED, for the ninth release running, and for the usual reason. R48's
+`allow_live_artifacts` pin listed three code shapes; two of them lived inside the template
+handlers that were archived, and the live lesson-write path was never at risk. It now
+asserts the rule instead of the shapes.
+
+Files changed: archive/** (new: README + 5 folders, 16 files), supabase/functions/canvas and
+google-classroom (moved out whole), resource-processing/index.ts (-457 lines, 5 actions
+left), curriculum-admin/index.ts (-231 net: 4 template handlers out, importCurriculum back
+in), admin-ops/index.ts (-233, the digest), .github/workflows/deploy-backend.yml, frontend
+ClassDigestCard (moved) + TodayScreen + api.ts + types.ts, six test modules re-expressed,
+docs/FEATURE_INVENTORY.md + DECISIONS.md.
+
+Tests run: python 1537 OK / 4 skipped (was 1561 — the digest's own 24 pins went to the
+archive with it) · tsc 0 · eslint src 0 errors (36 pre-existing warnings) · vite build green
+· deno harnesses flow, room and thinking all green · deno check clean on
+resource-processing and curriculum-admin, and admin-ops unchanged at its 2 pre-existing
+errors (TS2769 + TS2339, verified identical at HEAD before the edit).
+
+Remaining concerns:
+- The two archived integrations' OAuth client secrets are still set as env vars on the
+  Supabase project. Nothing reads them now. Removing them is an owner-side action worth
+  taking — the credential you do not hold cannot leak.
+- The three orphan production functions (key-probe-oneoff, ops-probe-r49, deploy-probe-r90)
+  are still deployed; they have no source in this repo and were not part of this release.
+- 26 empty tables from archived and never-built features remain. Deliberate.
+- Not deployed yet: this needs a merge to main for the backend functions to redeploy.
+
+Suggested next task: R103 (§19's cognitive-load move) and R104 (docs + the brain-map
+decision), both unchanged by this release.
+
+## Claude -> Codex / Human - 2026-09-03 (R101: the Thinking tab just shows)
+
+Status: Finished
+Task: the owner, looking at the live Thinking tab — "lets have it just show. not as an
+action you need to click and analyze … a total breakdown of these for all their work and
+progress over time, and a selector to see a breakdown of specific lessons, units, and
+classes … design it in a way thats bang for buck."
+
+Summary:
+
+TWO THINGS MADE "JUST SHOW" FALSE AT THE ROOT, and neither was cosmetic. The sweep queue
+never finished a lesson: it surfaced a (student, lesson) pair only at five new responses
+(or a probe), so a tail of one to four responses waited forever — measured live, nine
+such pairs holding eighteen responses across two students, every one older than two
+hours, while the sweep had run 96 times in a day and scored nothing. The "Read the
+thinking" button was the only thing reading them, which is exactly the click the owner
+asked to remove. And there was no cross-lesson read at all: `profile` required a lesson
+id, `storedScores` was lesson-scoped, and `cognition_profiles` has one row per lesson
+with no history, so "all their work" and "over time" had no data path.
+
+THE QUEUE NOW OWES COMPLETENESS. `cognition_sweep_queue` gained a third condition on its
+one HAVING line: a pair surfaces two hours after its last constructed response, at
+whatever count. One short judge call per abandoned tail (under five responses by
+definition); the sweep already orders by last activity, so live work goes first and aged
+tails drain in the idle ticks. The thirty-day window stays — the 149 responses beyond it
+predate the ledger. Applied to production by hand (as R97/R100 were) and in the deploy
+list: the moment it landed the queue showed the nine pairs.
+
+ONE READ, NUMBERS AND IDS ONLY. A new scorer action `student_view {user_id}` returns every
+judged response of a student as levels and ids — `STUDENT_VIEW_COLUMNS` never names
+`evidence`, `signals` or `note` (pinned); the quotes stay on the per-lesson `profile`
+read, fetched only when a lesson is selected. The read is paged (PostgREST's max-rows is
+1000 and `selectAll` cannot tell when it is cut) newest-first with a named cap of 5,000,
+deduplicated by id (a sweep INSERT between two pages shifts the later page — newest-first
+turns that into a duplicate, never a miss) and reversed to chronological; `truncated` is
+returned and the panel says so. Authorization is on the student, so no scope reaches the
+server.
+
+EVERY SCOPE IS COMPUTED WHERE THE DATA ALREADY IS. `cognition/thinking.ts` (new, pure,
+deno-tested) builds the scope groups from the one payload plus the lesson catalogue and
+the class→course links the console already holds: Everything / Classes (this student's
+active memberships among the teacher's classes, the class the teacher came from first;
+a lesson is in a class iff its course is one the class links — the room's own strict
+rule, so the two views agree; no links = everything; links still loading = no Classes
+group rather than a wrong one for a moment) / Units / Lessons, each with its count, and
+an option with nothing in it is never offered. Switching scope costs no request. The
+eight dimensions are the median over every response in the scope — deliberately not
+buildProfile's last-ten, which feeds §19 and must react to now; a last-ten window would
+make Everything equal to the latest lesson. Recency lives beside each dimension: a line
+BY SITTING (one session is one point, the running middle of the last five so one bad
+afternoon is a dip, not a spike; a sitting with no value is a hole, never an
+interpolated slope) and "first → now" from the earlier half of their sittings against
+the later half, shown at four or more. The §16/§14 pattern ("work that holds up while
+the tutor carries it") is called only at three lessons and two concurring signals, and
+it names them; it steers nothing. The whole-student reading is a deterministic sentence
+built from the numbers — the owner chose it over a model-written narrative (offered
+sweep-refreshed or on-open) — counts beside their denominators, a share in words, never
+a percentage. A lesson keeps the judge's own narrative and its response-by-response
+list with evidence, unchanged.
+
+THE FOUR THRESHOLDS the browser shares with the scorer are named the same in both files
+and cross-pinned, the R93/R100 pattern. The sparkline is inline SVG with `role="img"`
+and words for a screen reader (no chart library — R82). On a 390px phone the line wraps
+under the pills (R98's rule: min-w-0, flex-wrap).
+
+Owner decisions taken during planning (AskUserQuestion): deterministic reading; one
+sitting = one point; default scope Everything; no manual refresh at all.
+
+Files changed: supabase/functions/cognition-scorer/index.ts (selectPaged, the R101
+constants, studentView, the router line), supabase/migrations/20261104000000_r101_sweep_aging.sql
+(new), .github/workflows/deploy-backend.yml (the list), frontend/src/lib/api.ts
+(fetchStudentThinking + wire types; scoreCognitionLesson deleted — a dead export is how
+the button comes back), frontend/src/features/teacher/cognition/thinking.ts (new),
+console/CognitionPanel.tsx (rebuilt around the scope selector; ResponseEvidence and
+AttributionColumn untouched and adjacent, which the R99 slice pin needs),
+StudentDetail.tsx + TeacherConsole.tsx (classId and classLinks threaded),
+tests/thinking_view.test.ts (new, 20 deno properties), tests/test_r101_thinking_view.py
+(new, 21 pins + the deno runner), tests/test_r100_probe.py (one pin re-expressed as the
+rule it meant), docs/COGNITION.md, docs/DECISIONS.md, .gitignore (frontend/dist-mock/).
+
+Tests run: python 1561 OK / 4 skipped (was 1539) · deno thinking properties 20/20, room
+23/23, flow 43/43 · tsc 0 · eslint src 0 errors (36 pre-existing warnings) · vite build
+green · deno check on the scorer clean (chat untouched, baseline 7) · mock walk
+(scratchpad/walk_r101.mjs) at 1440×900 and 390×844: no "Read the thinking" button, the
+select lists Everything / 2 classes / 2 units / 3 lessons with counts, the reading and
+the delayed-checks tally render, 10 sparklines and 8 first→now arrows, unit scope and
+lesson scope switch instantly, lesson scope shows the narrative and six evidence
+disclosures, no `%` anywhere in the panel, scrollWidth === innerWidth on the phone, no
+page errors. Live, after the merge (PR #100, squash-merged; deploy run #168 green in two minutes;
+`cognition-scorer` v14, verify_jwt off; Render rebuilt the site at 09:17:51Z and its
+teacher chunk carries `student_view` with no trace of the old button): the queue
+migration, applied by hand before the merge, showed the nine aged pairs at once and the
+next five sweep ticks (09:15–10:15 UTC) saw 9 pairs, scored 9, 18 responses, 0 errors —
+queue 0 / 0 afterwards, ledger 113 → 131 rows. The rule worked on the scorer that was
+already live; nothing about it needed the new code.
+
+Remaining concerns:
+- The deployed `student_view` path is confirmed by version and bundle, not by a signed-in
+  open: there are no teacher credentials in this session and the sign-in page carries no
+  demo accounts by design (R98). The check that remains is the owner opening any scored
+  student's Thinking tab once on desktop and once on a phone. A rig teacher by SQL was
+  offered and not chosen — it is a production write and would put a real student's name
+  on a screenshot.
+- Sweep capacity, not the tail rule, is the ceiling: 2 pairs per 15 minutes is 192 pairs
+  a day, and 198 students × 3 lessons/day would exceed it. The knob is the cron body's
+  `"limit"` (up to SWEEP_BATCH_MAX = 10). Untouched here; worth a decision before the
+  school is at full use.
+- Aged tails sit behind fresher pairs in the queue's order and drain in quiet hours.
+- The order of sittings uses the time the judge read the work, up to two hours behind
+  the work itself. Sittings themselves key on the session id and are exact.
+- An unlinked class is an option whose count equals Everything; kept, because hiding
+  the class would read as a bug.
+- Still open from R100: the probe path unproven against a real student on a rig.
+
+Suggested next task: R101b (the room's "watch" marker and later-recall counts in
+class_view, server-side, no dimension value in the room), then R102 (§19's cognitive-load
+move), then R103 (docs + the brain-map decision with live numbers).
 
 ## Claude -> Codex / Human - 2026-09-03 (R100: the delayed unaided ask)
 

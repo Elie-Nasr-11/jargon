@@ -2953,6 +2953,13 @@ export type CognitionSteer = {
 // if the two files drift — they cannot import each other.
 const RETENTION_WEAK_AT_OR_BELOW = 2;
 const TRANSFER_HOLDS_AT_OR_ABOVE = 2;
+// R101b / §14: "a learner who performs well only when substantial AI support is available
+// should NOT be classified as independently proficient." The eight dimensions cannot see
+// this alone — a student can word an answer independently while the tutor supplies the
+// content, and the blended median reads the same either way. So fading additionally
+// requires having been SEEN working alone. A guard, never a marker: it can only withhold
+// an optimistic label, which is the right place for a number nothing has calibrated yet.
+const MASTERY_MIN_SHARE_UNAIDED = 0.25;
 const STEER_PRIORITY = [
   "retrieval",
   "reasoning",
@@ -2978,6 +2985,11 @@ const STEER_MOVES: Record<string, string> = {
     "ASK THEM TO REFORMULATE: the thinking is sound and the wording is what slips. Ask them to say it again more clearly in their own words — never rewrite it for them.",
   metacognition:
     "ASK THEM TO CHECK THEMSELVES: before you confirm or correct, ask how sure they are and what would make them surer.",
+  // R103 / §19's eighth rule. Not keyed on a dimension: overload is a state of the TASK
+  // against this student right now, and the scorer decides it from how much help they
+  // are taking and how little comes back (see cognition-scorer's LOAD_WINDOW).
+  load:
+    "BREAK IT DOWN: they are being handed a lot and giving back very little, which is what a task too big to hold at once looks like — not laziness, and not a student who does not care. Ask for ONE thing at a time: one step, one sentence, one example. Wait for that piece before you introduce the next, and never stack a new question on top of one they have not answered.",
 };
 
 function steerDim(profile: DbRow, key: string): number | null {
@@ -3030,6 +3042,17 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
   // says, and cannot be called mastered.
   const retention = steerDim(profile, "retention");
   const transfer = steerDim(profile, "transfer");
+  // §14's own statistic: the share of their answers that had no help before them. Absent
+  // evidence does not block, the same posture the two probe guards take — this fires on
+  // evidence of low independence, never on its silence.
+  const shareUnaided = steerDim(profile, "share_unaided");
+  const seenWorkingAlone = shareUnaided === null || shareUnaided >= MASTERY_MIN_SHARE_UNAIDED;
+  // R103: the scorer's verdict, not a threshold repeated here. A boolean is the whole
+  // point — the arithmetic behind it needs `signals.words` off the ledger rows, which a
+  // profile does not carry, so recomputing it in this file would mean inventing a
+  // second, worse answer. tests/test_r103_cognitive_load.py reads both files and fails
+  // if the column name drifts.
+  const loaded = profile.load_flag === true;
   const moves: string[] = [];
 
   // §19's FIRST rule, and the one that outranks the rest: "If cognitive production is
@@ -3042,10 +3065,20 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
     );
   }
 
+  // §19's EIGHTH rule: "If cognitive load appears excessive: break the task into smaller
+  // steps." Second, because a student who is both carried and overloaded needs the help
+  // cut before the task is chunked — but both moves fit inside the cap, and together
+  // they are one coherent posture: smaller asks, less supplied.
+  if (loaded) moves.push(STEER_MOVES.load);
+
   // §19's LAST rule: "If mastery appears strong: fade scaffolding and introduce
   // transfer." Keyed on the three dimensions that mean the student owns the material.
+  //
+  // Never on someone overloaded: fading help from a student who is already producing
+  // stubs under heavy scaffolding would be reading the same evidence backwards.
   const mastered =
     !dependent &&
+    !loaded &&
     retrieval !== null &&
     retrieval >= 3 &&
     reasoning !== null &&
@@ -3055,7 +3088,9 @@ export function learnerSteer(profile: DbRow | null | undefined): CognitionSteer 
     // Never fade on someone who could not retrieve it a day later, and never send them
     // to transfer work when the last transfer question found nothing to build on.
     (retention === null || retention > RETENTION_WEAK_AT_OR_BELOW) &&
-    (transfer === null || transfer >= TRANSFER_HOLDS_AT_OR_ABOVE);
+    (transfer === null || transfer >= TRANSFER_HOLDS_AT_OR_ABOVE) &&
+    // §14: never fade on a proficiency nobody has watched happen unaided.
+    seenWorkingAlone;
   // Strong in the lesson, but the delayed check says it has not stuck. §14's exact case:
   // supported proficiency is not proficiency. Fading here would withdraw help from
   // someone who has already shown they cannot hold the idea overnight.

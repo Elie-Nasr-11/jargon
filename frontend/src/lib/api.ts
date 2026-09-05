@@ -61,7 +61,6 @@ import type {
   ActiveSession,
   AdminActorAccess,
   AdminOpsAction,
-  ClassDigest,
   AdminOpsResponse,
   AdminScopeResult,
   AdminSeedResponse,
@@ -1145,24 +1144,6 @@ export async function fetchActiveSessions(accessToken: string): Promise<ActiveSe
   const data = await invokeAdminOps({ accessToken, action: "list_active_sessions" });
   const sessions = data.data?.sessions;
   return Array.isArray(sessions) ? (sessions as ActiveSession[]) : [];
-}
-
-// R71: the weekly evidence digest. Teacher-scoped (authorized by class_memberships,
-// not admin access) and read-only — it computes over evidence already recorded and
-// stores nothing.
-export async function fetchClassDigest(input: {
-  accessToken: string;
-  classId: string;
-  days?: number;
-}): Promise<ClassDigest | null> {
-  const data = await invokeAdminOps({
-    accessToken: input.accessToken,
-    action: "teacher_class_digest",
-    classId: input.classId,
-    payload: input.days ? { days: input.days } : undefined,
-  });
-  const digest = data.data?.digest;
-  return digest ? (digest as ClassDigest) : null;
 }
 
 // R51 admin window: thin wrappers over the long-deployed admin-ops management
@@ -4208,8 +4189,9 @@ export function warmStudentSurfaces(classId?: string | null): void {
 // --- R90: the cognition ledger (docs/COGNITION.md) ---------------------------------
 // The scorer judges constructed responses against the Independent Cognitive
 // Production Rubric, in the context of the assistance given immediately before each
-// one. The console asks for a lesson to be scored (idempotent — judged turns stay
-// judged) and renders dimensions + the teacher narrative. Never a single percentage.
+// one. Scoring runs itself (R92's sweep; R101 finishes lesson tails) — the console only
+// reads stored truth and renders dimensions + the teacher narrative. Never a single
+// percentage.
 
 export type CognitionDims = {
   retrieval: number | null;
@@ -4283,20 +4265,6 @@ async function callCognitionScorer(
   return data;
 }
 
-/** Judge any not-yet-scored constructed responses, then return the fresh profile.
- *  A scoring pass reads the whole run through the judge model — allow it minutes. */
-export function scoreCognitionLesson(input: {
-  accessToken: string;
-  userId: string;
-  lessonId: string;
-}): Promise<CognitionResponse> {
-  return callCognitionScorer(
-    input.accessToken,
-    { action: "score_lesson", user_id: input.userId, lesson_id: input.lessonId },
-    150000,
-  );
-}
-
 /** The stored profile + scored responses, no new judging. */
 export function fetchCognitionProfile(input: {
   accessToken: string;
@@ -4308,6 +4276,68 @@ export function fetchCognitionProfile(input: {
     user_id: input.userId,
     lesson_id: input.lessonId,
   });
+}
+
+// --- R101: the whole student, one read ---------------------------------------------
+// The Thinking tab shows; it does not ask. Nothing in the frontend can trigger a judge
+// call any more — the sweep reads new work every fifteen minutes and finishes a lesson's
+// tail two hours after the student leaves it. This read is stored truth only, and it is
+// numbers and ids only: the quotes that ground a score stay on the per-lesson read.
+
+/** One judged response as the whole-student view sees it — no evidence, no note. */
+export type ThinkingRow = CognitionDims & {
+  id: string;
+  lesson_id: string;
+  session_id: string;
+  created_at: string;
+  scaffold_level: number;
+  retention: number | null;
+  transfer: number | null;
+};
+
+/** A delayed unaided question (R100), so a skipped one is visible as itself. */
+export type ThinkingProbe = {
+  lesson_id: string;
+  idea_title: string;
+  kind: "retention" | "transfer";
+  status: "asked" | "answered" | "expired";
+  retention: number | null;
+  transfer: number | null;
+  asked_at: string;
+  answered_at: string | null;
+};
+
+export type StudentThinkingResponse = {
+  status?: string;
+  error?: string;
+  user_id?: string;
+  rows?: ThinkingRow[];
+  lessons?: CognitionProfile[];
+  probes?: ThinkingProbe[];
+  /** The newest rows were kept and older work dropped; the panel says so. */
+  truncated?: boolean;
+  read_at?: string;
+};
+
+/** Every judged response of one student as numbers and ids — never a quote. Stored truth only. */
+export async function fetchStudentThinking(input: {
+  accessToken: string;
+  userId: string;
+}): Promise<StudentThinkingResponse> {
+  const response = await fetchWithTimeout(
+    functionUrl("cognition-scorer"),
+    {
+      method: "POST",
+      headers: authHeaders(input.accessToken),
+      body: JSON.stringify({ action: "student_view", user_id: input.userId }),
+    },
+    30000,
+  );
+  const data = (await response.json()) as StudentThinkingResponse;
+  if (!response.ok || data.status === "error") {
+    throw new Error(data.error || "Could not read this student's thinking.");
+  }
+  return data;
 }
 
 // --- R93: the whole room -----------------------------------------------------------
@@ -4327,10 +4357,22 @@ export type RoomStudent = {
   user_id: string;
   /** Which stream of the class, or null for the people not in one. */
   section: string | null;
-  group: "dependent" | "mastered" | "needs" | "steady" | "unread";
+  // R103: "load" is §19's eighth rule — heavy help and short answers together, which
+  // reads as overload rather than as any one weak dimension.
+  // R101b: "not_held" is §11 — strong in the lesson, but a delayed unaided check found
+  // the idea did not come back. The mentor has been told to consolidate rather than fade
+  // since R100; this is the room saying the same thing.
+  group: "dependent" | "load" | "needs" | "not_held" | "mastered" | "steady" | "unread";
   focus: keyof CognitionDims | null;
   dims: CognitionDims;
   turns_scored: number;
+  // R101b / §14, as counts. The room may never carry a dimension VALUE; how many of a
+  // student's answers had no help before them is a count of responses, not a judgment
+  // of one, and it is the denominator under every other label on the screen.
+  unaided_count: number;
+  share_unaided: number | null;
+  /** Delayed unaided checks actually answered. Zero everywhere until a probe lands. */
+  probes_answered: number;
   lessons_read: number;
   scaffold_recent: number | null;
   scaffold_trend: "falling" | "rising" | "steady" | null;

@@ -57,10 +57,6 @@ class LandingTests(unittest.TestCase):
 
 
 class ThreeThingsTests(unittest.TestCase):
-    def test_the_digest_leads_then_live_then_waiting(self):
-        body = SCREEN.split("return (", 1)[1]
-        self.assertLess(body.index("<ClassDigestCard"), body.index("In a lesson now"))
-        self.assertLess(body.index("In a lesson now"), body.index("Waiting on you"))
 
     def test_today_creates_nothing(self):
         # Work is set on the lesson it belongs to; Today only reports and opens.
@@ -105,6 +101,8 @@ class ClassScopeTests(unittest.TestCase):
         self.assertIn("return courseId ? courseIds.has(courseId) : true;", NEEDS)
 
 
+# R102: the weekly digest was cut and archived (archive/weekly-digest/), so the two pins
+# about where it sat on this screen went with it. Today now leads with live sessions.
 class SubtractionTests(unittest.TestCase):
     def test_the_hotlist_module_is_gone(self):
         self.assertFalse((SRC / "features" / "teacher" / "HotlistFeed.tsx").exists())
@@ -116,8 +114,6 @@ class SubtractionTests(unittest.TestCase):
         self.assertNotIn("activityItems", CONSOLE)
         self.assertNotIn("Quizzes &amp; assignments", CONSOLE)
 
-    def test_the_digest_is_not_in_two_rooms(self):
-        self.assertEqual(CONSOLE.count("<ClassDigestCard"), 1)
 
 
 class DeepLinkTests(unittest.TestCase):

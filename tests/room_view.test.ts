@@ -7,6 +7,9 @@
 // grepping. Driven by tests/test_r93_room_view.py, which rewrites the "@/" aliases.
 import {
   ALL_SECTIONS,
+  independenceNote,
+  MOSTLY_SUPPORTED_BELOW,
+  mostlySupported,
   roomGroups,
   roomHeadline,
   sectionChoices,
@@ -14,6 +17,7 @@ import {
   sectionKey,
   studentsInSection,
   summaryForChoice,
+  unaidedLabel,
 } from "./room.ts";
 
 // Zero-dependency helpers (the repo's flow suite uses the same pair — no jsr import,
@@ -39,6 +43,9 @@ function student(over: Partial<AnyStudent> & { user_id: string }): AnyStudent {
       vocabulary: 3, expression: 3, independence: 3, metacognition: 3,
     },
     turns_scored: 6,
+    unaided_count: 3,
+    share_unaided: 0.5,
+    probes_answered: 0,
     lessons_read: 1,
     scaffold_recent: 2,
     scaffold_trend: null,
@@ -54,7 +61,7 @@ function room(over: Partial<Parameters<typeof roomHeadline>[0]> = {}) {
     read: 8,
     unread: 2,
     weakest: [],
-    groups: { dependent: 0, mastered: 0, needs: 0, steady: 0, unread: 2 },
+    groups: { dependent: 0, load: 0, needs: 0, not_held: 0, mastered: 0, steady: 0, unread: 2 },
     ...over,
   } as Parameters<typeof roomHeadline>[0];
 }
@@ -66,12 +73,73 @@ Deno.test("the alarm is read before the good news", () => {
     student({ user_id: "c", group: "dependent" }),
     student({ user_id: "d", group: "needs", focus: "reasoning" }),
     student({ user_id: "e", group: "steady" }),
+    student({ user_id: "f", group: "load" }),
+    student({ user_id: "g", group: "not_held" }),
   ]);
   eq(
     groups.map((g) => g.key),
-    ["dependent", "needs:reasoning", "mastered", "steady", "unread"],
+    ["dependent", "load", "needs:reasoning", "not_held", "mastered", "steady", "unread"],
     "a teacher meets the problem before the opportunity",
   );
+});
+
+// --- R103: §19's eighth rule in the room --------------------------------------------
+
+Deno.test("R103: overload is an alarm, and it says what to do", () => {
+  const [group] = roomGroups([student({ user_id: "a", group: "load" })]);
+  eq(group.tone, "alert", "an overloaded room is not a quiet one");
+  ok(/break tasks down/i.test(group.title), `the title names the move: ${group.title}`);
+  ok(
+    /one step|one sentence|one example/i.test(group.body),
+    `the body says what smaller looks like: ${group.body}`,
+  );
+  ok(
+    !/\d/.test(group.title + group.body),
+    "the teacher's copy carries no measurement either",
+  );
+});
+
+Deno.test("R103: an overloaded room is not told to reteach", () => {
+  // The dimensions ARE weak in an overloaded room — that is what producing stubs looks
+  // like. Reteaching the weakest one is the wrong instruction, so the headline must not
+  // be the weak-dimension one.
+  const line = roomHeadline(
+    room({
+      read: 6,
+      weakest: [{ dimension: "elaboration", students: 5 }],
+      groups: { dependent: 0, load: 4, mastered: 0, needs: 2, steady: 0, unread: 0 },
+    }),
+  );
+  ok(/smaller steps/i.test(line), `the headline breaks the work down: ${line}`);
+  ok(
+    !/weak on/i.test(line) && !/a lesson to reteach, not/i.test(line),
+    `and it is not the weak-dimension sentence: ${line}`,
+  );
+});
+
+Deno.test("R103: dependency still outranks overload in the headline", () => {
+  const line = roomHeadline(
+    room({
+      read: 6,
+      weakest: [],
+      groups: { dependent: 4, load: 4, mastered: 0, needs: 0, steady: 0, unread: 0 },
+    }),
+  );
+  ok(
+    /assistance problem/i.test(line),
+    `a room being carried is named first, as it is in the mentor: ${line}`,
+  );
+});
+
+Deno.test("R103: one overloaded student in a big room is not the headline", () => {
+  const line = roomHeadline(
+    room({
+      read: 8,
+      weakest: [{ dimension: "reasoning", students: 3 }],
+      groups: { dependent: 0, load: 1, mastered: 0, needs: 3, steady: 4, unread: 0 },
+    }),
+  );
+  ok(!/smaller steps/i.test(line), `one student is a tutorial, not a room problem: ${line}`);
 });
 
 Deno.test("needs splits by dimension, most-affected group first", () => {
@@ -315,4 +383,85 @@ Deno.test("one student does not read as many", () => {
     room({ read: 2, groups: { dependent: 1, mastered: 1, needs: 0, steady: 0, unread: 0 } }),
   );
   ok(oneDep.includes("1 student of the 2 read is leaning"), oneDep);
+});
+
+// --- R101b: §14 in the room ---------------------------------------------------------
+// The groups say what to DO about a student. These say what the saying rests on: how
+// much of their work was done with no help, and whether anyone has ever checked the
+// reading away from the lesson that produced it.
+
+Deno.test("R101b: the correction is read before the reading it corrects", () => {
+  const groups = roomGroups([
+    student({ user_id: "a", group: "mastered" }),
+    student({ user_id: "b", group: "not_held" }),
+  ]);
+  eq(
+    groups.map((g) => g.key),
+    ["not_held", "mastered"],
+    "'it did not stick' must not sit under 'ready for harder ground'",
+  );
+  ok(
+    /did not stick/i.test(groups[0].title),
+    `the title says what happened: ${groups[0].title}`,
+  );
+  ok(
+    /day later/i.test(groups[0].body) && /new case/i.test(groups[0].body),
+    `the body says what to do about it: ${groups[0].body}`,
+  );
+});
+
+Deno.test("R101b: the fraction is a count over its own denominator, never a percentage", () => {
+  eq(unaidedLabel(student({ unaided_count: 2, turns_scored: 14 })), "2/14", "the shape is n/N");
+  for (const s of [
+    student({ unaided_count: 0, turns_scored: 9, share_unaided: 0 }),
+    student({ unaided_count: 9, turns_scored: 9, share_unaided: 1 }),
+  ]) {
+    ok(!/%/.test(unaidedLabel(s)), "no percentage in the room");
+    ok(!/%/.test(independenceNote(s)), "nor in the note");
+  }
+});
+
+Deno.test("R101b: the note says whether anyone has checked a day later", () => {
+  ok(
+    /never checked a day later/.test(independenceNote(student({ probes_answered: 0 }))),
+    "silence is stated, not left blank",
+  );
+  ok(
+    /checked a day later 1 time\b/.test(independenceNote(student({ probes_answered: 1 }))),
+    "one check is a time, not times",
+  );
+  ok(
+    /checked a day later 3 times/.test(independenceNote(student({ probes_answered: 3 }))),
+    "and more than one is plural",
+  );
+});
+
+Deno.test("R101b: the note reads as a sentence at one answer", () => {
+  const note = independenceNote(student({ unaided_count: 0, turns_scored: 1 }));
+  ok(/0 of 1 answer came/.test(note), `singular denominator: ${note}`);
+  ok(!/1 answers/.test(note), `and never "1 answers": ${note}`);
+});
+
+Deno.test("R101b: mostly-supported is evidence, never silence", () => {
+  ok(
+    mostlySupported(student({ share_unaided: 0.1 })),
+    "a tenth of their answers unaided is the §14 case",
+  );
+  ok(!mostlySupported(student({ share_unaided: 0.5 })), "half is not");
+  ok(
+    !mostlySupported(student({ share_unaided: null })),
+    "an unknown share is not a finding about the student",
+  );
+  ok(
+    !mostlySupported(student({ group: "unread", share_unaided: 0 })),
+    "and a student nobody has read is never marked",
+  );
+  ok(
+    mostlySupported(student({ share_unaided: MOSTLY_SUPPORTED_BELOW - 0.01 })),
+    "the threshold is exclusive below",
+  );
+  ok(
+    !mostlySupported(student({ share_unaided: MOSTLY_SUPPORTED_BELOW })),
+    "and a student exactly at it is not marked",
+  );
 });

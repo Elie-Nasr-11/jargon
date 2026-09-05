@@ -105,16 +105,15 @@ class BookLeadsTests(unittest.TestCase):
 
 
 class LandingReportsBackTests(unittest.TestCase):
-    def test_the_digest_opens_the_room_a_teacher_lands_in(self):
-        # R81 moved the landing from Students to Today; the digest moved with it, and
-        # still opens the room rather than hiding below a roster.
+    def test_the_landing_is_today(self):
+        # R81 moved the landing from Students to Today. The digest that used to lead
+        # this screen was cut in R102 (archive/weekly-digest/), so what remains of the
+        # rule is the landing itself.
         self.assertIn('return "today";', NAV)
-        today = CONSOLE.split("export function TodayScreen(", 1)[1]
-        self.assertLess(today.index("<ClassDigestCard"), today.index("In a lesson now"))
 
-    def test_it_is_not_duplicated_in_activity(self):
-        self.assertEqual(CONSOLE.count("<ClassDigestCard"), 1)
-
+    def test_the_digest_is_gone_from_every_room(self):
+        # R102: cut, and archived. If it comes back it lands in ONE room, not two.
+        self.assertEqual(CONSOLE.count("<ClassDigestCard"), 0)
 
 if __name__ == "__main__":
     unittest.main()

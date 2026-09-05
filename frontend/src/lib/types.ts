@@ -1689,7 +1689,6 @@ export type AdminOpsAction =
   | "organization_links"
   | "generate_progress_report"
   | "teacher_generate_progress_report"
-  | "teacher_class_digest"
   | "teacher_export_class_snapshot"
   | "create_class"
   | "update_class"
@@ -1700,31 +1699,6 @@ export type AdminOpsAction =
 
 // R71: the weekly evidence digest — what a class learned in a window, and what the
 // teacher needs to teach again. Computed on demand, server-side; no stored report.
-export type ClassDigestStudent = {
-  user_id: string;
-  name: string;
-  minutes: number;
-  turns: number;
-  lessons_touched: number;
-  lessons_completed: number;
-  steps_done: number;
-};
-
-export type ClassDigest = {
-  window: { from: string; to: string; days: number };
-  students: { enrolled: number; active: number };
-  totals: {
-    minutes?: number;
-    turns?: number;
-    lessons_completed?: number;
-    steps_done?: number;
-    evidence?: number;
-  };
-  movers: ClassDigestStudent[];
-  stalled: ClassDigestStudent[];
-  reteach: { skill_key: string; students: number; pattern: string }[];
-};
-
 export type AdminOpsResponse = {
   status: "ok" | "error";
   data?: {

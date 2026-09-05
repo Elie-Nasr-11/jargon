@@ -164,6 +164,24 @@ async function selectAll(config: Config, path: string): Promise<DbRow[]> {
     : [];
 }
 
+// R101: PostgREST's max-rows on this project is 1000. A larger `limit` is silently cut to
+// it and selectAll cannot tell, so a read that may exceed a page walks it in pages of
+// exactly that size. `path` carries a deterministic order and no limit/offset of its own.
+// Five full pages means "there may be more", and the caller says so rather than guessing.
+async function selectPaged(
+  config: Config,
+  path: string,
+  maxRows: number,
+): Promise<{ rows: DbRow[]; truncated: boolean }> {
+  const rows: DbRow[] = [];
+  for (let offset = 0; offset < maxRows; offset += PAGE_ROWS) {
+    const page = await selectAll(config, `${path}&limit=${PAGE_ROWS}&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < PAGE_ROWS) return { rows, truncated: false };
+  }
+  return { rows, truncated: true };
+}
+
 // Mirrors the ledger's RLS policy exactly: a teacher sharing an ACTIVE class with the
 // student, an org admin of an organization the student is an active member of, or a
 // platform admin. Nobody else can ask for a student's cognition.
@@ -297,6 +315,51 @@ const STEER_FLOOR = 3;
 // A dimension at or below 2 is weak; at or above 3 is proficient.
 const WEAK_AT_OR_BELOW = 2;
 const PROFICIENT_AT_OR_ABOVE = 3;
+// R103 / §19's eighth rule: "If cognitive load appears excessive: break the task into
+// smaller steps."
+//
+// Overload has a signature, and it is NOT weakness. A student who finds the work hard
+// produces weak answers; a student who is OVERLOADED produces almost nothing while the
+// tutor carries the turn. So both halves must hold at once over the recent window: the
+// help is heavy AND the answers are coming back short. Either alone is a different
+// student — heavy help with full answers is a scaffolded learner working, and short
+// answers with no help is someone disengaged or simply fast — and breaking the task
+// down would be the wrong move for both.
+//
+// Heavy is the same S-level as SUPPORTED_AT_OR_ABOVE: S3+ is where the tutor supplies
+// actual content. "Short" is a word count, and words are counted by textSignals, which
+// R99 started writing: a row without them counts as NOT short, so responses judged
+// before R99 can never flag anyone.
+//
+// EIGHT WORDS, AND THE LIVE CORPUS PICKED IT. The first draft said twelve, which read
+// well and was wrong: measured against the 132 judged responses on production, the
+// MEDIAN response is 11 words, so a twelve-word cutoff put "short" above the middle of
+// the distribution and would have flagged 6 of the 15 eligible (student, lesson) pairs.
+// A rule that fires on 40% of a school is a description of the corpus, not a signal.
+// Eight words is one clause -- an answer with no room for a "because" -- sits at the
+// corpus's 25th percentile, and fires on nobody today with three pairs one response
+// away from it. Re-measure before moving it; docs/COGNITION.md carries the numbers.
+// R101b / §14: "a learner who performs well only when substantial AI support is available
+// should NOT be classified as independently proficient." The eight dimensions cannot see
+// this on their own — a student can word an answer independently while the tutor has been
+// supplying the content all along, and the blended median reads the same either way. So
+// mastery additionally requires having been SEEN working alone often enough to mean it.
+//
+// It is a guard, never a marker: it can only ever WITHHOLD an optimistic label, which is
+// the right place for a number that has not been calibrated. It has not been — no profile
+// on production is mastery-shaped yet, so nothing has ever met the rest of the rule for
+// this to withhold from. Absent evidence does NOT block, matching R100's retention and
+// transfer guards; the guard fires on evidence of low independence, not on its silence.
+const MASTERY_MIN_SHARE_UNAIDED = 0.25;
+// R101b: chat's own two probe numbers, named identically, because the room now has to
+// make the same call chat does about whether a strong reading actually held. The two
+// files cannot import each other; tests/test_r101b_room_independence.py reads both.
+const RETENTION_WEAK_AT_OR_BELOW = 2;
+const TRANSFER_HOLDS_AT_OR_ABOVE = 2;
+const LOAD_WINDOW = 6;
+const LOAD_SHARE = 0.5;
+const LOAD_HEAVY_AT_OR_ABOVE = SUPPORTED_AT_OR_ABOVE;
+const LOAD_SHORT_WORDS_AT_OR_BELOW = 8;
 // Weakest first, ties broken in the rubric's own order — retrieval leads because
 // everything else is built on it.
 const STEER_PRIORITY = [
@@ -638,7 +701,52 @@ function buildProfile(rows: DbRow[]): DbRow {
     independent: medianOver(unaided),
     supported: medianOver(supported),
   };
+
+  // §19's eighth rule: cognitive load. Read over the RECENT window only — overload is a
+  // state, not a trait, and a student who was drowning three weeks ago and is fine now
+  // must not still be flagged.
+  //
+  // The counts are stored beside the verdict because a bare boolean is unfalsifiable:
+  // a teacher (or the next person reading this code) can see that it fired on four
+  // heavy turns out of six with four short answers, and disagree with the thresholds
+  // rather than with the machine.
+  const recent = chronological.slice(-LOAD_WINDOW);
+  const heavyCount = recent.filter(
+    (row) => Number(row.scaffold_level) >= LOAD_HEAVY_AT_OR_ABOVE,
+  ).length;
+  const shortCount = recent.filter((row) => {
+    const words = wordsOf(row);
+    return words !== null && words <= LOAD_SHORT_WORDS_AT_OR_BELOW;
+  }).length;
+  const wordsMissing = recent.filter((row) => wordsOf(row) === null).length;
+  // STEER_FLOOR for the same reason chat uses it: below three judged responses one bad
+  // afternoon would set a posture. Shares must CLEAR the half, so at six rows it takes
+  // four of each — a majority, not a tie.
+  profile.load_flag =
+    recent.length >= STEER_FLOOR &&
+    heavyCount / recent.length > LOAD_SHARE &&
+    shortCount / recent.length > LOAD_SHARE;
+  profile.load_signals = {
+    window: recent.length,
+    heavy_scaffold: heavyCount,
+    short_answers: shortCount,
+    words_missing: wordsMissing,
+  };
   return profile;
+}
+
+/**
+ * How many words a stored response came back as, or null when nobody counted.
+ *
+ * Null is load-neutral by design (see LOAD_WINDOW): the alternative — treating an
+ * uncounted response as short — would have flagged every student whose recent work
+ * predates R99's textSignals, on evidence that does not exist.
+ */
+function wordsOf(row: DbRow): number | null {
+  const signals = row.signals;
+  if (!signals || typeof signals !== "object") return null;
+  const words = (signals as DbRow).words;
+  return typeof words === "number" && Number.isFinite(words) ? words : null;
 }
 
 const SCORE_COLUMNS =
@@ -647,6 +755,31 @@ const SCORE_COLUMNS =
   "," +
   PROBE_DIMENSIONS.join(",") +
   ",scaffold_level,evidence,signals,note,model,rubric_version,created_at";
+
+// R101: the whole-student read. Numbers and ids only — never `evidence`, `signals` or a
+// `note`. Those stay on the per-lesson `profile` read, beside the response they belong to:
+// a teacher who wants the quotes selects the lesson, and a cross-lesson payload never
+// carries a child's words it has no immediate reason to show.
+//
+// 5,000 rows is roughly a school year for a student judged ~25 times a day. Past it the
+// read keeps the NEWEST rows (the order is newest-first) and reports `truncated`, so the
+// current work is always in the numbers and the loss is labelled rather than silent.
+const STUDENT_VIEW_MAX_ROWS = 5000;
+// PostgREST's max-rows on this project; see selectPaged.
+const PAGE_ROWS = 1000;
+const STUDENT_VIEW_COLUMNS =
+  "id,lesson_id,session_id,created_at,scaffold_level," +
+  DIMENSIONS.join(",") +
+  "," +
+  PROBE_DIMENSIONS.join(",");
+const PROFILE_VIEW_COLUMNS =
+  "lesson_id,narrative,turns_scored,scaffold_earlier,scaffold_recent,updated_at," +
+  DIMENSIONS.join(",") +
+  "," +
+  PROBE_DIMENSIONS.join(",") +
+  ",probes_answered,unaided_count,share_unaided";
+const PROBE_VIEW_COLUMNS =
+  "lesson_id,idea_title,kind,status,retention,transfer,asked_at,answered_at";
 
 async function storedScores(config: Config, userId: string, lessonId: string): Promise<DbRow[]> {
   return await selectAll(
@@ -980,10 +1113,20 @@ type RoomStudent = {
   // R94: which stream of the class this student is in, or null for the people not in
   // one. A class that has never used sections is one flat room and says so.
   section: string | null;
-  group: "dependent" | "mastered" | "needs" | "steady" | "unread";
+  group: "dependent" | "load" | "needs" | "not_held" | "mastered" | "steady" | "unread";
   focus: string | null;
   dims: DbRow;
   turns_scored: number;
+  // R101b / §14, as COUNTS. The room may never carry a dimension value (that is the
+  // whole point of R93's wire shape), but "how many of their answers came with no help
+  // before them" is a count of responses, not a judgment of one, and it is the
+  // denominator under every other label on this screen.
+  unaided_count: number;
+  share_unaided: number | null;
+  // How many delayed unaided checks have actually been answered. Reads "never" for the
+  // whole school today, which is exactly the thing worth showing: no reading in this
+  // room has yet been tested away from the lesson that produced it.
+  probes_answered: number;
   lessons_read: number;
   scaffold_recent: number | null;
   scaffold_trend: string | null;
@@ -1028,10 +1171,47 @@ function rollUpStudent(userId: string, section: string | null, profiles: DbRow[]
           : "steady"
       : null;
 
+  // R103: the freshest lesson's verdict, for the same reason scaffold_recent is — a
+  // student overloaded in the unit they finished last month is not overloaded now.
+  const loaded = freshest?.load_flag === true;
+
+  // R101b / §14. Summed across lessons rather than averaged: a mean of per-lesson shares
+  // would weight a three-response lesson the same as a thirty-response one, and the
+  // question is "of everything this student has done, how much was unaided" — one
+  // fraction with one denominator.
+  const unaidedCount = profiles.reduce((sum, row) => sum + (Number(row.unaided_count) || 0), 0);
+  const shareUnaided = turnsScored ? Number((unaidedCount / turnsScored).toFixed(2)) : null;
+  const probesAnswered = profiles.reduce(
+    (sum, row) => sum + (Number(row.probes_answered) || 0),
+    0,
+  );
+  // The delayed check, from the freshest lesson — the same recency rule as the scaffold
+  // trend. These are read here and deliberately NOT put on RoomStudent: they are
+  // dimension values, and no dimension value may reach the room (R93).
+  const retention = numOrNull(freshest?.retention);
+  const transfer = numOrNull(freshest?.transfer);
+
   const dim = (key: string) => numOrNull(dims[key]);
   const independence = dim("independence");
   const retrieval = dim("retrieval");
   const reasoning = dim("reasoning");
+
+  // The three §19/§14 predicates the branch below reads, named so the branch says what
+  // it means. A student strong on the three dimensions is only "mastered" if the delayed
+  // check has not contradicted it AND they have been seen working alone.
+  const strongOnTheThree =
+    retrieval !== null &&
+    retrieval >= PROFICIENT_AT_OR_ABOVE &&
+    reasoning !== null &&
+    reasoning >= PROFICIENT_AT_OR_ABOVE &&
+    independence !== null &&
+    independence >= PROFICIENT_AT_OR_ABOVE;
+  const held =
+    (retention === null || retention > RETENTION_WEAK_AT_OR_BELOW) &&
+    (transfer === null || transfer >= TRANSFER_HOLDS_AT_OR_ABOVE);
+  // §14. Absent evidence does not block, the same posture R100 took for retention and
+  // transfer: the guard fires on evidence of low independence, never on its silence.
+  const seenWorkingAlone = shareUnaided === null || shareUnaided >= MASTERY_MIN_SHARE_UNAIDED;
 
   let group: RoomStudent["group"] = "steady";
   let focus: string | null = null;
@@ -1047,15 +1227,22 @@ function rollUpStudent(userId: string, section: string | null, profiles: DbRow[]
     recent >= PROFICIENT_AT_OR_ABOVE
   ) {
     group = "dependent";
-  } else if (
-    // §19's last rule: they own the material on the three dimensions that mean it.
-    retrieval !== null &&
-    retrieval >= PROFICIENT_AT_OR_ABOVE &&
-    reasoning !== null &&
-    reasoning >= PROFICIENT_AT_OR_ABOVE &&
-    independence !== null &&
-    independence >= PROFICIENT_AT_OR_ABOVE
-  ) {
+  } else if (loaded) {
+    // §19's eighth rule. It sits second because a student who is BOTH being carried and
+    // producing stubs is a dependency case first — that is also the order learnerSteer
+    // pushes the two moves in, and the room must never name a different first move than
+    // the one the mentor is making.
+    group = "load";
+  } else if (strongOnTheThree && !held) {
+    // R101b, §11 in the room. chat has told the mentor CONSOLIDATE, DO NOT FADE for this
+    // student since R100, while this view went on calling them "ready for harder ground"
+    // — a real disagreement between the room and the tutor, of exactly the kind R93 says
+    // is worse than having no view at all. They look strong in the lesson and a delayed
+    // unaided check found the idea did not come back.
+    group = "not_held";
+  } else if (strongOnTheThree && held && seenWorkingAlone) {
+    // §19's last rule: they own the material on the three dimensions that mean it — AND
+    // §14's condition on saying so, that enough of the evidence came without help.
     group = "mastered";
   } else {
     // Weakest first, ties broken in the rubric's own order.
@@ -1076,6 +1263,9 @@ function rollUpStudent(userId: string, section: string | null, profiles: DbRow[]
     focus,
     dims,
     turns_scored: turnsScored,
+    unaided_count: unaidedCount,
+    share_unaided: shareUnaided,
+    probes_answered: probesAnswered,
     lessons_read: profiles.length,
     scaffold_recent: recent,
     scaffold_trend: trend,
@@ -1168,7 +1358,7 @@ async function classView(config: Config, actorId: string, body: DbRow): Promise<
     selectAll(
       config,
       `cognition_profiles?user_id=in.(${studentIds.map(enc).join(",")})` +
-        `&select=user_id,lesson_id,${DIMENSIONS.join(",")},scaffold_earlier,scaffold_recent,turns_scored,updated_at&limit=2000`,
+        `&select=user_id,lesson_id,${DIMENSIONS.join(",")},${PROBE_DIMENSIONS.join(",")},scaffold_earlier,scaffold_recent,turns_scored,load_flag,unaided_count,probes_answered,updated_at&limit=2000`,
     ),
   ]);
 
@@ -1199,7 +1389,15 @@ async function classView(config: Config, actorId: string, body: DbRow): Promise<
 // What the ROOM needs, which is a different question from what any student needs: a
 // dimension weak in nine of twelve is a lesson to reteach, not nine tutorials.
 function summarizeRoom(students: RoomStudent[]): DbRow {
-  const groups: DbRow = { dependent: 0, mastered: 0, needs: 0, steady: 0, unread: 0 };
+  const groups: DbRow = {
+    dependent: 0,
+    load: 0,
+    needs: 0,
+    not_held: 0,
+    mastered: 0,
+    steady: 0,
+    unread: 0,
+  };
   for (const student of students) {
     groups[student.group] = (Number(groups[student.group]) || 0) + 1;
   }
@@ -1383,6 +1581,60 @@ async function listLessons(config: Config, actorId: string, body: DbRow): Promis
   return json({ status: "ok", lessons: lessons.slice(0, 30) });
 }
 
+// R101: one student, every lesson, one read — the Thinking tab's whole feed.
+//
+// The scope (this class, this unit, this lesson) is NOT an argument. Authorization is on
+// the student — assertCanViewStudent asks "may this actor see this person?" — and a
+// teacher who may see a student may see all of that student's work, so the browser
+// filters the one payload it gets and switching scope costs no request.
+//
+// Three reads, independent, together. The ledger is read newest-first so that a capped
+// read keeps the current work; it is then reversed so the wire is chronological. A sweep
+// INSERT landing between two pages shifts the later page by the rows it added — with a
+// newest-first order that shows up as a duplicate, never a miss, and the id removes it.
+async function studentView(config: Config, actorId: string, body: DbRow): Promise<Response> {
+  const userId = cleanText(body.user_id);
+  if (!userId) throw new Error("user_id is required.");
+  await assertCanViewStudent(config, actorId, userId);
+
+  const [ledger, lessons, probes] = await Promise.all([
+    selectPaged(
+      config,
+      `cognition_turn_scores?user_id=eq.${enc(userId)}&rubric_version=eq.${RUBRIC_VERSION}` +
+        `&order=created_at.desc,id.desc&select=${STUDENT_VIEW_COLUMNS}`,
+      STUDENT_VIEW_MAX_ROWS,
+    ),
+    selectAll(
+      config,
+      `cognition_profiles?user_id=eq.${enc(userId)}&order=updated_at.desc&select=${PROFILE_VIEW_COLUMNS}&limit=500`,
+    ),
+    selectAll(
+      config,
+      `cognition_probes?user_id=eq.${enc(userId)}&order=asked_at.desc&select=${PROBE_VIEW_COLUMNS}&limit=200`,
+    ),
+  ]);
+
+  const seen = new Set<string>();
+  const rows: DbRow[] = [];
+  for (const row of ledger.rows) {
+    const id = cleanText(row.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    rows.push(row);
+  }
+  rows.reverse();
+
+  return json({
+    status: "ok",
+    user_id: userId,
+    rows,
+    lessons,
+    probes,
+    truncated: ledger.truncated,
+    read_at: new Date().toISOString(),
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("Method not allowed.", 405);
@@ -1416,6 +1668,7 @@ Deno.serve(async (req: Request) => {
     const actorId = String(actor.id);
     if (action === "score_lesson") return await scoreLesson(config, actorId, record);
     if (action === "profile") return await readProfile(config, actorId, record);
+    if (action === "student_view") return await studentView(config, actorId, record);
     if (action === "list_lessons") return await listLessons(config, actorId, record);
     if (action === "class_view") return await classView(config, actorId, record);
     return errorResponse("Unsupported cognition-scorer action.", 400);

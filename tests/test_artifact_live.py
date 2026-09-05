@@ -285,13 +285,13 @@ class ChatLiveArtifactWire(unittest.TestCase):
         admin = (
             REPO / "supabase" / "functions" / "curriculum-admin" / "index.ts"
         ).read_text()
-        # Write path (save_lesson_meta + create-lesson) and the studio read path.
+        # The RULE: a teacher's per-lesson toggle survives the lesson write path.
+        # R102 note — this pin used to list three code shapes. Two of them lived inside
+        # the template handlers (saveTemplate, instantiateTemplate), which were archived
+        # to archive/curriculum-templates/. The live path is the one that matters and is
+        # asserted here; restoring templates should re-add their own pin.
         self.assertIn(
             "policyPatch.allow_live_artifacts = meta.allow_live_artifacts", admin
-        )
-        self.assertIn("policy.allow_live_artifacts = meta.allow_live_artifacts", admin)
-        self.assertIn(
-            "allow_live_artifacts: lesson.allow_live_artifacts === true", admin
         )
 
 

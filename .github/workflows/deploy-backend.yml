@@ -24,8 +24,6 @@ on:
       - "supabase/functions/assessment-admin/**"
       - "supabase/functions/voice-session/**"
       - "supabase/functions/run/**"
-      - "supabase/functions/canvas/**"
-      - "supabase/functions/google-classroom/**"
       - "supabase/functions/resource-processing/**"
       - "supabase/functions/admin-ops/**"
       - "supabase/functions/submission-maintenance/**"
@@ -127,7 +125,9 @@ jobs:
             supabase/migrations/20261010000000_class_sections.sql \
             supabase/migrations/20261015000000_step_work_links.sql \
             supabase/migrations/20261102000000_r97_idea_mastery_backfill.sql \
-            supabase/migrations/20261103000000_r100_cognition_probes.sql ; do
+            supabase/migrations/20261103000000_r100_cognition_probes.sql \
+            supabase/migrations/20261104000000_r101_sweep_aging.sql \
+            supabase/migrations/20261105000000_r103_cognitive_load.sql ; do
             echo "Applying $f"
             # Body goes through a temp file, not a shell argument: large seed migrations
             # (e.g. the Book F content seed, ~254KB) exceed the kernel's per-argument
@@ -186,8 +186,6 @@ jobs:
           supabase functions deploy assessment-admin --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy voice-session --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy run --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy canvas --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy google-classroom --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions deploy resource-processing --project-ref "$PROJECT_REF" --no-verify-jwt
           # admin-ops now auto-deploys (actively developed as of the Live tab); it stays JWT- +
           # actor-access-gated internally. admin-seed remains manual (account provisioning).

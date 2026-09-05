@@ -125,6 +125,18 @@ class TheSweepIsBoundedTests(unittest.TestCase):
     def test_the_batch_is_capped_however_the_caller_asks(self):
         self.assertIn("Math.max(1, Math.min(SWEEP_BATCH_MAX, Math.round(requested)))", SCORER)
 
+    def test_the_schedule_never_asks_for_more_than_the_function_will_give(self):
+        # 2026-09-04: the batch went 2 -> 10. The RULE is that the cron body and the
+        # function's own cap cannot drift apart — a schedule asking for 25 would be
+        # silently clamped, and the migration would then be documenting a throughput
+        # that never happens. The number is a bound, not a target: sweep() walks the
+        # queue sequentially inside SWEEP_BUDGET_MS, so a bigger batch cannot overrun a
+        # tick, fan out concurrent calls, or cost anything when the queue is short.
+        asked = int(re.search(r'"action":"sweep","limit":(\d+)', MIGRATION).group(1))
+        cap = int(re.search(r"const SWEEP_BATCH_MAX = (\d+);", SCORER).group(1))
+        self.assertGreaterEqual(asked, 1)
+        self.assertLessEqual(asked, cap, "the cron asks for more than the function allows")
+
     def test_one_bad_pair_never_ends_the_run(self):
         sweep = SCORER[SCORER.index("async function sweep(") : SCORER.index("async function readProfile(")]
         self.assertIn("errors += 1;", sweep)

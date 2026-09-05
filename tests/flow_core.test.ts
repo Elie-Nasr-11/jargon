@@ -1116,6 +1116,141 @@ Deno.test("R91: the scaffold trend reads the direction of help over time", () =>
 });
 
 
+// --- R103: rubric §19's eighth rule — cognitive load ------------------------------
+// "If cognitive load appears excessive: break the task into smaller steps." The scorer
+// decides WHETHER someone is overloaded (it needs the ledger's word counts, which a
+// profile does not carry); learnerSteer decides what the mentor does about it. These
+// are the promises that second half makes.
+
+Deno.test("R103: no flag, no break-it-down", () => {
+  // independence at 2 keeps these out of the mastery branch, which would otherwise skip
+  // the steering path entirely and let the assertion pass without exercising anything.
+  const steerable = { elaboration: 1, independence: 2 };
+  ok(
+    !learnerSteer(profile(steerable))!.moves.some((m: string) => m.startsWith("BREAK IT DOWN")),
+    "a profile the scorer did not flag must never be chunked",
+  );
+  ok(
+    !learnerSteer(profile({ ...steerable, load_flag: false }))!.moves.some((m: string) =>
+      m.startsWith("BREAK IT DOWN"),
+    ),
+    "an explicit false is still no",
+  );
+});
+
+Deno.test("R103: only a real boolean fires it", () => {
+  // PostgREST hands back JSON, but a hand-written row, a stale cache or a future
+  // migration default could put a string here. "false" is truthy, and a student would
+  // be chunked on the strength of a five-character string.
+  for (const value of ["true", "false", 1, 0, "1", {}, []]) {
+    ok(
+      !learnerSteer(
+        profile({ elaboration: 1, independence: 2, load_flag: value }),
+      )!.moves.some((m: string) => m.startsWith("BREAK IT DOWN")),
+      `load_flag must be a boolean, not ${JSON.stringify(value)}`,
+    );
+  }
+});
+
+Deno.test("R103: the flag breaks the task down", () => {
+  const steer = learnerSteer(profile({ elaboration: 1, load_flag: true }));
+  ok(
+    steer!.moves.some((m: string) => m.startsWith("BREAK IT DOWN")),
+    "an overloaded student gets smaller asks",
+  );
+});
+
+Deno.test("R103: an overloaded student is never faded", () => {
+  // Every dimension proficient AND overloaded. Fading help from someone producing stubs
+  // under heavy scaffolding would be reading the same evidence backwards.
+  const steer = learnerSteer(profile({ load_flag: true }));
+  ok(
+    !steer!.moves.some((m: string) => m.startsWith("FADE AND TRANSFER")),
+    "mastery must not fire while the flag is up",
+  );
+  ok(steer!.moves[0].startsWith("BREAK IT DOWN"), "chunk the task instead");
+});
+
+Deno.test("R103: dependency is still the first move when both fire", () => {
+  const steer = learnerSteer(
+    profile({ independence: 1, scaffold_recent: 4, scaffold_earlier: 4, load_flag: true }),
+  );
+  eq(steer!.moves.length, 2, "both rules fit inside the cap and nothing else follows");
+  ok(steer!.moves[0].startsWith("REDUCE ASSISTANCE"), "cut the help first");
+  ok(steer!.moves[1].startsWith("BREAK IT DOWN"), "then chunk the task");
+});
+
+Deno.test("R103: the floor holds — a flag on two responses steers nothing", () => {
+  eq(
+    learnerSteer(profile({ turns_scored: 2, load_flag: true })),
+    null,
+    "below three judged responses there is no posture to set, flagged or not",
+  );
+});
+
+Deno.test("R103: the move says nothing a student could be shown", () => {
+  for (const move of learnerSteer(profile({ load_flag: true }))!.moves) {
+    ok(!/\d/.test(move), `a move must carry no digits: ${move}`);
+    ok(!/rubric|score|dimension|overload/i.test(move), `a move must not name the measurement: ${move}`);
+  }
+});
+
+// --- R101b: §14 — never fade on a proficiency nobody has watched happen ------------
+// "A learner who performs well only when substantial AI support is available should not
+// be classified as independently proficient." The eight dimensions cannot see this: a
+// student can word an answer independently while the tutor supplies the content, and the
+// blended median reads the same either way.
+
+Deno.test("R101b: mastery does not fire when almost nothing was unaided", () => {
+  const steer = learnerSteer(profile({ share_unaided: 0.1 }));
+  ok(
+    steer === null || !steer.moves.some((m: string) => m.startsWith("FADE AND TRANSFER")),
+    "supported proficiency is not proficiency",
+  );
+});
+
+Deno.test("R101b: mastery still fires when they have been seen working alone", () => {
+  const steer = learnerSteer(profile({ share_unaided: 0.5 }));
+  ok(
+    steer!.moves[0].startsWith("FADE AND TRANSFER"),
+    "half their answers unaided is evidence enough to fade",
+  );
+});
+
+Deno.test("R101b: an absent share does not block — the guard fires on evidence, not silence", () => {
+  // Every profile written before R100 carries a null share. Blocking on that would have
+  // silently withheld mastery from a whole term of stale rollups, on nothing.
+  for (const value of [undefined, null, ""]) {
+    const steer = learnerSteer(profile({ share_unaided: value }));
+    ok(
+      steer!.moves[0].startsWith("FADE AND TRANSFER"),
+      `an unknown share must not withhold mastery: ${JSON.stringify(value)}`,
+    );
+  }
+});
+
+Deno.test("R101b: blocked by §14 with nothing weak, the mentor is told nothing at all", () => {
+  // The failure to avoid is a CONSOLATION move — steering a dimension that is not weak
+  // just because mastery was withheld. Silence is the honest output.
+  eq(
+    learnerSteer(profile({ share_unaided: 0 })),
+    null,
+    "no move is better than an invented one",
+  );
+});
+
+Deno.test("R101b: §14 outranks nothing — dependency and overload still come first", () => {
+  const dependent = learnerSteer(
+    profile({ independence: 1, scaffold_recent: 4, scaffold_earlier: 4, share_unaided: 0 }),
+  );
+  ok(
+    dependent!.moves[0].startsWith("REDUCE ASSISTANCE"),
+    "§19's first rule is unaffected by the guard",
+  );
+  const loaded = learnerSteer(profile({ load_flag: true, share_unaided: 0 }));
+  ok(loaded!.moves[0].startsWith("BREAK IT DOWN"), "and so is the eighth");
+});
+
 // ---------------------------------------------------------------------------
 // R100: the delayed unaided ask (§10 transfer, §11 retention, §20).
 //

@@ -2,6 +2,198 @@
 
 Record durable project decisions here. Add new entries at the top.
 
+## 2026-09-04: the rubric is finished, and the brain map is left alone on purpose
+
+R104 closes the roadmap that began at R90. Two decisions in it.
+
+**The rubric is complete.** Every section the Independent Cognitive Production Rubric asks
+for is live — §1 through §20, including all eight of §19's steering rules — except the
+part of §12 that needs client-side events the product does not emit (latency, revisions,
+speaking duration), which are not faked. `docs/COGNITION.md` now opens with a table saying
+which release closed each section and where it lives, so "is X built" is a lookup rather
+than an archaeology.
+
+**The brain map: leave it alone this release.** The decision deferred since the brain-first
+plan, put back to the owner with live numbers rather than a recommendation dressed as one.
+What was measured on production:
+
+- 132 published ideas; **17 have any evidence at all, school-wide**; the median student has
+  evidence on **5**, the busiest on 9.
+- **948 of the 953 mastery rows sit on ideas R97 minted one-per-lesson.** Only 5 of the 42
+  hand-authored ideas have ever been touched. The brain is lesson-grained, not
+  concept-grained — a lesson list wearing a graph's clothes.
+- `fetchIdeas` is **unscoped** (every published idea, `.limit(300)`) and `BrainGraph` draws
+  `.slice(0, 90)`, so a student sees ~90 nodes of which ~5 are theirs.
+- It is the **hero** of the student home, 420px, always rendered — so the most prominent
+  thing a student sees is ~94% lessons they may never open.
+- There is **no telemetry**: no client event table exists in the repo and the component
+  records nothing. Whether anyone uses it cannot be answered from data.
+
+Three fixes were costed — scope it to the student's own classes (~half a day, no schema
+change), build telemetry first, or demote it below the fold. The owner chose **none of
+them, this release**: the school is starting, and a half-day spent on the least-evidenced
+surface is a half-day not spent on the ones a teacher opens daily. The numbers and the two
+conditions that would change the answer are written into `docs/BRAIN_FIRST_SCOPE.md` §9, so
+revisiting is a read rather than a re-investigation.
+
+**A word the chrome used two ways.** "Sign out" in both sidebars, "Log out" in the settings
+menu — one door, two names, differing by screen, which is the exact thing LEXICON's retired
+table exists to stop. The lexicon now owns **Appearance** and **Sign out**, and a pin
+enforces the second across all three chrome files rather than one screen.
+
+**Measuring the population before designing a rule about it** is now three-for-three: R103
+rejected a twelve-word threshold that would have fired on 40% of the school, R101b did not
+build a chip that could not have fired on anyone, and R104 did not ship a brain-map fix on
+a surface whose usage nobody can measure. The measurement is cheap and it has changed the
+answer every time.
+
+## 2026-09-03 (last): §14 beside every student, and the chip that was not built
+
+The room said what to DO about each student. It did not say what the saying rested on — a
+teacher reading "needs: reasoning" could not tell whether that came from work the child did
+alone or work the tutor carried, and those are different lessons.
+
+- **The release was planned as a positive chip and the live data killed it.** "Looks strong,
+  but only with help" was the intended marker. Measured on production BEFORE building: zero
+  of the nineteen profiles are mastery-shaped, and zero of the fifteen eligible have no weak
+  dimension. Every read student today is *Leaning on the tutor* (5) or *needs* (10);
+  `mastered` and `steady` are empty groups. A chip gated on "looks strong" could not have
+  fired on anyone — an unfalsifiable rule, the same trap R103's twelve-word threshold nearly
+  walked into from the other side. **Measure the population before designing a rule about
+  it** is now two-for-two.
+- **So §14 became a number, not a group.** Every read student's chip carries the count of
+  their answers with no help before them over its own denominator (`2/14`), amber below a
+  quarter. Never a percentage: "2 of 14" and "14%" are different claims and the second hides
+  what decides the first. One fraction over one denominator across every lesson, not a mean
+  of per-lesson shares, which would weight a three-response lesson like a thirty-response one.
+- **"Never checked a day later" is said out loud.** `probes_answered` is zero for the whole
+  school. Rendering nothing would have read as "fine"; it means nobody has asked them cold.
+- **Two guards, and both closed disagreements that already existed in code.** Since R100
+  `chat` has told the mentor CONSOLIDATE, DO NOT FADE for a strong-but-not-retained student
+  while the room called them "ready for harder ground" — the exact contradiction R93 says is
+  worse than having no view. The room now has the matching group. And mastery, in both files,
+  additionally requires having been seen working alone.
+- **A guard is where an uncalibrated number belongs.** `MASTERY_MIN_SHARE_UNAIDED` has never
+  had a student to withhold from, so it is unmeasured. It can only ever take away an
+  optimistic label, never assert something about a child — which is why it shipped and the
+  chip did not. Absent evidence does not block, matching R100's retention and transfer.
+- **Pins state rules, not shapes** (eleventh release). R93's mastery pin sliced between the
+  branch's `else if (` and its assignment and expected three dimension names inline; lifting
+  the condition into a named predicate broke it. It was pinning where the code sat, not what
+  it read.
+
+## 2026-09-03 (latest): overload is not weakness — §19's eighth rule
+
+The rubric's last unshipped steering rule: *"If cognitive load appears excessive: break the
+task into smaller steps."* Seven of the eight steered the mentor already. This one could not
+be read off the eight dimensions, and the reason is the decision.
+
+- **Overload and weakness produce the same dimension scores and need opposite responses.**
+  A student who finds the work hard produces weak answers. An overloaded student produces
+  almost nothing *while the tutor carries the turn*. The only thing that separates them is
+  how much came back, so the flag requires **both** halves over the recent six responses:
+  more than half heavily scaffolded (S3+) **and** more than half short. Either alone is a
+  different student, and the conjunction is pinned — an `||` there would flag every
+  heavily-scaffolded child in the school.
+- **The threshold is a measurement, not a taste, and live data moved it.** The draft said
+  twelve words. Against the 132 judged responses on production the median response is
+  **11 words**, so twelve put "short" above the middle of the distribution and would have
+  fired on 6 of 15 eligible pairs — 40% of the school, which describes the corpus rather
+  than finding anything in it. Eight words (one clause, no room for a *because*) sits at
+  the 25th percentile, fires on nobody today, and leaves three pairs one response away.
+  A python pin now asserts the rule — short must be shorter than typical — against the
+  median the doc records, so the two cannot be moved apart.
+- **A missing word count is never short.** `signals.words` arrived with R99; treating an
+  uncounted response as short would have flagged every student whose recent work predates
+  it, on evidence that does not exist.
+- **The verdict is stored with its arithmetic.** `load_flag` is the answer; `load_signals`
+  holds the counts behind it. A bare boolean is unfalsifiable — a reader has to be able to
+  disagree with the thresholds rather than with the machine.
+- **The scorer decides whether; chat decides what.** `learnerSteer` reads the flag and never
+  recomputes it: the arithmetic needs ledger rows a profile does not carry, and a second
+  implementation of one rule is a second answer to one question. The flag also blocks FADE
+  AND TRANSFER — withdrawing help from a student already producing stubs under heavy
+  scaffolding is the same evidence read backwards.
+- **The room gets an alarm, not a dimension.** Without a group of its own an overloaded
+  student lands under "needs: elaboration" — and their elaboration IS weak, because the
+  task is too big. Reteaching it is the wrong instruction. A student who is both carried
+  and overloaded is grouped as *Leaning on the tutor*, the same order in which the mentor
+  pushes the two moves.
+- **Pins state rules, not shapes** (tenth release). Two broke. R93's group-order pin listed
+  the five groups in order and failed for the sixth existing; it now asserts the rule —
+  alarms before teachable before opportunity, unread last. R91's "no move names the
+  measurement" pin sliced the whole `STEER_MOVES` block including comments, and failed
+  because the new move's comment says it is *not keyed on a dimension*; it now reads the
+  string literals, which is what a student could ever be shown.
+
+## 2026-09-03 (later): cut it, but keep it readable — the archive
+
+The feature audit found 48 of 105 backend actions with no caller. The owner's call: keep
+every thin-but-reachable feature, cut the weekly digest, keep the OCR path and archive the
+rest — *"make sure it is well annotated that that code is there so that if i ever bring it
+back i can know."*
+
+- **Removed code goes to `archive/`, not to git history alone.** History is a second copy,
+  not a plan: "it's in the log somewhere" is not something a person can act on eighteen
+  months later. Each archived feature gets a folder with the code and a `NOTES.md` saying
+  what it did, why it left, what still exists that it depends on, **what changed underneath
+  it since**, and numbered restore steps. The archive is not compiled, linted, tested or
+  deployed.
+- **No tables were dropped.** Every archived feature's tables stay, empty. A restore needs
+  no migration and no data recovery. Dropping them is a separate, deliberate, irreversible
+  step that has to be asked for on its own.
+- **"Keep only the OCR" needed a correction, and the correction is the interesting part.**
+  `ocr_pdf_pages` reads `resource_page_assets` (written by `save_pdf_page_assets`) and
+  writes `resource_text_chunks` (read by `list_resource_chunks`). Keeping the one action
+  named would have preserved a function that can never execute. Three actions stayed — the
+  minimum runnable chain — and the NOTES lead with why.
+- **"No frontend caller" is not "no caller".** The audit flagged `import_curriculum` as
+  dead; it is the book importer, driven from `scripts/` and `tools/`. It was archived and
+  restored in the same release, caught by its own tests (R58, R61) rather than by the audit.
+  Future dead-code claims must check scripts, tools, other edge functions and cron too.
+- **Pins state rules, not shapes** (ninth release). The `allow_live_artifacts` pin listed
+  three code shapes; two lived in the archived template handlers. It now asserts the rule —
+  the toggle survives the lesson write path.
+
+
+## 2026-09-03: the Thinking tab shows; it does not ask
+
+The owner, looking at the live tab: *"lets have it just show. not as an action you need to
+click and analyze … a total breakdown of these for all their work and progress over time,
+and a selector to see a breakdown of specific lessons, units, and classes … design it in a
+way thats bang for buck."* Two things made "just show" false at the root, and neither was
+cosmetic: the sweep queue never finished a lesson (a tail of one to four responses waited
+forever — nine such pairs live, all older than two hours), and there was no cross-lesson
+read at all.
+
+- **No button, because the queue owes completeness.** A "Read the thinking" button was the
+  only thing reading small lessons. Rather than hide it, the queue gained a rule: a tail
+  surfaces two hours after its last response, at whatever count. One short judge call per
+  abandoned tail, bounded by lessons and pauses rather than by the clock. Nothing in the
+  frontend can trigger a judge call any more, and a dead export is how a button comes back,
+  so the export went too.
+- **One read per student, numbers and ids only.** `student_view` returns every judged
+  response as its levels and ids — never `evidence`, `signals` or a `note`. The quotes stay
+  on the per-lesson read and appear when a lesson is selected. A cross-lesson payload
+  should not carry a child's words it has no immediate reason to show.
+- **Every scope is computed where the data already is.** Class, unit and lesson are filters
+  over that one payload in the browser, built from the lesson catalogue and the class→course
+  links the console already holds; switching costs no request. The four thresholds the
+  browser shares with the scorer are named the same in both files and cross-pinned, the
+  R93/R100 pattern. A class scopes by the room's own strict rule, so the two views agree.
+- **A sitting is the unit of progress.** One session is one point, the running middle of
+  five; "first → now" is the earlier half of their sittings against the later half. By
+  calendar week every student is one point on the day the ledger is four days old; the
+  weekly bucketer is one function away if a term of sittings proves too dense.
+- **The whole-student reading is deterministic.** Offered a model-written narrative
+  (refreshed by the sweep, or written on open when stale) and chose the sentence built from
+  the numbers: zero model spend, exact, never stale. Counts beside their denominators, a
+  share in words, never a percentage. A lesson keeps the judge's narrative.
+- **Pins state rules, not shapes** (eighth release). One R100 pin named the object that held
+  the denominator (`profile.turns_scored`) and broke when the statistic moved one scope out.
+  It now asserts what it meant: the count is printed in one expression with its denominator.
+
+
 ## 2026-08-31 (later still): a section is a second room, not a filter
 
 "Now do sections." The cheap reading is a dropdown that hides rows. The real one is that

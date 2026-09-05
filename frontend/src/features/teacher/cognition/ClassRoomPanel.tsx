@@ -19,12 +19,15 @@ import { Brain, Loader2, RefreshCw } from "lucide-react";
 import { displayName } from "@/features/teacher/classShared";
 import {
   ALL_SECTIONS,
+  independenceNote,
+  mostlySupported,
   roomGroups,
   roomHeadline,
   sectionChoices,
   sectionHeadlines,
   studentsInSection,
   summaryForChoice,
+  unaidedLabel,
   type RoomGroup,
 } from "@/features/teacher/cognition/room";
 import { fetchClassCognition, getSession, type ClassCognitionResponse } from "@/lib/api";
@@ -193,7 +196,7 @@ export function ClassRoomPanel({
                         title={
                           student.group === "unread"
                             ? `${student.turns_scored} response${student.turns_scored === 1 ? "" : "s"} judged so far`
-                            : `${student.turns_scored} responses judged across ${student.lessons_read} lesson${student.lessons_read === 1 ? "" : "s"}`
+                            : `${student.turns_scored} responses judged across ${student.lessons_read} lesson${student.lessons_read === 1 ? "" : "s"}\n${independenceNote(student)}`
                         }
                         className="rounded-full border border-border bg-depth-field px-2.5 py-1 text-meta text-foreground transition-colors hover:bg-muted"
                       >
@@ -208,6 +211,19 @@ export function ClassRoomPanel({
                             ↑
                           </span>
                         ) : null}
+                        {/* R101b / §14: the fraction of their answers that had no help
+                            before them. Shown as the count over its own denominator,
+                            never a percentage — "2 of 14" and "14%" are different
+                            claims, and the second hides what decides the first. */}
+                        {student.group === "unread" ? null : (
+                          <span
+                            className={`ml-1.5 font-mono text-[10px] ${
+                              mostlySupported(student) ? "text-warning" : "text-muted-foreground"
+                            }`}
+                          >
+                            {unaidedLabel(student)}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>

@@ -49,19 +49,15 @@ class MediaProcessingStaticTests(unittest.TestCase):
                 self.assertIn(fragment, self.migration)
 
     def test_resource_processing_function_is_jwt_scoped(self):
+        # R102: only the OCR chain stayed live — save_pdf_page_assets writes the page
+        # images, ocr_pdf_pages reads them, list_resource_chunks reads the result back.
+        # The other eight actions are in archive/resource-chunk-pipeline/.
         for fragment in (
-            '"extract_pdf_chunks"',
             '"save_pdf_page_assets"',
             '"ocr_pdf_pages"',
-            '"transcribe_media_resource"',
-            '"save_chunk_edits"',
-            '"approve_chunks"',
-            '"reject_chunks"',
-            '"delete_chunks"',
             '"list_resource_chunks"',
             "fetchCurrentUser",
             "rpc/can_manage_lesson_resource",
-            "Only uploaded PDF resources can be extracted in v1.",
             "Only uploaded PDF resources can be OCR processed.",
             "Only uploaded audio and video resources can be transcribed.",
             "Resource management access is required.",
@@ -93,28 +89,9 @@ class MediaProcessingStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, self.transcription_migration)
 
-    def test_media_transcription_uses_server_side_openai_limits(self):
-        for fragment in (
-            "OPENAI_API_KEY",
-            "MAX_TRANSCRIPTION_BYTES = 25 * 1024 * 1024",
-            '"mp3"',
-            '"mp4"',
-            '"mpeg"',
-            '"mpga"',
-            '"m4a"',
-            '"wav"',
-            '"webm"',
-            "https://api.openai.com/v1/audio/transcriptions",
-            'form.append("model", "whisper-1")',
-            'form.append("response_format", "verbose_json")',
-            'form.append("timestamp_granularities[]", "segment")',
-            "status: \"draft\"",
-            "source_kind",
-            "start_seconds",
-            "end_seconds",
-        ):
-            with self.subTest(fragment=fragment):
-                self.assertIn(fragment, self.function)
+    # R102: transcribe_media_resource was archived to archive/resource-chunk-pipeline/
+    # along with the rest of the chunk pipeline; the owner kept only the OCR path.
+    # Its limits pin lives with it, in that folder's NOTES.
 
     def test_pdf_page_asset_migration_is_private_and_scoped(self):
         for fragment in (

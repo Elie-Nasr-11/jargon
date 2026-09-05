@@ -213,12 +213,19 @@ class TheRoomAnswersATeachersQuestionTests(unittest.TestCase):
         self.assertIn('`needs:${student.focus}`', ROOM)
 
     def test_the_alarm_is_read_before_the_good_news(self):
+        # The RULE, not the list: a teacher reading top to bottom meets what is going
+        # wrong before what is going well. R103 added a second alarm, and a pin that
+        # spelled the groups out in order would have failed for saying so.
         rank = ROOM[ROOM.index("const GROUP_RANK") : ROOM.index("export function roomGroups")]
-        order = re.findall(r"(\w+): (\d)", rank)
-        self.assertEqual(
-            [name for name, _ in sorted(order, key=lambda row: int(row[1]))],
-            ["dependent", "needs", "mastered", "steady", "unread"],
-        )
+        order = {name: int(value) for name, value in re.findall(r"^\s*(\w+): (\d+),", rank, re.M)}
+        alarms = ("dependent", "load")
+        for name in (*alarms, "needs", "mastered", "steady", "unread"):
+            with self.subTest(group=name):
+                self.assertIn(name, order)
+        self.assertLess(max(order[name] for name in alarms), order["needs"])
+        self.assertLess(order["needs"], order["mastered"])
+        self.assertLess(order["mastered"], order["steady"])
+        self.assertEqual(order["unread"], max(order.values()))
 
     def test_a_teacher_can_reach_the_student_from_the_room(self):
         self.assertIn("onOpenStudent(student.user_id)", PANEL)
@@ -289,7 +296,12 @@ class TheRoomAgreesWithTheMentorTests(unittest.TestCase):
     def test_the_mastery_rule_is_the_same_three_dimensions(self):
         roll = SCORER[SCORER.index("function rollUpStudent(") :]
         roll = roll[: roll.index("\nasync function classView(")]
-        mastery = roll[roll.index('} else if ('): roll.index('group = "mastered"')]
+        # The RULE: whatever decides "mastered" in the room reads the same three
+        # dimensions chat's does. R101b lifted the condition into a named predicate, so a
+        # pin that only looked between the branch's `else if (` and its assignment found
+        # a variable name and no dimensions — it was pinning where the code sat, not what
+        # it read. Everything from the top of the rollup to the assignment is the answer.
+        mastery = roll[: roll.index('group = "mastered"')]
         for dimension in ("retrieval", "reasoning", "independence"):
             with self.subTest(dimension=dimension):
                 self.assertIn(dimension, mastery)
