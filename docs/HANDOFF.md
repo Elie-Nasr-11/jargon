@@ -6,6 +6,18 @@ Newest entries should go at the top under `Active Handoff`.
 
 ## Active Handoff
 
+## 2026-09-06 - Athenaeum hook delivery rollout
+
+Status: Hook update verified on `codex/claude-activity-v2` (PR #99); live-session gate pending.
+Scope: `.claude` lifecycle hooks only; copy the reviewed dashboard implementation
+at `56a3197` after production protocol 2 verification. Preserve all runtime code.
+Verification: 11 hook transport tests passed against this repository's copies;
+three canonical hashes match and secret/diff checks pass. Application checks ran
+from a clean HEAD archive because checkout fixture reads stalled: 1,539 unit tests
+ran (1,530 passed, 9 skipped), and all 136 examples passed. No application source
+changed. Independent review found no actionable cloud-hook findings. Fresh cloud
+sessions remain a live gate; these fixtures do not prove live Claude execution.
+
 ## Claude -> Codex / Human - 2026-09-03 (R100: the delayed unaided ask)
 
 Status: Finished
